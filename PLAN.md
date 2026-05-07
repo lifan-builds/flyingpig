@@ -100,6 +100,9 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - [x] User-profile launch defaults (2026-05-07) — changed real-run Chrome default from a blank dedicated profile to the persistent copied default-profile path and kept browser-use attaching to the prepared Amex tab.
 - [x] Side-panel pivot (2026-05-07) — made the Chrome extension side panel the preferred supervised surface, streamed daemon progress events over WebSocket, added `scripts/start.py --browser-only`, and stopped opening a dashboard tab by default.
 - [x] Extension E2E harness (2026-05-07) — added a Puppeteer-managed mock side-panel smoke (`npm run test:extension`) that installs the unpacked extension, opens the mock Amex page, verifies WebSocket daemon progress, and keeps copied-profile Chrome plus Computer Use reserved for real-profile smoke tests.
+- [x] Helper-sidepanel prototype archived on GitHub (2026-05-07) — initialized git, committed the reconnectable daemon + improved side panel, created private repo `lifan-builds/flyingpig`, and pushed `main`.
+- [x] Pure-extension runtime rollback (2026-05-07) — rejected the all-in-extension implementation because it would give up browser-use's advanced browser/LLM loop; restored the extension as a UI/control plane for the local helper.
+- [ ] Design packaged-helper or Native Messaging launch path so release users do not manually run daemon/start scripts.
 - [ ] Extend the extension smoke from mock-daemon protocol coverage to a full mock-agent browser-use run once the CDP/extension install split is settled.
 
 ## Decisions
@@ -111,6 +114,7 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - **2026-04-09** Prompts live as `.txt` templates in `prompts/<site>/`.
 - **2026-05-04** Use `BrowserSession.from_system_chrome()` as the default path instead of a Chrome extension; simpler architecture, real profile access, with the explicit tradeoff that Chrome must be closed before launch.
 - **2026-05-06** Prefer inspected CDP Chrome for live Amex runs requiring human observation. Use a persistent copied profile for Chrome CDP compatibility; do not attempt literal default-profile remote debugging.
+- **2026-05-07** Keep browser-use in a packaged local helper/native host and use the Chrome side panel as the supervised UX. Do not replace browser-use with pure extension JavaScript just to make the product feel standalone.
 
 ## Archive
 (Empty — initial migration.)

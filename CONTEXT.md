@@ -1,25 +1,26 @@
 # Context
 
 ## Project
-**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ / FastAPI backend, browser-use + Playwright for automation, Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers, Celery + Redis for async jobs, PostgreSQL for persistence, React + TypeScript dashboard. Live browser automation has two user-facing paths: attach to an existing remote-debugging tab with `--cdp-url`, or launch a FlyingPig-controllable Chrome with remote debugging. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Docker.
+**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ / FastAPI backend, browser-use + Playwright for automation, Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers, Celery + Redis for async jobs, PostgreSQL for persistence, React + TypeScript dashboard, and a Chrome side-panel extension as the supervised user surface. Release direction: preserve browser-use in a packaged local helper/native host so users do not manually run scripts, while the extension remains the control/status UI. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Docker, Puppeteer extension smoke tests.
 
 ## Structure
 ```
 .
 ├── config/
 ├── frontend/           # React + TypeScript dashboard
+├── extension/          # Chrome side panel UI that talks to local helper over WS
 ├── prompts/            # LLM prompt templates by site
 │   ├── amex/
 │   └── generic/        # Site-agnostic fallback templates
-├── scripts/            # start.py, daemon.py, demo_amex.py
+├── scripts/            # start.py, daemon.py, demo_amex.py, extension smoke tooling
 ├── src/
 │   ├── agent/          # Core loop: brain, navigator, browser_runtime, evidence, llm_runtime, user_input
 │   ├── api/            # FastAPI backend (dashboard-facing)
-│   ├── daemon/         # WebSocket API for dashboard/daemon sessions
+│   ├── daemon/         # Reconnectable WebSocket helper API for extension/dashboard sessions
 │   ├── models/         # DB models
 │   ├── sites/          # Adapters: base, amex, generic + registry (URL → adapter resolver)
 │   └── utils/
-└── tests/              # unit/, integration/, e2e/, mock_amex/
+└── tests/              # unit/, integration/, e2e/, mock_amex/, support/
 ```
 
 ## Rules
@@ -51,9 +52,13 @@
 
 ## Language
 - **Hangup and Call-again**: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from scratch. Avoid: restarting while a human is typing/reviewing.
+- **Packaged Helper**: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the user must run.
+- **Side Panel Control Plane**: Chrome extension UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/recovery into pure extension JavaScript.
+
+## Relationships
+- The extension owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, and reconnectable run state.
 
 ## Learned Patterns
-- **Verify the visible CDP target** — browser-use may initially attach to a top-chrome/omnibox target or a copied-profile window while Computer Use sees another Chrome surface; use Computer Use before releasing the agent, and use `~/.flyingpig/chrome-cdp-default-copy` because Chrome rejects CDP on the literal default profile.
 - **CDP attach must reuse the current tab** — when attaching via CDP, never call `navigate_to(new_tab=True)`; fresh Target.createTarget lands in a new browser context and loses cookies. Use `get_current_page()` and page-level `goto()` if navigation is needed.
 - **browser-use page wrappers are not Playwright pages** — use `await page.get_url()`, `await page.get_title()`, and `await page.goto(url)`; do not use `page.url` or Playwright-only `wait_until` args.
 - **Amex chat widget scrollback is server-persisted** — cannot be cleared from the UI. Prompt must explicitly treat prior history as read-only background; otherwise agent continues old threads.
@@ -63,3 +68,4 @@
 - **Keep live-run policy behind deep modules** — browser launch/profile rules, LLM adapter creation, user input/tools, prompt rendering, and evidence capture each have their own module so live Amex fixes do not pile into `AgentBrain`.
 - **Human chat needs slow waits** — after a rep joins or says they are reviewing, prefer 30-120 second waits and at most one short nudge; repeated 10-second waits burn step budget and look impatient.
 - **Hangup and Call-again is user-gated** — when a rep refuses or a chat dies, ask the user before ending the chat and starting a fresh one; never restart while a human is typing or reviewing.
+- **Standalone UX still needs browser-use** — the pure-extension runtime was rolled back because it would lose browser-use's planning, perception, CDP recovery, and model/tool loop. Make the release feel standalone by packaging/autostarting the helper, not by rewriting execution inside the extension.
