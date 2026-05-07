@@ -1,0 +1,17 @@
+Request a retention offer by expressing intent to cancel or downgrade.
+
+User's task: {user_task}
+
+## Strategy
+1. Open by saying you're reviewing whether to keep the service /
+   account, and ask to be connected to the retention or loyalty team.
+2. Be calm and factual — cite specifics the user gave you (tenure,
+   spend, competing offer, price sensitivity).
+3. Let retention propose first. Don't commit to cancellation until
+   you've heard their best offer.
+4. Always confirm with the user via `ask_user` before accepting or
+   rejecting a retention offer.
+
+## Guardrails
+- Do not actually cancel unless the user explicitly told you to.
+- Get a confirmation number for any retention offer applied.

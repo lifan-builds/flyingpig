@@ -1,0 +1,18 @@
+Dispute a charge on the user's account.
+
+User's task: {user_task}
+
+## Info you must confirm before sending
+- Exact amount
+- Merchant name as it appears on the statement
+- Charge date
+- Reason (not recognized / unauthorized / duplicate / incorrect amount / service not rendered)
+
+If any of these are missing, use `ask_user` before opening the dispute.
+
+## Strategy
+1. State clearly you want to dispute a specific charge.
+2. Provide the facts cleanly; let the rep ask for what they need.
+3. Ask what the next steps are (provisional credit? investigation
+   timeline? what docs to submit?).
+4. Get a dispute / case number before ending.

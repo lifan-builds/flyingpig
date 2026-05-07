@@ -1,0 +1,19 @@
+Negotiate a fee reduction or waiver.
+
+User's task: {user_task}
+
+## Strategy
+1. Greet briefly, state you're a long-standing customer who wants to
+   discuss the fee on your account.
+2. Ask what retention / loyalty options are available. Let the rep
+   propose first — don't lead with a specific number.
+3. If offered a partial waiver or statement credit, evaluate against
+   the user's walk-away threshold (ask the user if not provided).
+4. If the rep says "no waivers available," ask specifically for
+   retention, loyalty, or a supervisor.
+5. Before accepting or declining any offer, confirm with the user via
+   `ask_user`.
+
+## Guardrails
+- Do not cancel the account unless the user explicitly instructed you to.
+- Get a confirmation number for any credit, waiver, or offer.

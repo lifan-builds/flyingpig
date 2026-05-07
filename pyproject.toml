@@ -1,0 +1,62 @@
+[project]
+name = "flyingpig"
+version = "0.1.0"
+description = "Flying Pig AI (客服上树) — AI agent that interacts with customer service on your behalf"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "browser-use>=0.2.0",
+    "playwright>=1.49.0",
+    "anthropic>=0.40.0",
+    "openai>=1.50.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.0",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "celery>=5.4.0",
+    "redis>=5.2.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "langchain-anthropic>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "passlib[bcrypt]>=1.7.4",
+    "python-jose[cryptography]>=3.3.0",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.8.0",
+    "mypy>=1.13.0",
+]
+
+[project.scripts]
+flyingpig = "src.cli:main"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "slow: marks tests as slow (require browser, deselect with '-m \"not slow\"')",
+]
+
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

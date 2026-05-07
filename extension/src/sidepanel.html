@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flying Pig</title>
+    <link rel="stylesheet" href="sidepanel.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Flying Pig</p>
+          <h1>Customer Service Copilot</h1>
+        </div>
+        <span id="runtimeStatus" class="pill disconnected">Helper Offline</span>
+      </header>
+
+      <section class="hero">
+        <div>
+          <span id="siteStatus">Current tab</span>
+          <strong id="agentStatus">Ready</strong>
+        </div>
+        <p id="runMessage">Open a supported customer-service page, choose a task, and start.</p>
+      </section>
+
+      <section class="metrics">
+        <div>
+          <span>Step</span>
+          <strong id="stepStatus">-</strong>
+        </div>
+        <div>
+          <span>Started</span>
+          <strong id="startedAt">-</strong>
+        </div>
+        <div>
+          <span>Updated</span>
+          <strong id="updatedAt">-</strong>
+        </div>
+      </section>
+
+      <section class="panel current-tab">
+        <label for="currentUrl">Current Tab</label>
+        <input id="currentUrl" readonly>
+        <div class="row">
+          <button id="refreshTab" class="secondary" type="button">Refresh</button>
+          <button id="openAccount" class="secondary" type="button">Open Amex</button>
+        </div>
+      </section>
+
+      <section class="panel task-panel">
+        <label for="taskText">Task</label>
+        <textarea id="taskText" rows="4">Ask American Express for the status of my checking account application and why it did not pass.</textarea>
+
+        <label for="template">Playbook</label>
+        <select id="template">
+          <option value="general">General support</option>
+          <option value="negotiate_fee">Negotiate fee</option>
+          <option value="dispute_charge">Dispute charge</option>
+          <option value="retention_offer">Retention offer</option>
+        </select>
+
+        <details class="advanced">
+          <summary>Advanced</summary>
+          <label for="model">Model</label>
+          <select id="model">
+            <option value="cliproxyapi">Cliproxy API</option>
+            <option value="claude">Claude</option>
+            <option value="openai">OpenAI</option>
+            <option value="gemini-flash">Gemini Flash</option>
+          </select>
+
+          <label for="cdpUrl">Browser endpoint</label>
+          <input id="cdpUrl" placeholder="http://127.0.0.1:9222">
+        </details>
+
+        <div class="actions">
+          <button id="startTask" type="button">Start</button>
+          <button id="cancelTask" class="danger" type="button">Cancel</button>
+        </div>
+      </section>
+
+      <section id="questionPanel" class="panel question hidden">
+        <p class="eyebrow">Input Needed</p>
+        <p id="questionText"></p>
+        <textarea id="answerText" rows="3" placeholder="Type your answer or press Send Answer to continue"></textarea>
+        <button id="sendAnswer" type="button">Send Answer</button>
+      </section>
+
+      <section class="panel transcript">
+        <div class="timeline-header">
+          <h2>Live Timeline</h2>
+          <button id="clearLog" class="link" type="button">Clear</button>
+        </div>
+        <ol id="log"></ol>
+      </section>
+    </main>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

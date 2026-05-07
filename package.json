@@ -1,0 +1,11 @@
+{
+  "name": "flyingpig",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:extension": "node scripts/test_extension_sidepanel.mjs"
+  },
+  "devDependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}

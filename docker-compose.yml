@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  flyingpig:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - DATABASE_URL=postgresql+asyncpg://flyingpig:flyingpig@postgres:5432/flyingpig
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_USER=flyingpig
+      - POSTGRES_PASSWORD=flyingpig
+      - POSTGRES_DB=flyingpig
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flyingpig"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
