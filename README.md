@@ -135,23 +135,41 @@ The preferred supervised UI is the Chrome side panel. It keeps agent
 status, questions, and controls visible beside the Amex tab while the
 local Flying Pig helper runs the browser-use agent.
 
-For release, the helper should be packaged and started automatically by
-the app installer or Chrome Native Messaging host. During development,
-run it manually:
+For beta, install the local helper service first. It starts the WebSocket
+helper in the background at login; the side panel can then launch a
+FlyingPig-controlled Chrome window when you are ready:
 
 ```bash
-python scripts/daemon.py --port 8765
-python scripts/start.py --browser-only
+flyingpig-macos-helper install
 ```
 
 1. In Chrome, open `chrome://extensions`, enable developer mode, click
 **Load unpacked**, and select `extension/`.
 
-2. Open an Amex customer-service or account tab, then click the Flying Pig
-extension icon.
+2. Click the Flying Pig extension icon and press **Launch Chrome**.
 
-3. Choose a playbook, edit the task, and start. The side panel streams
+3. In the FlyingPig Chrome window, open or prepare the Amex
+customer-service tab.
+
+4. Choose a playbook, edit the task, and start. The side panel streams
 browser-use progress and forwards mid-run questions.
+
+If the copied default Chrome profile has not been created yet, quit
+normal Chrome once and press **Launch Chrome** again. To use a clean
+profile that can run alongside normal Chrome during development, use:
+
+```bash
+flyingpig-helper --chrome-profile dedicated
+```
+
+For beta support:
+
+```bash
+flyingpig-macos-helper status
+flyingpig-macos-helper stop
+flyingpig-macos-helper start
+flyingpig-macos-helper uninstall
+```
 
 Automated extension tests should use a Puppeteer-managed browser with the
 extension installed through Puppeteer's extension APIs.
@@ -166,6 +184,9 @@ npm run test:extension
 This launches a Puppeteer-managed Chrome with the unpacked extension,
 starts mock Amex and helper servers, and verifies that the side panel can
 start a browser-use-helper run and render progress.
+
+See `docs/beta.md` for the first-cohort beta checklist and operating
+rules.
 
 ## Development
 

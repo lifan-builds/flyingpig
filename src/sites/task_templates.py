@@ -7,6 +7,8 @@ to initiate tasks without writing freeform descriptions.
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from src.sites.profiles import PROFILE_TEMPLATE_FALLBACKS
+
 PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 
 
@@ -107,7 +109,11 @@ _TEMPLATES: dict[str, list[TaskTemplate]] = {
 
 def get_templates(site: str) -> list[TaskTemplate]:
     """Get all available templates for a site."""
-    return _TEMPLATES.get(site.lower(), [])
+    site_key = site.lower()
+    template_site = site_key if site_key in _TEMPLATES else PROFILE_TEMPLATE_FALLBACKS.get(site_key)
+    if template_site is None:
+        return []
+    return _TEMPLATES.get(template_site, [])
 
 
 def get_template(site: str, template_id: str) -> TaskTemplate | None:
@@ -128,4 +134,7 @@ def load_prompt_template(site: str, prompt_file: str) -> str:
 
 def list_all_templates() -> dict[str, list[TaskTemplate]]:
     """Return all templates grouped by site."""
-    return dict(_TEMPLATES)
+    templates = dict(_TEMPLATES)
+    for site, fallback_site in PROFILE_TEMPLATE_FALLBACKS.items():
+        templates[site] = _TEMPLATES.get(fallback_site, [])
+    return templates

@@ -28,6 +28,8 @@ until step 3 completes.
 Only after the user confirms (or provides the missing details) should
 you start typing in the chat.
 
+{decision_checkpoint_instructions}
+
 ## Site-Specific Context for American Express
 
 ### Login & Authentication

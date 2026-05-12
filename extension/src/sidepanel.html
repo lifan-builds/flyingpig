@@ -21,7 +21,7 @@
           <span id="siteStatus">Current tab</span>
           <strong id="agentStatus">Ready</strong>
         </div>
-        <p id="runMessage">Open a supported customer-service page, choose a task, and start.</p>
+        <p id="runMessage">Open a customer-service chat or support page, choose a task, and start.</p>
       </section>
 
       <section class="metrics">
@@ -44,7 +44,8 @@
         <input id="currentUrl" readonly>
         <div class="row">
           <button id="refreshTab" class="secondary" type="button">Refresh</button>
-          <button id="openAccount" class="secondary" type="button">Open Amex</button>
+          <button id="launchChrome" class="secondary" type="button">Launch Chrome</button>
+          <button id="openOura" class="secondary" type="button">Open Oura</button>
         </div>
       </section>
 
@@ -72,6 +73,21 @@
 
           <label for="cdpUrl">Browser endpoint</label>
           <input id="cdpUrl" placeholder="http://127.0.0.1:9222">
+
+          <label for="helperUrl">Helper endpoint</label>
+          <input id="helperUrl" placeholder="http://127.0.0.1:8765">
+
+          <fieldset class="notification-settings">
+            <legend>User attention alerts</legend>
+            <label class="check-row">
+              <input id="notifySound" type="checkbox">
+              Sound
+            </label>
+            <label class="check-row">
+              <input id="notifyOs" type="checkbox">
+              OS notification
+            </label>
+          </fieldset>
         </details>
 
         <div class="actions">
@@ -87,6 +103,18 @@
         <button id="sendAnswer" type="button">Send Answer</button>
       </section>
 
+      <section id="checkpointPanel" class="panel checkpoint hidden">
+        <p class="eyebrow">Decision Checkpoint</p>
+        <h2 id="checkpointType">Decision needed</h2>
+        <p id="checkpointSummary"></p>
+        <div id="checkpointOptions" class="checkpoint-options"></div>
+        <details class="custom-decision">
+          <summary>Other instruction</summary>
+          <textarea id="checkpointCustomText" rows="3" placeholder="Tell Flying Pig what to do instead"></textarea>
+          <button id="sendCheckpointCustom" type="button">Send Custom Instruction</button>
+        </details>
+      </section>
+
       <section class="panel transcript">
         <div class="timeline-header">
           <h2>Live Timeline</h2>
@@ -95,6 +123,6 @@
         <ol id="log"></ol>
       </section>
     </main>
-    <script src="sidepanel.js"></script>
+    <script type="module" src="sidepanel.js"></script>
   </body>
 </html>

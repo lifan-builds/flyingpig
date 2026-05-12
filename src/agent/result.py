@@ -17,6 +17,7 @@ class TaskResult:
     summary: str
     transcript: list[str] = field(default_factory=list)
     chat_transcript: list[str] = field(default_factory=list)
+    checkpoint_events: list[dict] = field(default_factory=list)
     transcript_path: str | None = None
     outcome_details: dict = field(default_factory=dict)
     steps_taken: int = 0

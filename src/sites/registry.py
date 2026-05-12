@@ -5,6 +5,8 @@ from urllib.parse import urlparse
 from src.sites.amex import AmexAdapter
 from src.sites.base import BaseSiteAdapter
 from src.sites.generic import GenericAdapter
+from src.sites.profile_adapter import ProfileBackedAdapter
+from src.sites.profiles import PROFILES
 
 _ADAPTERS: dict[str, type[BaseSiteAdapter]] = {
     "amex": AmexAdapter,
@@ -14,16 +16,20 @@ _ADAPTERS: dict[str, type[BaseSiteAdapter]] = {
 
 def get_site_adapter(site: str) -> BaseSiteAdapter:
     """Get an instantiated site adapter by name."""
-    adapter_cls = _ADAPTERS.get(site.lower())
-    if adapter_cls is None:
-        available = ", ".join(sorted(_ADAPTERS.keys()))
-        raise ValueError(f"Unknown site '{site}'. Available sites: {available}")
-    return adapter_cls()
+    site_id = site.lower()
+    adapter_cls = _ADAPTERS.get(site_id)
+    if adapter_cls is not None:
+        return adapter_cls()
+    profile = PROFILES.get(site_id)
+    if profile is not None:
+        return ProfileBackedAdapter(profile)
+    available = ", ".join(list_sites())
+    raise ValueError(f"Unknown site '{site}'. Available sites: {available}")
 
 
 def list_sites() -> list[str]:
     """Return all registered site names."""
-    return sorted(_ADAPTERS.keys())
+    return sorted({*_ADAPTERS.keys(), *PROFILES.keys()})
 
 
 def resolve_from_url(url: str | None) -> str:
@@ -46,6 +52,10 @@ def resolve_from_url(url: str | None) -> str:
         if site_id == "generic":
             continue
         for pattern in cls.hostname_patterns():
+            if pattern.lower() in haystack:
+                return site_id
+    for site_id, profile in PROFILES.items():
+        for pattern in profile.hostname_patterns:
             if pattern.lower() in haystack:
                 return site_id
     return "generic"

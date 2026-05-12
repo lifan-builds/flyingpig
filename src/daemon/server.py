@@ -14,6 +14,7 @@ Protocol (JSON per frame, both directions):
     {"type": "status", "text": "..."}                  # human-readable progress
     {"type": "progress", "event": {...}}                # step-level agent progress
     {"type": "question", "question": "...", "reason": "..."}
+    {"type": "decision_checkpoint", "checkpoint": {...}}
     {"type": "result", "status": "success|partial|failed|needs_input",
                        "summary": "...", "steps": N, "duration": S}
     {"type": "error", "text": "..."}
@@ -24,16 +25,32 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import UTC, datetime
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 from src.agent.brain import AgentBrain, TaskStatus
-from src.sites.registry import list_sites, resolve_from_url
+from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome
+from src.daemon.run_session import (
+    RunStateStore,
+    now_iso,
+    protocol_event_for_request,
+    request_message,
+    result_payload,
+)
+from src.sites.registry import get_site_adapter, list_sites, resolve_from_url
 from src.sites.task_templates import get_templates
 
 logger = logging.getLogger(__name__)
+
+
+class BrowserLaunchRequest(BaseModel):
+    site: str = "amex"
+    cdp_port: int = 9222
+    chrome_profile: str = "default"
+    chrome_user_data_dir: str | None = None
+    initial_url: str | None = None
 
 
 class RunManager:
@@ -46,20 +63,7 @@ class RunManager:
         self.questions_task: asyncio.Task | None = None
         self.sessions: set[Session] = set()
         self.lock = asyncio.Lock()
-        self.state: dict = {
-            "type": "state",
-            "status": "idle",
-            "running": False,
-            "needs_input": False,
-            "site": None,
-            "message": "Idle",
-            "step": None,
-            "updated_at": None,
-            "started_at": None,
-            "finished_at": None,
-            "transcript": None,
-            "result": None,
-        }
+        self.state = RunStateStore()
 
     def attach(self, session: Session) -> None:
         self.sessions.add(session)
@@ -68,7 +72,7 @@ class RunManager:
         self.sessions.discard(session)
 
     async def send_snapshot(self, session: Session) -> None:
-        await session.send(**self.state)
+        await session.send(**self.state.snapshot())
 
     async def broadcast(self, **payload) -> None:
         stale = []
@@ -81,22 +85,21 @@ class RunManager:
             self.detach(session)
 
     async def set_state(self, **changes) -> None:
-        self.state.update(changes)
-        self.state["type"] = "state"
-        self.state["updated_at"] = datetime.now(UTC).isoformat()
-        await self.broadcast(**self.state)
+        await self.broadcast(**self.state.apply(**changes))
 
     def _sites_payload(self) -> list[dict]:
         out = []
         for site in list_sites():
             templates = get_templates(site)
-            out.append({
-                "id": site,
-                "templates": [
-                    {"id": t.id, "label": t.name, "description": t.description}
-                    for t in templates
-                ],
-            })
+            out.append(
+                {
+                    "id": site,
+                    "templates": [
+                        {"id": t.id, "label": t.name, "description": t.description}
+                        for t in templates
+                    ],
+                }
+            )
         return out
 
     async def start(self, msg: dict) -> None:
@@ -107,21 +110,17 @@ class RunManager:
 
             url = msg.get("url") or ""
             requested_site = msg.get("site")
-            site = (
-                resolve_from_url(url)
-                if requested_site in (None, "", "auto")
-                else requested_site
-            )
+            site = resolve_from_url(url) if requested_site in (None, "", "auto") else requested_site
             if not site:
                 await self.broadcast(
                     type="error",
-                    text="Could not detect the current site. Open a supported site tab first.",
+                    text="Could not resolve the current tab. Open a customer-service tab first.",
                 )
                 await self.set_state(
                     status="idle",
                     running=False,
                     needs_input=False,
-                    message="Open a supported site tab first.",
+                    message="Open a customer-service tab first.",
                     site=None,
                 )
                 return
@@ -141,7 +140,7 @@ class RunManager:
                 target_url=target_url,
                 navigate_on_attach=bool(msg.get("navigate_on_attach")),
             )
-            started_at = datetime.now(UTC).isoformat()
+            started_at = now_iso()
             await self.broadcast(type="status", text=f"using adapter: {site}")
             await self.set_state(
                 status="starting",
@@ -154,6 +153,7 @@ class RunManager:
                 finished_at=None,
                 transcript=None,
                 result=None,
+                pending_request=None,
             )
             self.agent_task = asyncio.create_task(
                 self._run_agent(
@@ -171,25 +171,18 @@ class RunManager:
             result = await self.brain.execute(
                 task=task, max_steps=max_steps, template_id=template_id
             )
-            status = str(result.status).split(".")[-1].lower()
-            payload = {
-                "type": "result",
-                "status": status,
-                "summary": result.summary,
-                "steps": result.steps_taken,
-                "duration": result.duration_seconds,
-                "transcript": str(result.transcript_path) if result.transcript_path else None,
-            }
+            payload = result_payload(result)
             await self.broadcast(**payload)
             await self.set_state(
-                status=status,
+                status=payload["status"],
                 running=False,
                 needs_input=False,
                 message=result.summary,
                 step=result.steps_taken,
-                finished_at=datetime.now(UTC).isoformat(),
+                finished_at=now_iso(),
                 transcript=payload["transcript"],
                 result=payload,
+                pending_request=None,
             )
         except asyncio.CancelledError:
             await self.set_state(
@@ -197,7 +190,8 @@ class RunManager:
                 running=False,
                 needs_input=False,
                 message="Cancelled",
-                finished_at=datetime.now(UTC).isoformat(),
+                finished_at=now_iso(),
+                pending_request=None,
             )
             raise
         except Exception as e:
@@ -208,7 +202,8 @@ class RunManager:
                 running=False,
                 needs_input=False,
                 message=f"{type(e).__name__}: {e}",
-                finished_at=datetime.now(UTC).isoformat(),
+                finished_at=now_iso(),
+                pending_request=None,
             )
 
     async def _poll_questions(self) -> None:
@@ -217,23 +212,26 @@ class RunManager:
             await asyncio.sleep(0.3)
             if not self.brain:
                 continue
-            q = self.brain.input_handler.pending_question
-            if q and q != last_seen:
-                last_seen = q
-                await self.broadcast(type="question", question=q, reason="agent needs input")
+            request = getattr(self.brain.input_handler, "pending_request", None)
+            request_key = json.dumps(request, sort_keys=True) if request else None
+            if request and request_key != last_seen:
+                last_seen = request_key
+                await self.broadcast(**protocol_event_for_request(request))
                 await self.set_state(
                     status="needs_input",
                     running=True,
                     needs_input=True,
-                    message=q,
+                    message=request_message(request),
+                    pending_request=request,
                 )
-            elif not q and last_seen is not None:
+            elif not request and last_seen is not None:
                 last_seen = None
                 await self.set_state(
                     status="running",
                     running=True,
                     needs_input=False,
                     message="Continuing",
+                    pending_request=None,
                 )
 
     async def _poll_progress(self) -> None:
@@ -245,24 +243,29 @@ class RunManager:
             progress = self.brain.step_log
             for event in progress[sent:]:
                 await self.broadcast(type="progress", event=event)
+                pending_request = getattr(self.brain.input_handler, "pending_request", None)
                 await self.set_state(
-                    status="running",
+                    status="needs_input" if pending_request else "running",
                     running=True,
-                    needs_input=False,
+                    needs_input=bool(pending_request),
                     step=event.get("step"),
-                    message=(
+                    message=request_message(pending_request)
+                    or (
                         event.get("message")
                         or event.get("goal")
                         or event.get("thought")
                         or "Working"
                     ),
+                    pending_request=pending_request,
                 )
             sent = len(progress)
 
-    async def answer(self, text: str) -> None:
+    async def answer(self, text: str, payload: dict | None = None) -> None:
         if self.brain is None:
             await self.broadcast(type="error", text="no active agent")
             return
+        if payload:
+            text = json.dumps(payload)
         self.brain.input_handler.provide_input(text)
         await self.broadcast(type="status", text="answer received")
         await self.set_state(
@@ -270,6 +273,7 @@ class RunManager:
             running=True,
             needs_input=False,
             message="Answer received",
+            pending_request=None,
         )
 
     async def cancel(self) -> None:
@@ -281,7 +285,8 @@ class RunManager:
                 running=False,
                 needs_input=False,
                 message="Cancelled",
-                finished_at=datetime.now(UTC).isoformat(),
+                finished_at=now_iso(),
+                pending_request=None,
             )
 
 
@@ -314,7 +319,7 @@ class Session:
             elif mtype == "start":
                 await run_manager.start(msg)
             elif mtype == "answer":
-                await run_manager.answer(msg.get("text", ""))
+                await run_manager.answer(msg.get("text", ""), payload=msg.get("payload"))
             elif mtype == "cancel":
                 await run_manager.cancel()
             else:
@@ -333,6 +338,40 @@ def create_app() -> FastAPI:
     @app.get("/health")
     async def health():
         return {"ok": True, "sites": list_sites()}
+
+    @app.post("/browser/launch")
+    async def browser_launch(request: BrowserLaunchRequest):
+        if request.site not in list_sites():
+            return {
+                "ok": False,
+                "error": f"Unknown site '{request.site}'. Available: {', '.join(list_sites())}",
+            }
+        if request.chrome_profile not in {"dedicated", "default"}:
+            return {
+                "ok": False,
+                "error": "chrome_profile must be dedicated or default",
+            }
+
+        adapter = get_site_adapter(request.site)
+        initial_url = request.initial_url or adapter.chat_url or "about:blank"
+        try:
+            cdp_url = await asyncio.to_thread(
+                launch_cdp_chrome,
+                ChromeLaunchConfig(
+                    cdp_port=request.cdp_port,
+                    chrome_profile=request.chrome_profile,
+                    chrome_user_data_dir=request.chrome_user_data_dir,
+                    initial_url=initial_url,
+                ),
+            )
+        except Exception as exc:
+            logger.exception("browser launch failed")
+            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        return {
+            "ok": True,
+            "cdp_url": cdp_url,
+            "message": "Chrome is ready. Prepare the visible tab, then start the task.",
+        }
 
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):

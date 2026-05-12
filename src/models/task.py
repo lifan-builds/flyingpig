@@ -5,6 +5,7 @@ from src.models.db import Base
 
 class TaskRecord(Base):
     """Database model for storing session recordings and audit trails."""
+
     __tablename__ = "tasks"
 
     id = Column(String, primary_key=True, index=True)

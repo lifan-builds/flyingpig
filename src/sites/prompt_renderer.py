@@ -15,6 +15,7 @@ def render_site_prompt(
     escalation_instructions: str,
     detection_instructions: str,
     template_id: str | None = None,
+    site_context: str = "",
 ) -> str:
     """Render a full site prompt from base and task templates."""
     task_section = _render_task_section(site=site, user_task=user_task, template_id=template_id)
@@ -23,6 +24,10 @@ def render_site_prompt(
         base_template.replace("{task_section}", task_section)
         .replace("{detection_instructions}", detection_instructions)
         .replace("{escalation_instructions}", escalation_instructions)
+        .replace(
+            "{decision_checkpoint_instructions}", _load_shared_partial("decision_checkpoints.txt")
+        )
+        .replace("{site_context}", site_context)
     )
 
 
@@ -37,3 +42,10 @@ def _render_task_section(*, site: str, user_task: str, template_id: str | None) 
     except FileNotFoundError:
         return user_task
     return raw_template.replace("{user_task}", user_task)
+
+
+def _load_shared_partial(prompt_file: str) -> str:
+    path = PROMPTS_DIR / "shared" / prompt_file
+    if not path.exists():
+        raise FileNotFoundError(f"Shared prompt partial not found: {path}")
+    return path.read_text(encoding="utf-8")

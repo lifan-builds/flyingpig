@@ -2,6 +2,7 @@
 
 import pytest
 from src.sites.amex import AmexAdapter
+from src.sites.profiles import AMEX_PROFILE
 from src.sites.task_templates import (
     get_template,
     get_templates,
@@ -68,6 +69,8 @@ class TestAmexAdapter:
         )
         assert "Never fabricate" in prompt
         assert "ask_user" in prompt
+        assert "Use `decision_checkpoint` instead of `ask_user`" in prompt
+        assert "{decision_checkpoint_instructions}" not in prompt
 
     def test_build_prompt_login_instructions(self):
         prompt = self.adapter.build_task_prompt(
@@ -90,6 +93,11 @@ class TestAmexAdapter:
         assert "supervisor" in keywords
         assert "retention" in keywords
         assert "loyalty department" in keywords
+
+    def test_declarative_amex_profile_supplies_adapter_data(self):
+        assert self.adapter.name == AMEX_PROFILE.name
+        assert self.adapter.chat_url == AMEX_PROFILE.chat_url
+        assert self.adapter.requires_login == AMEX_PROFILE.requires_login
 
     def test_build_prompt_invalid_template(self):
         # Invalid template should fall back to user_task
@@ -120,6 +128,12 @@ class TestTaskTemplates:
         templates = get_templates("nonexistent")
         assert templates == []
 
+    def test_profile_site_uses_generic_templates(self):
+        templates = get_templates("oura")
+        ids = [t.id for t in templates]
+        assert "general" in ids
+        assert "retention_offer" in ids
+
     def test_get_specific_template(self):
         template = get_template("amex", "negotiate_fee")
         assert template is not None
@@ -148,6 +162,7 @@ class TestTaskTemplates:
     def test_list_all_templates(self):
         all_templates = list_all_templates()
         assert "amex" in all_templates
+        assert "oura" in all_templates
         assert len(all_templates["amex"]) >= 4
 
     def test_dispute_template_has_required_inputs(self):

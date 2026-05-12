@@ -13,9 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CHROME_APP = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-DEFAULT_CHROME_USER_DATA_DIR = (
-    Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
-)
+DEFAULT_CHROME_USER_DATA_DIR = Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
 DEDICATED_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-profile"
 DEFAULT_COPY_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-default-copy"
 

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="Flying Pig">
+  <rect width="128" height="128" rx="24" fill="#171d1d"/>
+  <circle cx="64" cy="66" r="38" fill="#65d69c"/>
+  <circle cx="50" cy="58" r="5" fill="#06140e"/>
+  <circle cx="78" cy="58" r="5" fill="#06140e"/>
+  <ellipse cx="64" cy="74" rx="16" ry="11" fill="#f4f7f2"/>
+  <circle cx="58" cy="74" r="3" fill="#06140e"/>
+  <circle cx="70" cy="74" r="3" fill="#06140e"/>
+  <path d="M34 48 18 36l5 28Z" fill="#65d69c"/>
+  <path d="m94 48 16-12-5 28Z" fill="#65d69c"/>
+</svg>

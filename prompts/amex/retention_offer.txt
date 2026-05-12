@@ -28,12 +28,18 @@ Get the best possible retention offer from Amex. This could be bonus points, sta
 
 ### Important Rules
 - You are NOT actually canceling — you're exploring retention offers
-- If they proceed to cancel without offering anything, say: "Actually, let me think about it. I don't want to close the account today."
-- Never let the account actually be closed
+- If the user's task explicitly says to close the card when no offer is
+  available, do not default to stopping. Raise a `decision_checkpoint` after
+  the no-offer response with options such as close, downgrade/product change,
+  ask again, or stop.
+- Never let the account actually be closed without an irreversible-action
+  `decision_checkpoint` and explicit user approval of the exact outbound
+  confirmation message.
 - Get all offer details in writing (confirmation number, terms)
 
 ### Things to NEVER Do
-- Never actually confirm a cancellation
+- Never actually confirm a cancellation without an irreversible-action
+  `decision_checkpoint`
 - Never accept an offer without reporting to the user first — say "That sounds interesting, let me note that down"
 - Never be hostile — retention reps respond to friendly, reasonable customers
 

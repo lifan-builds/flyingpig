@@ -37,6 +37,8 @@ dev = [
 
 [project.scripts]
 flyingpig = "src.cli:main"
+flyingpig-helper = "src.helper:main"
+flyingpig-macos-helper = "src.helper_service:main"
 
 [tool.ruff]
 target-version = "py312"

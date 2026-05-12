@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:extension": "node scripts/test_extension_sidepanel.mjs"
+    "test:extension": "node scripts/test_sidepanel_protocol.mjs && node scripts/test_extension_sidepanel.mjs"
   },
   "devDependencies": {
     "puppeteer": "^24.0.0"

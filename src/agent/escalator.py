@@ -66,7 +66,7 @@ If chat escalation fails after strategies 1-4:
 "Can you transfer me to a phone callback? I'd like to discuss this with
 someone directly."
 
-### Strategy 6: Hangup and Call-again
+### Recovery: Hangup and Call-again
 If the chat gives a final refusal, the representative disconnects, or the chat
 appears dead after reasonable waiting, use a fresh-chat recovery only after user
 confirmation. Ask the user whether to end this chat and start a new one. If the
@@ -78,8 +78,10 @@ and restate the current task from scratch without referencing old agent names.
 - Wait for the response after each attempt — the bot may comply
 - If a strategy partially works (e.g., "let me check if an agent is available"),
   wait and follow the process rather than immediately trying the next strategy
-- After all 6 strategies, if still talking to AI, proceed to negotiate with the
+- After all 5 escalation strategies, if still talking to AI, proceed to negotiate with the
   AI chatbot — some resolution is better than none
+- Hangup and call-again is a separate recovery path, not an escalation attempt,
+  and must only happen after explicit user confirmation
 - NEVER be rude or hostile — firm but polite always works better
-- Maximum 6 escalation attempts total before proceeding with whoever you're talking to
+- Maximum 5 escalation attempts total before proceeding with whoever you're talking to
 """

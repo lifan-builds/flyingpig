@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,13 +15,26 @@ from src.sites.base import BaseSiteAdapter
 logger = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class SessionArtifacts:
+    transcript_path: str
+    chat_transcript: list[str]
+    checkpoint_events: list[dict]
+    result: TaskResult
+
+
 class EvidenceRecorder:
     """Captures run artifacts and converts browser-use history into TaskResult."""
 
     def __init__(self, site_adapter: BaseSiteAdapter):
         self.site_adapter = site_adapter
 
-    def save_session(self, history: AgentHistoryList, save_dir: Path) -> str:
+    def save_session(
+        self,
+        history: AgentHistoryList,
+        save_dir: Path,
+        events: list[dict] | None = None,
+    ) -> str:
         """Save the full session history to disk."""
         save_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
@@ -29,6 +43,10 @@ class EvidenceRecorder:
         filepath = save_dir / filename
 
         history.save_to_file(str(filepath))
+        if events:
+            events_path = save_dir / f"session_{site_name}_{timestamp}_events.json"
+            events_path.write_text(json.dumps(events, indent=2), encoding="utf-8")
+            logger.info("Session events saved to %s", events_path)
         logger.info("Session saved to %s", filepath)
         return str(filepath)
 
@@ -102,9 +120,11 @@ class EvidenceRecorder:
         self,
         history: AgentHistoryList,
         chat_transcript: list[str] | None = None,
+        checkpoint_events: list[dict] | None = None,
     ) -> TaskResult:
         """Extract a structured TaskResult from the agent's history."""
         chat_transcript = chat_transcript or []
+        checkpoint_events = checkpoint_events or []
         final = history.final_result()
         steps = history.number_of_steps()
         duration = history.total_duration_seconds()
@@ -115,6 +135,7 @@ class EvidenceRecorder:
                 summary=final.replace("[NEEDS_INPUT] ", ""),
                 transcript=history.agent_steps(),
                 chat_transcript=chat_transcript,
+                checkpoint_events=checkpoint_events,
                 steps_taken=steps,
                 duration_seconds=duration,
             )
@@ -139,7 +160,39 @@ class EvidenceRecorder:
             summary=outcome_details.get("outcome", final or "No result captured"),
             transcript=history.agent_steps(),
             chat_transcript=chat_transcript,
+            checkpoint_events=checkpoint_events,
             steps_taken=steps,
             duration_seconds=duration,
             outcome_details=outcome_details,
+        )
+
+    async def record_session_result(
+        self,
+        *,
+        history: AgentHistoryList,
+        browser_session,
+        save_dir: Path,
+        checkpoint_events: list[dict],
+    ) -> SessionArtifacts:
+        """Capture chat evidence, save artifacts, and return the linked result."""
+        chat_transcript = await self.capture_chat_transcript(browser_session)
+        if not chat_transcript:
+            chat_transcript = self.extract_chat_transcript_from_history(history)
+
+        transcript_path = self.save_session(
+            history,
+            save_dir,
+            events=checkpoint_events,
+        )
+        result = self.extract_result(
+            history,
+            chat_transcript=chat_transcript,
+            checkpoint_events=checkpoint_events,
+        )
+        result.transcript_path = transcript_path
+        return SessionArtifacts(
+            transcript_path=transcript_path,
+            chat_transcript=chat_transcript,
+            checkpoint_events=checkpoint_events,
+            result=result,
         )

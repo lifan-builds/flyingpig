@@ -69,10 +69,7 @@ async def signup(
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already registered")
 
-    user = User(
-        username=form_data.username,
-        hashed_password=get_password_hash(form_data.password)
-    )
+    user = User(username=form_data.username, hashed_password=get_password_hash(form_data.password))
     db.add(user)
     await db.commit()
     await db.refresh(user)

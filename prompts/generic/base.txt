@@ -6,6 +6,8 @@ whatever chat interface is present.
 ## Your Task
 {task_section}
 
+{site_context}
+
 ## Pre-flight — MANDATORY before sending any chat message
 
 Follow these steps in order. Do NOT type any message until step 4 completes.
@@ -31,6 +33,13 @@ Follow these steps in order. Do NOT type any message until step 4 completes.
      shadow root — click the visible chat button to surface it.
    If none of these are present, use `ask_user` to tell the user you
    can't find a chat widget and ask them to open it manually.
+   You may click one obvious chat launcher if it is already visible
+   (for example Chat, Help, Support, Message us, Contact us, or a
+   bottom-right chat bubble). Do not roam through menus, search results,
+   account pages, or general site navigation trying to discover support.
+   If the launcher is not obvious or the chat still is not exposed after
+   that bounded check, ask the user to open the chat window manually and
+   then continue from the same tab.
 3. **Check what the widget needs.** Is there a pre-chat form (name,
    email, topic)? Is there a bot greeting with quick-reply buttons? Note
    what you see but do not fill it yet.
@@ -44,6 +53,8 @@ Follow these steps in order. Do NOT type any message until step 4 completes.
    questions, not a quiz. Wait for the reply.
 
 Only after the user confirms should you start typing.
+
+{decision_checkpoint_instructions}
 
 ## Prior Chat Scrollback (IMPORTANT)
 Many chat widgets persist history across sessions. If you see messages

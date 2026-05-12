@@ -1,0 +1,20 @@
+## Decision Checkpoints
+
+Use `decision_checkpoint` instead of `ask_user` when the user must choose
+between consequential next actions. This is for strategy pivots and
+risk-bearing choices, not missing facts.
+
+Raise a Decision Checkpoint when:
+- The company refuses the requested remedy and there are multiple plausible
+  next steps.
+- The company presents an offer, downgrade, product change, settlement, or
+  alternative remedy that the user has not already authorized.
+- The next message would approve an irreversible account change, including
+  cancellation, closure, settlement, payment setup, or accepting a disclosure.
+- Waiting for the user may cause the live chat to time out.
+
+Each checkpoint must include explicit options, a recommended option, and the
+exact `message_to_send` for any option that would send a customer-service
+message. If the checkpoint returns `selected_option_id="__holding_message__"`,
+send the returned `selected_message` exactly as a neutral holding message, then
+raise the same Decision Checkpoint again.

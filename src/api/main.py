@@ -30,6 +30,7 @@ async def lifespan(app: FastAPI):
     await init_db()
     yield
 
+
 app = FastAPI(
     title="Flying Pig AI",
     description="客服上树 — AI customer service agent API",
@@ -52,6 +53,7 @@ _task_brains: dict[str, AgentBrain] = {}
 
 
 # --- Request/Response models ---
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -112,6 +114,7 @@ class TemplateInfo(BaseModel):
 
 
 # --- Endpoints ---
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
@@ -175,13 +178,14 @@ async def launch_browser(
         )
 
     adapter = get_site_adapter(request.site)
+    initial_url = request.initial_url or adapter.chat_url or "about:blank"
     cdp_url = await asyncio.to_thread(
         launch_cdp_chrome,
         ChromeLaunchConfig(
             cdp_port=request.cdp_port,
             chrome_profile=request.chrome_profile,
             chrome_user_data_dir=request.chrome_user_data_dir,
-            initial_url=request.initial_url or adapter.chat_url,
+            initial_url=initial_url,
             dashboard_url=request.dashboard_url,
         ),
     )
@@ -193,10 +197,7 @@ async def launch_browser(
 
 
 @app.post("/tasks", response_model=TaskResponse)
-async def create_task(
-    request: TaskRequest,
-    current_user: User = Depends(get_current_user)
-):
+async def create_task(request: TaskRequest, current_user: User = Depends(get_current_user)):
     """Create and start a new customer service task."""
     if request.site not in list_sites():
         raise HTTPException(

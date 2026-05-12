@@ -208,8 +208,76 @@ button.link {
   border-color: rgba(120, 183, 255, 0.55);
 }
 
+.checkpoint {
+  border-color: rgba(255, 207, 102, 0.72);
+  box-shadow: 0 0 0 1px rgba(255, 207, 102, 0.1);
+}
+
+.checkpoint h2 {
+  color: #ffd680;
+  font-size: 16px;
+}
+
+.checkpoint p,
 .question p:not(.eyebrow) {
   overflow-wrap: anywhere;
+}
+
+.checkpoint-options {
+  display: grid;
+  gap: 8px;
+}
+
+.checkpoint-option {
+  align-items: stretch;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+  min-height: auto;
+  padding: 10px;
+  text-align: left;
+}
+
+.checkpoint-option.recommended {
+  border-color: rgba(101, 214, 156, 0.72);
+}
+
+.checkpoint-option strong,
+.checkpoint-option span,
+.checkpoint-option code {
+  overflow-wrap: anywhere;
+}
+
+.checkpoint-option code {
+  color: #d6ded9;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.custom-decision,
+.notification-settings {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.check-row {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: 13px;
+  gap: 8px;
+  text-transform: none;
+}
+
+.check-row input {
+  width: auto;
 }
 
 .transcript {

@@ -10,9 +10,9 @@ from src.agent.browser_runtime import (
 
 
 def test_chrome_user_data_dir_uses_custom_dir():
-    assert chrome_user_data_dir("default", "~/custom-chrome") == Path(
-        "~/custom-chrome"
-    ).expanduser()
+    assert (
+        chrome_user_data_dir("default", "~/custom-chrome") == Path("~/custom-chrome").expanduser()
+    )
 
 
 def test_chrome_user_data_dir_uses_existing_profile(monkeypatch, tmp_path):
@@ -211,7 +211,4 @@ def test_find_debugger_target_id_matches_page_prefix(monkeypatch):
         lambda *args, **kwargs: FakeResponse(),
     )
 
-    assert (
-        find_debugger_target_id(port=9222, url_prefix="https://example.com/chat")
-        == "one"
-    )
+    assert find_debugger_target_id(port=9222, url_prefix="https://example.com/chat") == "one"

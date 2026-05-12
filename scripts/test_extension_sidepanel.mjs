@@ -19,7 +19,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
 const extensionDir = path.join(rootDir, "extension");
 const mockUrl = "http://127.0.0.1:8086/?logged_in=true";
-const helperHealthUrl = "http://127.0.0.1:8765/health";
+const helperPort = process.env.FLYINGPIG_HELPER_PORT || "8766";
+const helperUrl = `http://127.0.0.1:${helperPort}`;
+const helperHealthUrl = `${helperUrl}/health`;
 const cdpUrlForPanel = process.env.FLYINGPIG_CDP_URL || "http://127.0.0.1:9335";
 
 const python = process.env.PYTHON || "python";
@@ -80,7 +82,7 @@ async function setValue(page, selector, value) {
 async function openSidePanelPage(browser, extensionId) {
   const sidePanelUrl = `chrome-extension://${extensionId}/src/sidepanel.html`;
   const triggerAction = browser.triggerExtensionAction?.bind(browser);
-  if (triggerAction) {
+  if (triggerAction && helperUrl === "http://127.0.0.1:8765") {
     const sidePanelTarget = browser
       .waitForTarget((target) => target.url().startsWith(sidePanelUrl), { timeout: 8000 })
       .catch(() => null);
@@ -91,9 +93,8 @@ async function openSidePanelPage(browser, extensionId) {
   }
 
   const page = await browser.newPage();
-  await page.goto(`${sidePanelUrl}?targetUrl=${encodeURIComponent(mockUrl)}`, {
-    waitUntil: "domcontentloaded",
-  });
+  const url = `${sidePanelUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`;
+  await page.goto(url, { waitUntil: "domcontentloaded" });
   return page;
 }
 
@@ -121,7 +122,7 @@ async function main() {
       "--host",
       "127.0.0.1",
       "--port",
-      "8765",
+      helperPort,
       "--log-level",
       "error",
     ],
@@ -157,6 +158,12 @@ async function main() {
       { timeout: 10000 },
     );
 
+    await panelPage.click("#launchChrome");
+    await panelPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CHROME-READY"),
+      { timeout: 10000 },
+    );
+
     await setValue(panelPage, "#cdpUrl", cdpUrlForPanel);
     await setValue(
       panelPage,
@@ -166,6 +173,23 @@ async function main() {
     await panelPage.click("#startTask");
     await panelPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-RUN-OK"),
+      { timeout: 10000 },
+    );
+
+    await setValue(panelPage, "#taskText", "Mock checkpoint flow.");
+    await panelPage.click("#startTask");
+    await panelPage.waitForFunction(
+      () => document.body.textContent.includes("No retention offer is available."),
+      { timeout: 10000 },
+    );
+    await panelPage.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll(".checkpoint-option"));
+      const closeCard = buttons.find((button) => button.textContent.includes("Close card"));
+      if (!closeCard) throw new Error("Close card checkpoint option was not rendered.");
+      closeCard.click();
+    });
+    await panelPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CHECKPOINT-OK"),
       { timeout: 10000 },
     );
 

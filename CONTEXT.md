@@ -54,9 +54,27 @@
 - **Hangup and Call-again**: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from scratch. Avoid: restarting while a human is typing/reviewing.
 - **Packaged Helper**: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the user must run.
 - **Side Panel Control Plane**: Chrome extension UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/recovery into pure extension JavaScript.
+- **User-Prepared Chat Surface**: A browser tab where the user has already navigated, logged in if needed, and exposed a plausible customer-service chat entry point or support page. Avoid: site-from-homepage support discovery.
+- **Chat Surface Check**: The agent's bounded attempt to find an already-present chat input or open an obvious chat launcher before asking the user to expose the chat manually. Avoid: roaming through general navigation to discover support.
+- **Support Profile**: Declarative knowledge for a known customer-service surface, including escalation language, verification boundaries, and support-specific vocabulary. Avoid: one-off adapter for normal chat-widget differences.
+- **Decision Checkpoint**: A structured human-in-the-loop pause where Flying Pig asks the user to choose among consequential next actions, such as accepting an offer, pivoting strategy after a refusal, approving an irreversible account change, or responding before a live chat times out. Avoid: treating these as generic free-text `ask_user` prompts.
+- **Run Session**: The reconnectable helper-side state model for one active agent run, including status, progress, pending user-attention request, result payload, and snapshots sent to side-panel clients. Avoid: hand-building run-state dictionaries throughout WebSocket code.
+- **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 
 ## Relationships
 - The extension owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, and reconnectable run state.
+- A **User-Prepared Chat Surface** is verified by one **Chat Surface Check** before the agent sends any customer-service message.
+- Most known sites use a **Support Profile** through the shared adapter; bespoke adapters are reserved for unusual mechanics or recovery policies.
+- A **Decision Checkpoint** is distinct from missing-information collection: `ask_user` can gather facts, while Decision Checkpoints present explicit options and consequences for user choice.
+- The model loop owns when to raise a **Decision Checkpoint**; the helper and side panel render and deliver checkpoints but do not maintain a separate deterministic checkpoint-detection rule engine.
+- A v1 **Decision Checkpoint** carries a checkpoint type, a short summary, explicit options, one recommended option, and the exact customer-service message for each option that sends one.
+- The **Side Panel Control Plane** owns notification delivery for user-blocking moments: normal progress does not notify, while every Decision Checkpoint or other user-attention request should alert the user through the configured in-panel, sound, or OS notification channels.
+- Decision Checkpoint options are generated live by the model but constrained by a schema. For irreversible actions, the UI must show the exact outbound message before the user approves it.
+- Decision Checkpoint answers include both the selected option id and the exact selected outbound message so the model can continue with context and the session has an audit trail of what the user approved.
+- A Decision Checkpoint may include one model-authored neutral holding message and delay. If the user has not answered by then, the helper may send that exact holding message once to keep a live chat open, but it must not improvise or confirm irreversible actions.
+- Decision Checkpoints must remain reconnect-safe: if the side panel disconnects or reloads while a checkpoint is pending, the next side-panel connection restores the structured options rather than degrading the decision to plain free text.
+- The **Run Session** module owns state snapshots and protocol events for pending user-attention requests; FastAPI/WebSocket code is an adapter over that state.
+- The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
 
 ## Learned Patterns
 - **CDP attach must reuse the current tab** — when attaching via CDP, never call `navigate_to(new_tab=True)`; fresh Target.createTarget lands in a new browser context and loses cookies. Use `get_current_page()` and page-level `goto()` if navigation is needed.

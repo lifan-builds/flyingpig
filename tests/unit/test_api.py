@@ -9,6 +9,7 @@ from src.models.user import User
 async def override_get_current_user():
     return User(id=1, username="testuser")
 
+
 app.dependency_overrides[get_current_user] = override_get_current_user
 
 
@@ -25,6 +26,8 @@ class TestAPI:
             response = client.get("/sites")
             assert response.status_code == 200
             assert "amex" in response.json()["sites"]
+            assert "oura" in response.json()["sites"]
+            assert "generic" in response.json()["sites"]
 
     def test_get_amex_templates(self):
         with TestClient(app) as client:

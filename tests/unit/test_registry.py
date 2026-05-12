@@ -1,7 +1,8 @@
 """Tests for site adapter registry."""
 
 import pytest
-from src.sites.registry import get_site_adapter, list_sites
+from src.sites.profile_adapter import ProfileBackedAdapter
+from src.sites.registry import get_site_adapter, list_sites, resolve_from_url
 
 
 class TestSiteRegistry:
@@ -21,6 +22,24 @@ class TestSiteRegistry:
     def test_list_sites(self):
         sites = list_sites()
         assert "amex" in sites
+        assert "generic" in sites
+        assert "oura" in sites
+
+    def test_get_oura_profile_adapter(self):
+        adapter = get_site_adapter("oura")
+        assert isinstance(adapter, ProfileBackedAdapter)
+        assert adapter.name == "Oura Ring"
+        assert "support.ouraring.com" in adapter.chat_url
+
+    def test_resolve_oura_from_url(self):
+        site = resolve_from_url(
+            "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us"
+        )
+        assert site == "oura"
+
+    def test_unknown_url_resolves_to_generic(self):
+        site = resolve_from_url("https://example.com/support")
+        assert site == "generic"
 
     def test_adapter_builds_prompt(self):
         adapter = get_site_adapter("amex")
@@ -52,3 +71,17 @@ class TestSiteRegistry:
         )
         assert "Never fabricate" in prompt
         assert "ask_user" in prompt  # Should reference ask_user tool for stopping
+
+    def test_profile_prompt_includes_site_context_and_chat_surface_boundary(self):
+        adapter = get_site_adapter("oura")
+        prompt = adapter.build_task_prompt(
+            user_task="ask about my ring warranty",
+            escalation_instructions="Escalate when needed",
+            detection_instructions="Detect bots",
+            template_id="general",
+        )
+        assert "Known Site Profile: Oura Ring" in prompt
+        assert "Finn" in prompt
+        assert "live Oura expert" in prompt
+        assert "Do not roam through menus" in prompt
+        assert "ask about my ring warranty" in prompt

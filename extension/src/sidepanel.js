@@ -1,3 +1,13 @@
+import {
+  attentionForRequest,
+  checkpointCustomAnswer,
+  checkpointOptionAnswer,
+  fallbackPendingRequest,
+  formatTime,
+  requestKey,
+  siteLabel,
+} from "./sidepanel_protocol.js";
+
 const $ = (id) => document.getElementById(id);
 
 const state = {
@@ -7,24 +17,12 @@ const state = {
   activeTabId: null,
   activeSite: "auto",
   running: false,
+  currentCheckpoint: null,
+  helperUrl: "http://127.0.0.1:8765",
+  notifySound: true,
+  notifyOs: true,
+  notifiedRequestKey: null,
 };
-
-function formatTime(value) {
-  if (!value) return "-";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "-";
-  return date.toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-}
-
-function siteLabel(site) {
-  if (site === "amex") return "American Express";
-  if (site === "unknown" || !site) return "Unsupported tab";
-  return site;
-}
 
 function log(kind, text) {
   const item = document.createElement("li");
@@ -34,6 +32,47 @@ function log(kind, text) {
   body.textContent = text;
   item.append(title, body);
   $("log").prepend(item);
+}
+
+function playAttentionSound() {
+  if (!state.notifySound) return;
+  try {
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const context = new AudioContext();
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    oscillator.type = "sine";
+    oscillator.frequency.setValueAtTime(880, context.currentTime);
+    oscillator.frequency.setValueAtTime(660, context.currentTime + 0.12);
+    gain.gain.setValueAtTime(0.001, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.32);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start();
+    oscillator.stop(context.currentTime + 0.34);
+  } catch {
+    log("notice", "Could not play attention sound.");
+  }
+}
+
+function notifyAttention(title, message) {
+  playAttentionSound();
+  if (!state.notifyOs || !chrome.notifications) return;
+  chrome.notifications.create({
+    type: "basic",
+    iconUrl: "src/notification.svg",
+    title,
+    message,
+  });
+}
+
+function maybeNotifyRequest(request) {
+  const key = requestKey(request);
+  if (!key || key === state.notifiedRequestKey) return;
+  state.notifiedRequestKey = key;
+  const attention = attentionForRequest(request);
+  if (attention) notifyAttention(attention.title, attention.message);
 }
 
 function setConnection(connected) {
@@ -55,11 +94,16 @@ function setRunState(message) {
   $("startedAt").textContent = formatTime(message.started_at);
   $("updatedAt").textContent = formatTime(message.updated_at);
 
-  if (message.needs_input && message.message) {
-    $("questionPanel").classList.remove("hidden");
-    $("questionText").textContent = message.message;
+  if (message.pending_request) {
+    renderPendingRequest(message.pending_request);
+    maybeNotifyRequest(message.pending_request);
+  } else if (fallbackPendingRequest(message)) {
+    renderPendingRequest(fallbackPendingRequest(message));
   } else if (!message.needs_input) {
     $("questionPanel").classList.add("hidden");
+    $("checkpointPanel").classList.add("hidden");
+    state.currentCheckpoint = null;
+    state.notifiedRequestKey = null;
   }
   updateButtons();
 }
@@ -68,6 +112,7 @@ function updateButtons() {
   const hasTask = Boolean($("taskText").value.trim());
   $("startTask").disabled = !state.connected || state.running || !hasTask;
   $("cancelTask").disabled = !state.connected || !state.running;
+  $("launchChrome").disabled = !state.connected || state.running;
 }
 
 async function refreshTab() {
@@ -87,25 +132,90 @@ async function refreshTab() {
   }
 }
 
-async function openAmex() {
+async function openOura() {
   await chrome.tabs.create({
-    url: "https://www.americanexpress.com/us/customer-service/",
+    url: "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us",
   });
 }
 
+async function launchChrome() {
+  if (!state.connected || state.running) return;
+  $("agentStatus").textContent = "launching";
+  $("runMessage").textContent = "Launching FlyingPig Chrome.";
+  log("browser", "Launch requested.");
+
+  try {
+    const response = await fetch(`${state.helperUrl}/browser/launch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        site: state.activeSite && state.activeSite !== "unknown" ? state.activeSite : "generic",
+        cdp_port: 9222,
+        chrome_profile: "default",
+        initial_url: state.activeUrl || undefined,
+      }),
+    });
+    const payload = await response.json();
+    if (!payload.ok) {
+      throw new Error(payload.error || "Browser launch failed.");
+    }
+    $("cdpUrl").value = payload.cdp_url || "http://127.0.0.1:9222";
+    chrome.storage.local.set({ cdpUrl: $("cdpUrl").value });
+    $("agentStatus").textContent = "ready";
+    $("runMessage").textContent = payload.message || "Chrome is ready.";
+    log("browser", payload.message || "Chrome is ready.");
+  } catch (error) {
+    $("agentStatus").textContent = "error";
+    $("runMessage").textContent = error.message || "Browser launch failed.";
+    log("error", error.message || "Browser launch failed.");
+  }
+}
+
 async function loadSettings() {
-  const saved = await chrome.storage.local.get(["cdpUrl", "taskText", "template", "model"]);
+  const saved = await chrome.storage.local.get([
+    "cdpUrl",
+    "taskText",
+    "template",
+    "model",
+    "helperUrl",
+    "notifySound",
+    "notifyOs",
+  ]);
   $("cdpUrl").value = saved.cdpUrl || "http://127.0.0.1:9222";
+  state.helperUrl = new URLSearchParams(window.location.search).get("helperUrl")
+    || saved.helperUrl
+    || "http://127.0.0.1:8765";
+  $("helperUrl").value = state.helperUrl;
   if (saved.taskText) $("taskText").value = saved.taskText;
   if (saved.template) $("template").value = saved.template;
   if (saved.model) $("model").value = saved.model;
+  state.notifySound = saved.notifySound ?? true;
+  state.notifyOs = saved.notifyOs ?? true;
+  $("notifySound").checked = state.notifySound;
+  $("notifyOs").checked = state.notifyOs;
+}
+
+function saveHelperUrl() {
+  state.helperUrl = $("helperUrl").value.trim() || "http://127.0.0.1:8765";
+  chrome.storage.local.set({ helperUrl: state.helperUrl });
+}
+
+function saveNotificationSettings() {
+  state.notifySound = $("notifySound").checked;
+  state.notifyOs = $("notifyOs").checked;
+  chrome.storage.local.set({
+    notifySound: state.notifySound,
+    notifyOs: state.notifyOs,
+  });
 }
 
 function connectHelper() {
   if (state.socket?.readyState === WebSocket.OPEN) return;
 
   $("agentStatus").textContent = "connecting";
-  const socket = new WebSocket("ws://127.0.0.1:8765/ws");
+  saveHelperUrl();
+  const wsUrl = state.helperUrl.replace(/^http/, "ws");
+  const socket = new WebSocket(`${wsUrl}/ws`);
   state.socket = socket;
 
   socket.addEventListener("open", () => {
@@ -119,7 +229,7 @@ function connectHelper() {
     state.running = false;
     setConnection(false);
     $("agentStatus").textContent = "offline";
-    $("runMessage").textContent = "Install or start the local Flying Pig helper to run browser-use.";
+    $("runMessage").textContent = "Start the local helper with: flyingpig-helper";
     log("helper", "Disconnected from local Flying Pig helper.");
   });
 
@@ -127,8 +237,8 @@ function connectHelper() {
     state.running = false;
     setConnection(false);
     $("agentStatus").textContent = "error";
-    $("runMessage").textContent = "Local helper is unavailable.";
-    log("error", "Local helper is unavailable.");
+    $("runMessage").textContent = "Helper unavailable. Run: flyingpig-helper";
+    log("error", "Helper unavailable. Run: flyingpig-helper");
   });
 
   socket.addEventListener("message", (event) => {
@@ -159,10 +269,22 @@ function handleHelperMessage(message) {
     $("runMessage").textContent = event.message || event.goal || event.thought || "Working";
     log(`step ${event.step || ""}`, event.message || event.goal || event.thought || "Progress");
   } else if (message.type === "question") {
-    $("agentStatus").textContent = "needs_input";
-    $("questionPanel").classList.remove("hidden");
-    $("questionText").textContent = message.question || "The agent needs input.";
+    const request = {
+      type: "question",
+      question: message.question || "The agent needs input.",
+      reason: message.reason || "agent needs input",
+    };
+    renderPendingRequest(request);
+    maybeNotifyRequest(request);
     log("input", message.question || "The agent needs input.");
+  } else if (message.type === "decision_checkpoint") {
+    const request = {
+      type: "decision_checkpoint",
+      checkpoint: message.checkpoint || {},
+    };
+    renderPendingRequest(request);
+    maybeNotifyRequest(request);
+    log("decision", message.checkpoint?.summary || "Decision checkpoint.");
   } else if (message.type === "result") {
     state.running = false;
     updateButtons();
@@ -178,6 +300,53 @@ function handleHelperMessage(message) {
   }
 }
 
+function renderPendingRequest(request) {
+  $("agentStatus").textContent = "needs_input";
+  if (request.type === "decision_checkpoint") {
+    renderDecisionCheckpoint(request.checkpoint || {});
+    return;
+  }
+  $("questionPanel").classList.remove("hidden");
+  $("questionText").textContent = request.question || "The agent needs input.";
+  $("checkpointPanel").classList.add("hidden");
+  state.currentCheckpoint = null;
+}
+
+function renderDecisionCheckpoint(checkpoint) {
+  state.currentCheckpoint = checkpoint;
+  $("questionPanel").classList.add("hidden");
+  $("checkpointPanel").classList.remove("hidden");
+  $("checkpointType").textContent = checkpoint.type
+    ? checkpoint.type.replaceAll("_", " ")
+    : "Decision needed";
+  $("checkpointSummary").textContent = checkpoint.summary || "Choose how to proceed.";
+  $("checkpointOptions").replaceChildren();
+  const options = Array.isArray(checkpoint.options) ? checkpoint.options : [];
+  for (const option of options) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "checkpoint-option";
+    if (option.id === checkpoint.recommended_option_id) {
+      button.classList.add("recommended");
+    }
+
+    const label = document.createElement("strong");
+    label.textContent = option.id === checkpoint.recommended_option_id
+      ? `${option.label} (Recommended)`
+      : option.label;
+    const consequence = document.createElement("span");
+    consequence.textContent = option.consequence || "";
+    button.append(label, consequence);
+    if (option.message_to_send) {
+      const message = document.createElement("code");
+      message.textContent = option.message_to_send;
+      button.append(message);
+    }
+    button.addEventListener("click", () => sendCheckpointOption(option));
+    $("checkpointOptions").append(button);
+  }
+}
+
 async function startTask() {
   await refreshTab();
   const task = $("taskText").value.trim();
@@ -186,6 +355,7 @@ async function startTask() {
   const cdpUrl = $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
   const template = $("template").value;
   const model = $("model").value;
+  saveHelperUrl();
   chrome.storage.local.set({ taskText: task, cdpUrl, template, model });
 
   state.running = true;
@@ -222,7 +392,33 @@ function sendAnswer() {
   state.socket?.send(JSON.stringify({ type: "answer", text }));
   $("answerText").value = "";
   $("questionPanel").classList.add("hidden");
+  state.notifiedRequestKey = null;
   log("answer", "Sent answer to agent.");
+}
+
+function sendCheckpointOption(option) {
+  if (!state.currentCheckpoint || !option) return;
+  state.socket?.send(JSON.stringify({
+    type: "answer",
+    payload: checkpointOptionAnswer(state.currentCheckpoint, option),
+  }));
+  $("checkpointPanel").classList.add("hidden");
+  state.notifiedRequestKey = null;
+  log("decision", `Selected: ${option.label}`);
+}
+
+function sendCheckpointCustom() {
+  if (!state.currentCheckpoint) return;
+  const text = $("checkpointCustomText").value.trim();
+  if (!text) return;
+  state.socket?.send(JSON.stringify({
+    type: "answer",
+    payload: checkpointCustomAnswer(state.currentCheckpoint, text),
+  }));
+  $("checkpointCustomText").value = "";
+  $("checkpointPanel").classList.add("hidden");
+  state.notifiedRequestKey = null;
+  log("decision", "Sent custom instruction.");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -231,11 +427,21 @@ document.addEventListener("DOMContentLoaded", async () => {
   setConnection(false);
 
   $("refreshTab").addEventListener("click", refreshTab);
-  $("openAccount").addEventListener("click", openAmex);
+  $("launchChrome").addEventListener("click", launchChrome);
+  $("openOura").addEventListener("click", openOura);
   $("taskText").addEventListener("input", updateButtons);
+  $("notifySound").addEventListener("change", saveNotificationSettings);
+  $("notifyOs").addEventListener("change", saveNotificationSettings);
+  $("helperUrl").addEventListener("change", () => {
+    saveHelperUrl();
+    state.socket?.close();
+    state.socket = null;
+    connectHelper();
+  });
   $("startTask").addEventListener("click", startTask);
   $("cancelTask").addEventListener("click", cancelTask);
   $("sendAnswer").addEventListener("click", sendAnswer);
+  $("sendCheckpointCustom").addEventListener("click", sendCheckpointCustom);
   $("clearLog").addEventListener("click", () => $("log").replaceChildren());
 
   connectHelper();

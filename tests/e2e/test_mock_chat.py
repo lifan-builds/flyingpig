@@ -11,15 +11,18 @@ from tests.mock_amex.server import app
 def run_server():
     uvicorn.run(app, host="127.0.0.1", port=8080, log_level="error")
 
+
 @pytest.fixture(scope="module")
 def mock_amex_server():
     p = multiprocessing.Process(target=run_server)
     p.start()
     import time
+
     time.sleep(2)  # Give uvicorn time to start
     yield
     p.terminate()
     p.join()
+
 
 @pytest.mark.asyncio
 @pytest.mark.slow

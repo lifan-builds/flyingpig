@@ -107,9 +107,7 @@ class ChatNavigator:
             current_url = await self._session.get_current_page_url()
             logger.info(f"Attached to user's active tab: {current_url}")
             if self.navigate_on_attach:
-                logger.info(
-                    "Navigating attached tab to %s", self.site_adapter.chat_url
-                )
+                logger.info("Navigating attached tab to %s", self.site_adapter.chat_url)
                 page = await self._session.get_current_page()
                 await page.goto(self.site_adapter.chat_url)
                 await _bring_page_to_front(page)

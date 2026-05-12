@@ -69,12 +69,14 @@ class AgentBrain:
     async def _on_step_start(self, agent: Agent):
         """Called at the start of each agent step."""
         step_num = agent.state.n_steps
-        self._step_log.append({
-            "step": step_num,
-            "phase": "starting",
-            "message": f"Step {step_num} started",
-            "timestamp": datetime.now(UTC).isoformat(),
-        })
+        self._step_log.append(
+            {
+                "step": step_num,
+                "phase": "starting",
+                "message": f"Step {step_num} started",
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
         logger.info("Step %s starting...", step_num)
 
     async def _on_step_end(self, agent: Agent):
@@ -88,14 +90,16 @@ class AgentBrain:
             if last.model_output:
                 thought = last.model_output.thinking or ""
                 goal = last.model_output.next_goal or ""
-            self._step_log.append({
-                "step": step_num,
-                "phase": "complete",
-                "thought": thought[:200],
-                "goal": goal[:200],
-                "message": goal[:200] or thought[:200] or f"Step {step_num} complete",
-                "timestamp": datetime.now(UTC).isoformat(),
-            })
+            self._step_log.append(
+                {
+                    "step": step_num,
+                    "phase": "complete",
+                    "thought": thought[:200],
+                    "goal": goal[:200],
+                    "message": goal[:200] or thought[:200] or f"Step {step_num} complete",
+                    "timestamp": datetime.now(UTC).isoformat(),
+                }
+            )
         logger.info("Step %s complete.", step_num)
 
     def _save_session(self, history: AgentHistoryList, save_dir: Path) -> str:
@@ -179,14 +183,13 @@ class AgentBrain:
                     max_steps=max_steps,
                     save_dir=save_dir,
                 )
-            chat_transcript = await self.evidence.capture_chat_transcript(browser_session)
-            if not chat_transcript:
-                chat_transcript = self.evidence.extract_chat_transcript_from_history(history)
-
-            save_path = self.evidence.save_session(history, Path(save_dir))
-            result = self.evidence.extract_result(history, chat_transcript=chat_transcript)
-            result.transcript_path = save_path
-            return result
+            artifacts = await self.evidence.record_session_result(
+                history=history,
+                browser_session=browser_session,
+                save_dir=Path(save_dir),
+                checkpoint_events=self.input_handler.events,
+            )
+            return artifacts.result
 
         except Exception as e:
             logger.exception("Task failed: %s", e)

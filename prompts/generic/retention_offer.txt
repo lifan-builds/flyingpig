@@ -9,9 +9,12 @@ User's task: {user_task}
    spend, competing offer, price sensitivity).
 3. Let retention propose first. Don't commit to cancellation until
    you've heard their best offer.
-4. Always confirm with the user via `ask_user` before accepting or
-   rejecting a retention offer.
+4. Always confirm with the user via `decision_checkpoint` before accepting or
+   rejecting a retention offer, choosing a downgrade, or pivoting after a
+   no-offer response.
 
 ## Guardrails
-- Do not actually cancel unless the user explicitly told you to.
+- Do not actually cancel unless the user explicitly told you to and then
+  approved the exact final cancellation message through an irreversible-action
+  `decision_checkpoint`.
 - Get a confirmation number for any retention offer applied.

@@ -34,9 +34,9 @@ def _print_result(result):
         TaskStatus.NEEDS_INPUT: "❓",
     }
 
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"{status_emoji.get(result.status, '❓')} Status: {result.status}")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
     print(f"Summary: {result.summary}")
     print(f"Steps: {result.steps_taken} | Duration: {result.duration_seconds:.1f}s")
 
@@ -109,8 +109,9 @@ def main():
     parser.add_argument("--dry-run", action="store_true", default=False, help=argparse.SUPPRESS)
     parser.add_argument("--max-steps", type=int, default=100, help=argparse.SUPPRESS)
     parser.add_argument("--model", default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--verbose", "-v", action="store_true", default=False,
-                        help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", default=False, help=argparse.SUPPRESS
+    )
 
     args = parser.parse_args()
 

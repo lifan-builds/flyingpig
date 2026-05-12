@@ -1,8 +1,8 @@
 """Abstract base class for site-specific adapters.
 
-Each supported website (Amex, telecom, etc.) gets its own adapter that knows
-how to find the chat widget, what escalation keywords work, and how to
-structure the negotiation prompt for that site.
+Every runnable site path is exposed as an adapter. Most websites use the
+shared profile-backed adapter; bespoke adapters are reserved for sites with
+unusual mechanics or recovery policies.
 """
 
 from abc import ABC, abstractmethod

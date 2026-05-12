@@ -102,7 +102,12 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - [x] Extension E2E harness (2026-05-07) — added a Puppeteer-managed mock side-panel smoke (`npm run test:extension`) that installs the unpacked extension, opens the mock Amex page, verifies WebSocket daemon progress, and keeps copied-profile Chrome plus Computer Use reserved for real-profile smoke tests.
 - [x] Helper-sidepanel prototype archived on GitHub (2026-05-07) — initialized git, committed the reconnectable daemon + improved side panel, created private repo `lifan-builds/flyingpig`, and pushed `main`.
 - [x] Pure-extension runtime rollback (2026-05-07) — rejected the all-in-extension implementation because it would give up browser-use's advanced browser/LLM loop; restored the extension as a UI/control plane for the local helper.
-- [ ] Design packaged-helper or Native Messaging launch path so release users do not manually run daemon/start scripts.
+- [x] Add beta helper entrypoint (2026-05-07) — `flyingpig-helper` starts the WebSocket daemon and launches FlyingPig-controlled Chrome with the side panel's default CDP endpoint, replacing the two manual development commands for beta sessions.
+- [x] Add macOS beta helper service path (2026-05-07) — `flyingpig-macos-helper install` writes a per-user LaunchAgent that starts the helper daemon at login; side panel now launches FlyingPig Chrome on demand through `/browser/launch`.
+- [x] Build local beta release artifact (2026-05-07) — `scripts/build_beta_release.py --clean` creates `dist/flyingpig-beta-0.1.0.zip` with helper code, side-panel extension, prompts, README, and beta install guide.
+- [x] Add model-owned Decision Checkpoints (2026-05-12) — structured human-in-the-loop choices for strategy pivots, offers, irreversible actions, verification, and timeout-risk moments; side panel renders option buttons, sends selected option id plus exact approved message, supports configurable user-attention alerts, and session artifacts save checkpoint audit events.
+- [x] Harden Decision Checkpoints v2 (2026-05-12) — schema validation now rejects malformed model-generated checkpoints, irreversible actions require exact outbound messages, pending checkpoints survive side-panel reconnects as structured choices, and daemon results expose checkpoint event counts.
+- [ ] Run supervised Amex beta smoke from the side panel with user login/MFA and send confirmation.
 - [ ] Extend the extension smoke from mock-daemon protocol coverage to a full mock-agent browser-use run once the CDP/extension install split is settled.
 
 ## Decisions
