@@ -66,7 +66,7 @@ function App() {
   // Dashboard state
   const [view, setView] = useState<'new_task' | 'history'>('new_task');
   const [sites, setSites] = useState<string[]>([]);
-  const [selectedSite, setSelectedSite] = useState<string>('amex');
+  const [selectedSite, setSelectedSite] = useState<string>('generic');
   const [templates, setTemplates] = useState<TemplateInfo[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateInfo | null>(null);
   const [taskHistory, setTaskHistory] = useState<HistoryTask[]>([]);

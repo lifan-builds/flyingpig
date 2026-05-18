@@ -93,12 +93,16 @@ class UserInputRequest(BaseModel):
 
 
 class BrowserLaunchRequest(BaseModel):
-    site: str = "amex"
+    site: str = "generic"
     cdp_port: int = 9222
-    chrome_profile: str = "default"
+    chrome_profile: str = "dedicated"
     chrome_user_data_dir: str | None = None
     initial_url: str | None = None
     dashboard_url: str | None = None
+    window_width: int = 1120
+    window_height: int = 900
+    window_left: int = 560
+    window_top: int = 80
 
 
 class BrowserLaunchResponse(BaseModel):
@@ -165,7 +169,7 @@ async def launch_browser(
     request: BrowserLaunchRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Launch a visible FlyingPig Chrome window for supervised dashboard runs."""
+    """Launch a visible Flying Pig work window for supervised dashboard runs."""
     if request.site not in list_sites():
         raise HTTPException(
             status_code=400,
@@ -187,6 +191,11 @@ async def launch_browser(
             chrome_user_data_dir=request.chrome_user_data_dir,
             initial_url=initial_url,
             dashboard_url=request.dashboard_url,
+            disable_extensions=True,
+            window_width=request.window_width,
+            window_height=request.window_height,
+            window_left=request.window_left,
+            window_top=request.window_top,
         ),
     )
     _ = current_user

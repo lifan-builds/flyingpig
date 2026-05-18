@@ -31,7 +31,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.agent.brain import AgentBrain, TaskStatus
-from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome
+from src.agent.browser_runtime import (
+    ChromeLaunchConfig,
+    debugger_is_ready,
+    debugger_page_info,
+    launch_cdp_chrome,
+)
 from src.daemon.run_session import (
     RunStateStore,
     now_iso,
@@ -46,15 +51,23 @@ logger = logging.getLogger(__name__)
 
 
 class BrowserLaunchRequest(BaseModel):
-    site: str = "amex"
+    site: str = "generic"
     cdp_port: int = 9222
-    chrome_profile: str = "default"
+    chrome_profile: str = "dedicated"
     chrome_user_data_dir: str | None = None
     initial_url: str | None = None
+    window_width: int = 1120
+    window_height: int = 900
+    window_left: int = 560
+    window_top: int = 80
+
+
+class BrowserStatusRequest(BaseModel):
+    cdp_url: str = "http://127.0.0.1:9222"
 
 
 class RunManager:
-    """Owns the active agent run independently of side-panel connections."""
+    """Owns the active agent run independently of dashboard connections."""
 
     def __init__(self):
         self.brain: AgentBrain | None = None
@@ -90,10 +103,14 @@ class RunManager:
     def _sites_payload(self) -> list[dict]:
         out = []
         for site in list_sites():
+            adapter = get_site_adapter(site)
             templates = get_templates(site)
             out.append(
                 {
                     "id": site,
+                    "label": adapter.name,
+                    "chat_url": adapter.chat_url,
+                    "requires_login": adapter.requires_login,
                     "templates": [
                         {"id": t.id, "label": t.name, "description": t.description}
                         for t in templates
@@ -114,7 +131,10 @@ class RunManager:
             if not site:
                 await self.broadcast(
                     type="error",
-                    text="Could not resolve the current tab. Open a customer-service tab first.",
+                    text=(
+                        "Could not resolve the work window. "
+                        "Launch a customer-service work window first."
+                    ),
                 )
                 await self.set_state(
                     status="idle",
@@ -294,7 +314,7 @@ run_manager = RunManager()
 
 
 class Session:
-    """One WebSocket connection = one side-panel client."""
+    """One WebSocket connection = one dashboard client."""
 
     def __init__(self, ws: WebSocket):
         self.ws = ws
@@ -339,6 +359,11 @@ def create_app() -> FastAPI:
     async def health():
         return {"ok": True, "sites": list_sites()}
 
+    @app.get("/browser/status")
+    async def browser_status(cdp_url: str = "http://127.0.0.1:9222"):
+        request = BrowserStatusRequest(cdp_url=cdp_url)
+        return browser_status_payload(request.cdp_url)
+
     @app.post("/browser/launch")
     async def browser_launch(request: BrowserLaunchRequest):
         if request.site not in list_sites():
@@ -362,14 +387,22 @@ def create_app() -> FastAPI:
                     chrome_profile=request.chrome_profile,
                     chrome_user_data_dir=request.chrome_user_data_dir,
                     initial_url=initial_url,
+                    disable_extensions=True,
+                    window_width=request.window_width,
+                    window_height=request.window_height,
+                    window_left=request.window_left,
+                    window_top=request.window_top,
                 ),
             )
         except Exception as exc:
             logger.exception("browser launch failed")
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+        status = browser_status_payload(cdp_url)
         return {
             "ok": True,
             "cdp_url": cdp_url,
+            "current_url": status.get("current_url") or initial_url,
+            "current_title": status.get("current_title") or "",
             "message": "Chrome is ready. Prepare the visible tab, then start the task.",
         }
 
@@ -385,3 +418,30 @@ def create_app() -> FastAPI:
 
     _ = TaskStatus
     return app
+
+
+def browser_status_payload(cdp_url: str) -> dict:
+    from urllib.parse import urlparse
+
+    try:
+        parsed = urlparse(cdp_url)
+        port = parsed.port or 9222
+    except ValueError:
+        return {
+            "ok": False,
+            "connected": False,
+            "cdp_url": cdp_url,
+            "message": "Browser endpoint is invalid.",
+        }
+    connected = debugger_is_ready(port)
+    page_info = debugger_page_info(port) if connected else None
+    return {
+        "ok": True,
+        "connected": connected,
+        "cdp_url": f"http://127.0.0.1:{port}",
+        "current_url": page_info.get("url") if page_info else None,
+        "current_title": page_info.get("title") if page_info else None,
+        "message": "Controlled Chrome is connected."
+        if connected
+        else "Launch the work window before starting.",
+    }

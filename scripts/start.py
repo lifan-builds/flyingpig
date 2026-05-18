@@ -24,8 +24,8 @@ from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome  # n
 
 async def run(args: argparse.Namespace) -> int:
     cdp_url = args.cdp_url or args.attach
-    should_launch_flyingpig_chrome = (
-        not args.dry_run and (args.browser_only or args.launch_flyingpig_chrome or not cdp_url)
+    should_launch_flyingpig_chrome = not args.dry_run and (
+        args.browser_only or args.launch_flyingpig_chrome or not cdp_url
     )
     if should_launch_flyingpig_chrome:
         cdp_url = launch_cdp_chrome(
@@ -38,14 +38,14 @@ async def run(args: argparse.Namespace) -> int:
             )
         )
         if args.browser_only:
-            print(f"   Chrome is ready for the side panel at {cdp_url}.")
+            print(f"   Chrome is ready for the dashboard at {cdp_url}.")
             return 0
         input(
             "   Log in / prepare the visible Chrome tab, then press Enter here "
             "to let Flying Pig attach: "
         )
     elif args.browser_only:
-        print(f"   Chrome is ready for the side panel at {cdp_url}.")
+        print(f"   Chrome is ready for the dashboard at {cdp_url}.")
         return 0
 
     brain = AgentBrain(
@@ -63,7 +63,7 @@ async def run(args: argparse.Namespace) -> int:
         print("   Dry run only; no Chrome session will be opened.")
     elif cdp_url:
         print(f"   Flying Pig will attach to Chrome at {cdp_url}.")
-        print("   Keep the intended Amex tab active in that Chrome window.")
+        print("   Keep the intended customer-service chat tab active in that Chrome window.")
     else:
         print("   Flying Pig will launch a dedicated visible Chrome window.")
     result = await brain.execute(
@@ -96,17 +96,17 @@ def main() -> None:
             "exist for debugging and scripted runs."
         ),
     )
-    p.add_argument("--site", default="amex", help=argparse.SUPPRESS)
+    p.add_argument("--site", default="generic", help=argparse.SUPPRESS)
     p.add_argument(
         "--task",
         default=(
-            "I'd like to negotiate my annual fee. "
-            "I'm considering whether the card is worth keeping."
+            "Help me with this customer-service chat. "
+            "Ask for a human representative if the chatbot cannot resolve it."
         ),
     )
     p.add_argument(
         "--template",
-        default="negotiate_fee",
+        default="general",
         choices=["negotiate_fee", "dispute_charge", "retention_offer", "general"],
         help="Task playbook to use",
     )
@@ -114,20 +114,34 @@ def main() -> None:
         "--model",
         default=None,
         choices=[
-            "claude", "claude-sonnet", "claude-opus",
-            "openai", "gpt-4o",
-            "cliproxyapi", "cliproxy", "gpt-5.5",
-            "gemini", "gemini-flash", "gemini-pro",
+            "claude",
+            "claude-sonnet",
+            "claude-opus",
+            "openai",
+            "gpt-4o",
+            "cliproxyapi",
+            "cliproxy",
+            "gpt-5.5",
+            "gemini",
+            "gemini-flash",
+            "gemini-pro",
         ],
     )
     p.add_argument(
         "--fallback-model",
         default=None,
         choices=[
-            "claude", "claude-sonnet", "claude-opus",
-            "openai", "gpt-4o",
-            "cliproxyapi", "cliproxy", "gpt-5.5",
-            "gemini", "gemini-flash", "gemini-pro",
+            "claude",
+            "claude-sonnet",
+            "claude-opus",
+            "openai",
+            "gpt-4o",
+            "cliproxyapi",
+            "cliproxy",
+            "gpt-5.5",
+            "gemini",
+            "gemini-flash",
+            "gemini-pro",
         ],
         help="Fallback model to try if the primary LLM fails mid-run.",
     )
@@ -140,7 +154,7 @@ def main() -> None:
     p.add_argument(
         "--browser-only",
         action="store_true",
-        help="Launch copied-profile Chrome with CDP, then exit for side-panel use.",
+        help="Launch the Flying Pig work window with CDP, then exit for dashboard use.",
     )
     p.add_argument(
         "--attach",
@@ -169,7 +183,7 @@ def main() -> None:
     p.add_argument(
         "--chrome-profile",
         choices=["dedicated", "default", "existing"],
-        default="default",
+        default="dedicated",
         help=argparse.SUPPRESS,
     )
     p.add_argument(
@@ -179,7 +193,7 @@ def main() -> None:
     )
     p.add_argument(
         "--initial-url",
-        default="https://www.americanexpress.com/us/customer-service/",
+        default="about:blank",
         help=argparse.SUPPRESS,
     )
     p.add_argument(

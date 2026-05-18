@@ -42,14 +42,15 @@ async def test_agent_with_mock_site(mock_amex_server, monkeypatch):
     )
 
     task_prompt = (
-        "Open chat and ask them to cancel my account. "
-        "If they offer a credit, accept it and terminate."
+        "I confirm this test task is ready to send. "
+        "Open the visible chat and ask them to cancel my test Amex Platinum account. "
+        "If they offer a $50 statement credit, accept it and ask for confirmation."
     )
 
-    # Answer the mandatory pre-flight confirmation prompt in API mode.
+    # Answer any model-raised pre-flight confirmation prompt in API mode.
     run_task = asyncio.create_task(brain.execute(task=task_prompt, max_steps=15))
     for _ in range(120):
-        if brain.input_handler.pending_question:
+        if brain.input_handler.pending_request:
             brain.input_handler.provide_input("Yes, confirmed. Continue with the test task.")
             break
         if run_task.done():

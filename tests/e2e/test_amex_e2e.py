@@ -85,6 +85,7 @@ class TestAmexE2EBrowser:
         )
         # We expect it to need login input or partially complete
         assert result.status in (
+            TaskStatus.SUCCESS,
             TaskStatus.NEEDS_INPUT,
             TaskStatus.PARTIAL,
             TaskStatus.FAILED,

@@ -3,7 +3,9 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import UTC, datetime
+from textwrap import dedent
 
 from browser_use.agent.views import ActionResult
 from pydantic import BaseModel
@@ -16,6 +18,7 @@ from src.agent.decision_checkpoint import (
     holding_message_answer,
     parse_answer,
 )
+from src.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +26,17 @@ __all__ = [
     "AskUserParams",
     "DecisionCheckpointParams",
     "DecisionOption",
+    "ClickVisibleControlParams",
     "ReportDetectionParams",
     "ReportOutcomeParams",
     "UserInputHandler",
     "build_tools",
+    "click_visible_control_tool",
+    "find_reference_numbers",
+    "outcome_claims_pending_handoff",
+    "outcome_claims_missing_documentation",
+    "text_has_pending_support_handoff",
+    "text_has_pending_human_work",
 ]
 
 
@@ -46,6 +56,181 @@ class ReportDetectionParams(BaseModel):
     responder_type: str
     confidence: str
     evidence: str
+
+
+class ClickVisibleControlParams(BaseModel):
+    label: str
+    purpose: str = "open or continue customer-service chat"
+
+
+MISSING_DOCUMENTATION_MARKERS = (
+    "no reference",
+    "no separate reference",
+    "no confirmation",
+    "no reference number",
+    "no reference/timing",
+    "not provided",
+    "was not provided",
+    "were not provided",
+)
+
+PENDING_HUMAN_WORK_MARKERS = (
+    "allow me one moment",
+    "allow me a moment",
+    "one moment please",
+    "give me a moment",
+    "please wait",
+    "still checking",
+    "still reviewing",
+    "i am checking",
+    "i'm checking",
+    "checking some details",
+    "let me check",
+    "let me see",
+    "bear with me",
+)
+
+PENDING_HANDOFF_MARKERS = (
+    "i'll connect you",
+    "i will connect you",
+    "connect you with",
+    "connect you to",
+    "transfer you to",
+    "transfer you with",
+    "connecting you",
+    "member care team now",
+    "live agent",
+    "live representative",
+    "human representative",
+)
+
+PENDING_HANDOFF_OUTCOME_MARKERS = (
+    "pending transfer",
+    "pending handoff",
+    "still pending",
+    "awaiting transfer",
+    "waiting for transfer",
+    "no verified final confirmation",
+    "do not have a verified final confirmation",
+    "no human-provided final answer",
+)
+
+
+def outcome_claims_missing_documentation(details: dict) -> bool:
+    """Return true when a final outcome claims missing reference/timing details."""
+    text = " ".join(str(value or "") for value in details.values()).lower()
+    return any(marker in text for marker in MISSING_DOCUMENTATION_MARKERS)
+
+
+def outcome_claims_pending_handoff(details: dict) -> bool:
+    """Return true when a final outcome says a support transfer is unresolved."""
+    text = " ".join(str(value or "") for value in details.values()).lower()
+    return any(marker in text for marker in PENDING_HANDOFF_OUTCOME_MARKERS)
+
+
+def text_has_pending_human_work(text: str) -> bool:
+    """Detect visible chat text that suggests a human rep is actively working."""
+    tail = text.lower()[-2000:]
+    return any(marker in tail for marker in PENDING_HUMAN_WORK_MARKERS)
+
+
+def text_has_pending_support_handoff(text: str) -> bool:
+    """Detect visible chat text that suggests a human support transfer is pending."""
+    tail = text.lower()[-2500:]
+    return any(marker in tail for marker in PENDING_HANDOFF_MARKERS)
+
+
+def find_reference_numbers(text: str) -> list[str]:
+    """Extract likely customer-service reference or confirmation numbers."""
+    matches = re.findall(
+        r"(?:reference|confirmation|case|ticket|records?\s+is|records?\s+are)"
+        r"[^#\d]{0,80}(#?\d{5,12})",
+        text,
+        flags=re.IGNORECASE,
+    )
+    hash_matches = re.findall(r"#\d{5,12}\b", text)
+    seen: set[str] = set()
+    refs: list[str] = []
+    for match in [*matches, *hash_matches]:
+        ref = match if match.startswith("#") else f"#{match}"
+        if ref not in seen:
+            seen.add(ref)
+            refs.append(ref)
+    return refs
+
+
+async def _visible_page_text(browser_session) -> str:
+    if browser_session is None:
+        return ""
+    page = await browser_session.get_current_page()
+    if page is None:
+        return ""
+    try:
+        text = await page.evaluate(
+            "() => document.body ? document.body.innerText : ''"
+        )
+    except Exception as exc:  # pragma: no cover - depends on live browser state
+        logger.debug("Could not read visible page text for outcome guard: %s", exc)
+        return ""
+    return text if isinstance(text, str) else ""
+
+
+async def _guard_report_outcome(browser_session, details: dict) -> str | None:
+    """Return a model-facing correction if final reporting looks stale."""
+    if browser_session is None or not (
+        outcome_claims_missing_documentation(details)
+        or outcome_claims_pending_handoff(details)
+    ):
+        return None
+
+    before = await _visible_page_text(browser_session)
+    if not before:
+        return None
+
+    refs = find_reference_numbers(before)
+    existing_summary = " ".join(str(value or "") for value in details.values())
+    new_refs = [ref for ref in refs if ref not in existing_summary]
+    if new_refs:
+        return (
+            "Do not finalize yet. The current visible chat appears to include "
+            f"reference/confirmation number {new_refs[-1]}, but your outcome "
+            "says no reference was provided. Inspect the latest messages and "
+            "call report_outcome again with the current details."
+        )
+
+    if not text_has_pending_human_work(before) and not text_has_pending_support_handoff(
+        before
+    ):
+        return None
+
+    await asyncio.sleep(max(settings.agent_pending_outcome_grace_seconds, 0))
+    after = await _visible_page_text(browser_session)
+    refs = find_reference_numbers(after)
+    new_refs = [ref for ref in refs if ref not in existing_summary]
+    if new_refs:
+        return (
+            "Do not finalize yet. A reference/confirmation number appeared "
+            f"after the final patience wait: {new_refs[-1]}. Inspect the latest "
+            "messages and call report_outcome again with the current details."
+        )
+    if text_has_pending_human_work(after):
+        return (
+            "Do not finalize missing documentation yet. The visible chat still "
+            "contains a human-work phrase such as 'one moment', 'checking', or "
+            "'please wait'. Wait through the human patience window or send one "
+            "brief status check before reporting that reference/timing details "
+            "were not provided."
+        )
+    if text_has_pending_support_handoff(after):
+        return (
+            "Do not finalize an unresolved handoff yet. The latest visible chat "
+            "still appears to promise or await transfer to a human support team. "
+            "Wait through the transfer patience window, or send one brief "
+            "message asking whether the human Member Care/support transfer is "
+            "still in progress, then inspect the newest messages before calling "
+            "report_outcome again."
+        )
+    return None
 
 
 class UserInputHandler:
@@ -220,11 +405,123 @@ class UserInputHandler:
         )
 
 
-def build_tools(input_handler: UserInputHandler | None = None):
+async def click_visible_control_tool(browser_session, label: str) -> str:
+    """Click a visible button/link-like control by label across frames and shadow roots."""
+    if browser_session is None:
+        return "No browser session is attached."
+
+    page = await browser_session.get_current_page()
+    if page is None:
+        return "No active page is available."
+
+    script = dedent(
+        """
+        (label) => {
+            const needle = String(label || '').trim().toLowerCase();
+            if (!needle) return { clicked: false, reason: 'empty label' };
+
+            const isVisible = (el) => {
+                const rect = el.getBoundingClientRect();
+                const style = window.getComputedStyle(el);
+                return rect.width > 0 && rect.height > 0
+                    && style.visibility !== 'hidden'
+                    && style.display !== 'none'
+                    && Number(style.opacity || '1') > 0;
+            };
+            const textFor = (el) => [
+                el.innerText,
+                el.textContent,
+                el.getAttribute('aria-label'),
+                el.getAttribute('title'),
+                el.getAttribute('value'),
+                el.getAttribute('placeholder')
+            ].filter(Boolean).join(' ').trim().toLowerCase();
+            const score = (el) => {
+                const text = textFor(el);
+                if (text === needle) return 3;
+                if (text.includes(needle)) return 2;
+                if (needle.includes(text) && text.length >= 3) return 1;
+                return 0;
+            };
+            const collect = (root, out = []) => {
+                const selector = [
+                    'button',
+                    'a',
+                    '[role="button"]',
+                    'input[type="button"]',
+                    'input[type="submit"]',
+                    '[aria-label]',
+                    '[title]'
+                ].join(',');
+                for (const el of root.querySelectorAll(selector)) {
+                    out.push(el);
+                    if (el.shadowRoot) collect(el.shadowRoot, out);
+                }
+                for (const el of root.querySelectorAll('*')) {
+                    if (el.shadowRoot) collect(el.shadowRoot, out);
+                }
+                return out;
+            };
+            const candidates = collect(document)
+                .filter(isVisible)
+                .map((el) => ({ el, score: score(el) }))
+                .filter((item) => item.score > 0)
+                .sort((a, b) => b.score - a.score);
+            if (!candidates.length) {
+                return { clicked: false, reason: `No visible control matched "${label}".` };
+            }
+            const target = candidates[0].el;
+            target.scrollIntoView({ block: 'center', inline: 'center' });
+            target.click();
+            return {
+                clicked: true,
+                label: textFor(target).slice(0, 120),
+                tag: target.tagName,
+                role: target.getAttribute('role') || ''
+            };
+        }
+        """
+    )
+
+    errors: list[str] = []
+    for frame in getattr(page, "frames", [page]) or [page]:
+        try:
+            result = await frame.evaluate(script, label)
+        except Exception as exc:  # pragma: no cover - depends on third-party frames
+            errors.append(str(exc))
+            continue
+        if isinstance(result, dict) and result.get("clicked"):
+            return f"Clicked visible control matching '{label}': {json.dumps(result)}"
+
+    reason = f"No visible control matching '{label}' was clicked."
+    if errors:
+        reason += f" Frame errors: {'; '.join(errors[:2])}"
+    return reason
+
+
+def build_tools(input_handler: UserInputHandler | None = None, browser_session=None):
     """Create custom tools the agent can use during chat interactions."""
     from browser_use.tools.service import Tools
 
     tools = Tools()
+
+    @tools.registry.action(
+        "Click an obvious visible customer-service control by its text/aria label "
+        "using a Playwright fallback across iframes and shadow DOM. Use this once "
+        "when a normal indexed click cannot reach visible controls such as "
+        "'Open Chat Agent', 'Start a new chat', 'Chat', 'No', or 'Send'. Do not "
+        "use it for irreversible account actions.",
+        param_model=ClickVisibleControlParams,
+    )
+    async def click_visible_control(params: ClickVisibleControlParams):
+        result = await click_visible_control_tool(browser_session, params.label)
+        logger.info(
+            "Click visible control for %s (%s): %s",
+            params.label,
+            params.purpose,
+            result,
+        )
+        return ActionResult(extracted_content=result)
 
     @tools.registry.action(
         "Ask the user for information you need but don't have. "
@@ -288,6 +585,11 @@ def build_tools(input_handler: UserInputHandler | None = None):
             "amount_saved": params.amount_saved,
             "next_steps": params.next_steps,
         }
+        guard_message = await _guard_report_outcome(browser_session, details)
+        if guard_message:
+            logger.info("Outcome guard blocked stale report: %s", guard_message)
+            return ActionResult(extracted_content=guard_message)
+
         logger.info("Task outcome: %s", json.dumps(details))
         return ActionResult(
             extracted_content=json.dumps(details),

@@ -71,7 +71,7 @@ AMEX_PROFILE = SiteProfile(
         ),
     ],
     communication_guidance=[
-        "Be polite but firm and use loyal-cardmember framing.",
+        "Be polite, warm, and firm; use loyal-cardmember framing without sounding pushy.",
         "For fee and retention tasks, ask about retention or loyalty options clearly.",
         "Always ask for a reference or confirmation number before ending a successful chat.",
     ],
@@ -165,6 +165,11 @@ PROFILES: dict[str, SiteProfile] = {
             (
                 "Chat starts with Finn, the virtual assistant, and can transfer to a live "
                 "Oura expert if needed."
+            ),
+            (
+                "When an Oura expert says they are checking, reviewing account details, "
+                "or need a moment, wait patiently and use friendly acknowledgements "
+                "before sending another prompt or summarizing the result."
             ),
             (
                 "Oura also offers scheduled phone support, but chat should remain the "

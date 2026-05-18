@@ -85,3 +85,17 @@ class TestSiteRegistry:
         assert "live Oura expert" in prompt
         assert "Do not roam through menus" in prompt
         assert "ask about my ring warranty" in prompt
+
+    def test_generic_prompt_does_not_force_redundant_goal_confirmation(self):
+        adapter = get_site_adapter("generic")
+        prompt = adapter.build_task_prompt(
+            user_task="ask for a goodwill credit",
+            escalation_instructions="Escalate when needed",
+            detection_instructions="Detect bots",
+        )
+
+        assert "proceed without asking the user to confirm" in prompt
+        assert "ask permission to send the exact request" in prompt
+        assert "STOP and use `ask_user`" in prompt
+        assert "bot-to-human transfer" in prompt
+        assert "Confirm the user's goal" not in prompt

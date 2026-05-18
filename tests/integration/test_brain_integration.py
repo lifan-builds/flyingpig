@@ -119,6 +119,7 @@ class TestBuildTools:
     def test_custom_actions_registered(self):
         tools = _build_tools()
         action_names = list(tools.registry.registry.actions.keys())
+        assert "click_visible_control" in action_names
         assert "ask_user" in action_names
         assert "report_outcome" in action_names
         assert "report_detection" in action_names
@@ -232,3 +233,21 @@ class TestAgentBrain:
         )
         assert "prompt_preview" in result.outcome_details
         assert len(result.outcome_details["prompt_preview"]) > 0
+
+    @pytest.mark.asyncio
+    async def test_dry_run_prompt_includes_runtime_pace_policy(self):
+        brain = AgentBrain(site="amex", headless=True)
+        result = await brain.execute(task="negotiate my annual fee", dry_run=True)
+
+        assert result.outcome_details["prompt_preview"].startswith("## Runtime Pace Policy")
+        assert "click_visible_control" in result.outcome_details["prompt_preview"]
+
+    def test_runtime_policy_handles_active_human_work_before_final_report(self):
+        from src.agent.brain import _runtime_policy
+
+        policy = _runtime_policy()
+
+        assert "Human representatives get a real patience window" in policy
+        assert "one moment" in policy
+        assert "Before `report_outcome`" in policy
+        assert "Avoid repeated 'just checking' messages" in policy

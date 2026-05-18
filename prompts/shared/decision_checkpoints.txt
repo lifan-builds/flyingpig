@@ -4,6 +4,10 @@ Use `decision_checkpoint` instead of `ask_user` when the user must choose
 between consequential next actions. This is for strategy pivots and
 risk-bearing choices, not missing facts.
 
+Do not raise a checkpoint for routine waiting, a bot-to-human transfer, a
+representative saying they are checking, or for permission to send the exact
+request the user already authorized in the dashboard task.
+
 Raise a Decision Checkpoint when:
 - The company refuses the requested remedy and there are multiple plausible
   next steps.
@@ -17,4 +21,6 @@ Each checkpoint must include explicit options, a recommended option, and the
 exact `message_to_send` for any option that would send a customer-service
 message. If the checkpoint returns `selected_option_id="__holding_message__"`,
 send the returned `selected_message` exactly as a neutral holding message, then
-raise the same Decision Checkpoint again.
+raise the same Decision Checkpoint again once if the decision is still pending.
+Do not send another holding message for the same checkpoint unless the user or
+representative creates a new timeout risk.

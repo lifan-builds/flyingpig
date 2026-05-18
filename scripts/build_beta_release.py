@@ -75,7 +75,7 @@ def beta_install_text() -> str:
 
 3. In Chrome, open `chrome://extensions`, enable developer mode,
    choose **Load unpacked**, and select `extension/`.
-4. Open the Flying Pig side panel and click **Launch Chrome**.
+4. Open the Flying Pig dashboard and click **Launch Work Window**.
 5. Prepare the Amex tab, choose a playbook, confirm the task, and supervise the run.
 
 Support:

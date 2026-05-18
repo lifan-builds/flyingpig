@@ -69,7 +69,8 @@ class TestAPI:
 
         assert response.status_code == 200
         assert response.json()["cdp_url"] == "http://127.0.0.1:9222"
-        assert captured["config"].chrome_profile == "default"
+        assert captured["config"].chrome_profile == "dedicated"
+        assert captured["config"].disable_extensions is True
         assert captured["config"].initial_url.startswith("https://")
         assert captured["config"].dashboard_url is None
 

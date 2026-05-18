@@ -2,17 +2,14 @@
   "manifest_version": 3,
   "name": "Flying Pig",
   "version": "0.1.0",
-  "description": "Run and supervise Flying Pig customer-service tasks from a Chrome side panel.",
-  "permissions": ["notifications", "sidePanel", "storage", "tabs"],
+  "description": "Run and supervise Flying Pig customer-service tasks from a dashboard.",
+  "permissions": ["notifications", "storage", "tabs", "windows"],
   "host_permissions": ["http://127.0.0.1/*", "http://localhost/*"],
   "background": {
     "service_worker": "src/background.js"
   },
-  "side_panel": {
-    "default_path": "src/sidepanel.html"
-  },
   "action": {
-    "default_title": "Open Flying Pig"
+    "default_title": "Open Flying Pig Dashboard"
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:*"

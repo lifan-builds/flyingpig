@@ -7,11 +7,10 @@ from passlib.context import CryptContext
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.config import settings
 from src.models.db import get_db
 from src.models.user import User
 
-# In production this should be in .env
-SECRET_KEY = "flying_pig_super_secret_key_for_mvp"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 1 week
 
@@ -19,6 +18,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+def _secret_key() -> str:
+    if not settings.api_secret_key:
+        raise RuntimeError("FLYINGPIG_API_SECRET_KEY must be set before using API auth")
+    return settings.api_secret_key
 
 
 def verify_password(plain_password, hashed_password):
@@ -33,7 +38,7 @@ def create_access_token(data: dict):
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return jwt.encode(to_encode, _secret_key(), algorithm=ALGORITHM)
 
 
 async def get_current_user(
@@ -46,7 +51,7 @@ async def get_current_user(
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, _secret_key(), algorithms=[ALGORITHM])
         username: str = payload.get("sub")
         if username is None:
             raise credentials_exception

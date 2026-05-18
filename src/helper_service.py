@@ -61,6 +61,29 @@ def run_launchctl(*parts: str, check: bool = True) -> subprocess.CompletedProces
     )
 
 
+def launchctl_failure_message(action: str, exc: subprocess.CalledProcessError) -> str:
+    details = (exc.stderr or exc.stdout or "").strip()
+    command = " ".join(exc.cmd) if isinstance(exc.cmd, list) else str(exc.cmd)
+    message = [
+        f"Could not {action} Flying Pig helper.",
+        f"`{command}` exited with status {exc.returncode}.",
+    ]
+    if details:
+        message.append(details)
+    message.append(
+        "Try `flyingpig-macos-helper status`, then reinstall with "
+        "`flyingpig-macos-helper install` if the LaunchAgent is missing or stale."
+    )
+    return "\n".join(message)
+
+
+def run_launchctl_or_exit(action: str, *parts: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return run_launchctl(*parts)
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(launchctl_failure_message(action, exc)) from exc
+
+
 def install(args: argparse.Namespace) -> None:
     LAUNCH_AGENTS_DIR.mkdir(parents=True, exist_ok=True)
     LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -68,10 +91,10 @@ def install(args: argparse.Namespace) -> None:
         plistlib.dump(plist_payload(args), f, sort_keys=False)
 
     run_launchctl("bootout", f"gui/{os.getuid()}", str(PLIST_PATH), check=False)
-    run_launchctl("bootstrap", f"gui/{os.getuid()}", str(PLIST_PATH))
-    run_launchctl("enable", service_target())
+    run_launchctl_or_exit("install", "bootstrap", f"gui/{os.getuid()}", str(PLIST_PATH))
+    run_launchctl_or_exit("enable", "enable", service_target())
     print(f"Installed Flying Pig helper LaunchAgent: {PLIST_PATH}")
-    print("The helper will start at login. Use the side panel's Launch Chrome button when ready.")
+    print("The helper will start at login. Use the dashboard's Launch Work Window button.")
 
 
 def uninstall(_args: argparse.Namespace) -> None:
@@ -85,13 +108,33 @@ def start(_args: argparse.Namespace) -> None:
     if not PLIST_PATH.exists():
         raise SystemExit("LaunchAgent is not installed. Run: flyingpig-macos-helper install")
     run_launchctl("bootstrap", f"gui/{os.getuid()}", str(PLIST_PATH), check=False)
-    run_launchctl("kickstart", "-k", service_target())
+    run_launchctl_or_exit("start", "kickstart", "-k", service_target())
     print("Started Flying Pig helper.")
 
 
 def stop(_args: argparse.Namespace) -> None:
-    run_launchctl("bootout", f"gui/{os.getuid()}", str(PLIST_PATH), check=False)
-    print("Stopped Flying Pig helper.")
+    result = run_launchctl("bootout", service_target(), check=False)
+    if result.returncode == 0:
+        print("Stopped Flying Pig helper.")
+        return
+
+    status_result = run_launchctl("print", service_target(), check=False)
+    if status_result.returncode != 0:
+        print("Flying Pig helper is not running.")
+        return
+
+    raise SystemExit(
+        "\n".join(
+            [
+                "Could not stop Flying Pig helper.",
+                "`launchctl bootout "
+                f"{service_target()}` exited with status {result.returncode}.",
+                (result.stderr or result.stdout or "").strip(),
+                "Try `flyingpig-macos-helper status`, then reinstall with "
+                "`flyingpig-macos-helper install` if the LaunchAgent is missing or stale.",
+            ]
+        )
+    )
 
 
 def status(_args: argparse.Namespace) -> None:

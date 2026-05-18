@@ -33,11 +33,13 @@ def test_launch_cdp_chrome_reuses_ready_debugger(monkeypatch):
     assert cdp_url == "http://127.0.0.1:9333"
 
 
-def test_chrome_launch_config_defaults_to_copied_user_profile():
+def test_chrome_launch_config_defaults_to_dedicated_work_profile():
     config = ChromeLaunchConfig()
 
-    assert config.chrome_profile == "default"
+    assert config.chrome_profile == "dedicated"
+    assert config.initial_url == "about:blank"
     assert config.dashboard_url is None
+    assert config.disable_extensions is True
 
 
 def test_launch_cdp_chrome_can_launch_dedicated_while_regular_chrome_runs(monkeypatch):
@@ -59,6 +61,7 @@ def test_launch_cdp_chrome_can_launch_dedicated_while_regular_chrome_runs(monkey
 
     assert cdp_url == "http://127.0.0.1:9444"
     assert any("--remote-debugging-port=9444" in arg for arg in launched["command"])
+    assert "--disable-extensions" in launched["command"]
     assert launched["kwargs"] == {"start_new_session": True}
 
 

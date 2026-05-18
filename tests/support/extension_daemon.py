@@ -1,4 +1,4 @@
-"""Mock daemon for deterministic Chrome extension side-panel tests."""
+"""Mock daemon for deterministic Chrome extension dashboard tests."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import asyncio
 import json
 from datetime import UTC, datetime
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(title="Flying Pig Extension Mock Daemon")
@@ -17,6 +17,61 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+mock_browser_connected = False
+mock_work_window_url = "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us"
+mock_state = {
+    "type": "state",
+    "status": "idle",
+    "running": False,
+    "needs_input": False,
+    "site": None,
+    "message": "Idle",
+    "step": None,
+    "updated_at": None,
+    "started_at": None,
+    "finished_at": None,
+    "transcript": None,
+    "result": None,
+    "pending_request": None,
+}
+
+
+def now() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def apply_state(**changes) -> dict:
+    mock_state.update(changes)
+    mock_state["type"] = "state"
+    mock_state["updated_at"] = now()
+    return dict(mock_state)
+
+
+def checkpoint_request() -> dict:
+    return {
+        "type": "decision_checkpoint",
+        "checkpoint": {
+            "checkpoint_id": "cp_mock",
+            "type": "strategy_pivot",
+            "summary": "No retention offer is available.",
+            "recommended_option_id": "close_card",
+            "options": [
+                {
+                    "id": "close_card",
+                    "label": "Close card",
+                    "consequence": "Proceed to cancellation disclosure.",
+                    "message_to_send": "I would like to proceed toward closing.",
+                },
+                {
+                    "id": "stop",
+                    "label": "Stop here",
+                    "consequence": "No account change is made.",
+                    "message_to_send": "Thanks, I will decide later.",
+                },
+            ],
+        },
+    }
+
 
 @app.get("/health")
 async def health():
@@ -24,11 +79,42 @@ async def health():
 
 
 @app.post("/browser/launch")
-async def browser_launch():
+async def browser_launch(request: Request):
+    global mock_browser_connected, mock_work_window_url
+
+    payload = await request.json()
+    if payload.get("chrome_profile") != "dedicated":
+        return {
+            "ok": False,
+            "error": f"expected dedicated work profile, got {payload.get('chrome_profile')}",
+        }
+    if not all(payload.get(key) for key in ("window_width", "window_height")):
+        return {
+            "ok": False,
+            "error": "expected side-by-side work-window placement hints",
+        }
+    mock_browser_connected = True
+    mock_work_window_url = payload.get("initial_url") or mock_work_window_url
     return {
         "ok": True,
         "cdp_url": "http://127.0.0.1:9335",
+        "current_url": mock_work_window_url,
+        "current_title": "Mock work window",
         "message": "MOCK-CHROME-READY",
+    }
+
+
+@app.get("/browser/status")
+async def browser_status():
+    return {
+        "ok": True,
+        "connected": mock_browser_connected,
+        "cdp_url": "http://127.0.0.1:9335",
+        "current_url": mock_work_window_url if mock_browser_connected else None,
+        "current_title": "Mock work window" if mock_browser_connected else None,
+        "message": "MOCK-BROWSER-CONNECTED"
+        if mock_browser_connected
+        else "MOCK-BROWSER-DISCONNECTED",
     }
 
 
@@ -36,30 +122,49 @@ async def browser_launch():
 async def ws_endpoint(ws: WebSocket):
     await ws.accept()
     await ws.send_text(json.dumps({"type": "ready"}))
-    await ws.send_text(
-        json.dumps(
-            {
-                "type": "state",
-                "status": "idle",
-                "running": False,
-                "needs_input": False,
-                "site": None,
-                "message": "Idle",
-                "step": None,
-                "updated_at": datetime.now(UTC).isoformat(),
-                "started_at": None,
-                "finished_at": None,
-                "transcript": None,
-                "result": None,
-            }
-        )
-    )
+    await ws.send_text(json.dumps(dict(mock_state)))
     try:
         while True:
             raw = await ws.receive_text()
             msg = json.loads(raw)
             mtype = msg.get("type")
-            if mtype == "resolve":
+            if mtype == "list_sites":
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "sites",
+                            "items": [
+                                {
+                                    "id": "amex",
+                                    "label": "American Express",
+                                    "chat_url": (
+                                        "https://www.americanexpress.com/us/customer-service/"
+                                    ),
+                                    "requires_login": True,
+                                    "templates": [],
+                                },
+                                {
+                                    "id": "oura",
+                                    "label": "Oura Ring",
+                                    "chat_url": (
+                                        "https://support.ouraring.com/hc/en-us/articles/"
+                                        "360047222554-Contact-Us"
+                                    ),
+                                    "requires_login": False,
+                                    "templates": [],
+                                },
+                                {
+                                    "id": "generic",
+                                    "label": "Generic (auto-detect chat)",
+                                    "chat_url": "",
+                                    "requires_login": False,
+                                    "templates": [],
+                                },
+                            ],
+                        }
+                    )
+                )
+            elif mtype == "resolve":
                 await ws.send_text(
                     json.dumps(
                         {
@@ -71,52 +176,55 @@ async def ws_endpoint(ws: WebSocket):
                 )
             elif mtype == "start":
                 if "checkpoint" in (msg.get("task") or "").lower():
+                    request = checkpoint_request()
+                    await ws.send_text(json.dumps(request))
                     await ws.send_text(
                         json.dumps(
-                            {
-                                "type": "decision_checkpoint",
-                                "checkpoint": {
-                                    "checkpoint_id": "cp_mock",
-                                    "type": "strategy_pivot",
-                                    "summary": "No retention offer is available.",
-                                    "recommended_option_id": "close_card",
-                                    "options": [
-                                        {
-                                            "id": "close_card",
-                                            "label": "Close card",
-                                            "consequence": "Proceed to cancellation disclosure.",
-                                            "message_to_send": (
-                                                "I would like to proceed toward closing."
-                                            ),
-                                        },
-                                        {
-                                            "id": "stop",
-                                            "label": "Stop here",
-                                            "consequence": "No account change is made.",
-                                            "message_to_send": "Thanks, I will decide later.",
-                                        },
-                                    ],
-                                },
-                            }
+                            apply_state(
+                                status="needs_input",
+                                running=True,
+                                needs_input=True,
+                                site="amex",
+                                message=request["checkpoint"]["summary"],
+                                pending_request=request,
+                                started_at=now(),
+                                finished_at=None,
+                            )
+                        )
+                    )
+                    continue
+                if "cancel" in (msg.get("task") or "").lower():
+                    await ws.send_text(
+                        json.dumps(
+                            apply_state(
+                                status="running",
+                                running=True,
+                                needs_input=False,
+                                site="amex",
+                                message="MOCK-CANCEL-RUNNING",
+                                step=1,
+                                started_at=now(),
+                                finished_at=None,
+                                pending_request=None,
+                            )
                         )
                     )
                     continue
                 await ws.send_text(
                     json.dumps(
-                        {
-                            "type": "state",
-                            "status": "running",
-                            "running": True,
-                            "needs_input": False,
-                            "site": "amex",
-                            "message": "mock run started",
-                            "step": None,
-                            "updated_at": datetime.now(UTC).isoformat(),
-                            "started_at": datetime.now(UTC).isoformat(),
-                            "finished_at": None,
-                            "transcript": None,
-                            "result": None,
-                        }
+                        apply_state(
+                            status="running",
+                            running=True,
+                            needs_input=False,
+                            site="amex",
+                            message="mock run started",
+                            step=None,
+                            started_at=now(),
+                            finished_at=None,
+                            transcript=None,
+                            result=None,
+                            pending_request=None,
+                        )
                     )
                 )
                 await ws.send_text(json.dumps({"type": "status", "text": "mock run started"}))
@@ -138,7 +246,7 @@ async def ws_endpoint(ws: WebSocket):
                         {
                             "type": "result",
                             "status": "success",
-                            "summary": "MOCK-RUN-OK side panel protocol completed.",
+                            "summary": "MOCK-RUN-OK dashboard protocol completed.",
                             "steps": 1,
                             "duration": 0.1,
                         }
@@ -146,26 +254,25 @@ async def ws_endpoint(ws: WebSocket):
                 )
                 await ws.send_text(
                     json.dumps(
-                        {
-                            "type": "state",
-                            "status": "success",
-                            "running": False,
-                            "needs_input": False,
-                            "site": "amex",
-                            "message": "MOCK-RUN-OK side panel protocol completed.",
-                            "step": 1,
-                            "updated_at": datetime.now(UTC).isoformat(),
-                            "started_at": datetime.now(UTC).isoformat(),
-                            "finished_at": datetime.now(UTC).isoformat(),
-                            "transcript": "recordings/mock.json",
-                            "result": {
+                        apply_state(
+                            status="success",
+                            running=False,
+                            needs_input=False,
+                            site="amex",
+                            message="MOCK-RUN-OK dashboard protocol completed.",
+                            step=1,
+                            started_at=mock_state.get("started_at") or now(),
+                            finished_at=now(),
+                            transcript="recordings/mock.json",
+                            result={
                                 "status": "success",
-                                "summary": "MOCK-RUN-OK side panel protocol completed.",
+                                "summary": "MOCK-RUN-OK dashboard protocol completed.",
                                 "steps": 1,
                                 "duration": 0.1,
                                 "transcript": "recordings/mock.json",
                             },
-                        }
+                            pending_request=None,
+                        )
                     )
                 )
             elif mtype == "answer":
@@ -182,10 +289,41 @@ async def ws_endpoint(ws: WebSocket):
                             }
                         )
                     )
+                    await ws.send_text(
+                        json.dumps(
+                            apply_state(
+                                status="success",
+                                running=False,
+                                needs_input=False,
+                                message="MOCK-CHECKPOINT-OK decision selected.",
+                                step=1,
+                                finished_at=now(),
+                                result={
+                                    "status": "success",
+                                    "summary": "MOCK-CHECKPOINT-OK decision selected.",
+                                    "steps": 1,
+                                    "duration": 0.1,
+                                },
+                                pending_request=None,
+                            )
+                        )
+                    )
                     continue
                 await ws.send_text(json.dumps({"type": "status", "text": "answer received"}))
             elif mtype == "cancel":
                 await ws.send_text(json.dumps({"type": "status", "text": "cancelled"}))
+                await ws.send_text(
+                    json.dumps(
+                        apply_state(
+                            status="cancelled",
+                            running=False,
+                            needs_input=False,
+                            message="MOCK-CANCELLED",
+                            finished_at=now(),
+                            pending_request=None,
+                        )
+                    )
+                )
             else:
                 await ws.send_text(
                     json.dumps({"type": "error", "text": f"unknown message type: {mtype}"})

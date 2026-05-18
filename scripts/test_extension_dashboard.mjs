@@ -22,7 +22,7 @@ const mockUrl = "http://127.0.0.1:8086/?logged_in=true";
 const helperPort = process.env.FLYINGPIG_HELPER_PORT || "8766";
 const helperUrl = `http://127.0.0.1:${helperPort}`;
 const helperHealthUrl = `${helperUrl}/health`;
-const cdpUrlForPanel = process.env.FLYINGPIG_CDP_URL || "http://127.0.0.1:9335";
+const cdpUrlForDashboard = process.env.FLYINGPIG_CDP_URL || "http://127.0.0.1:9335";
 
 const python = process.env.PYTHON || "python";
 const env = { ...process.env, PYTHONPATH: rootDir };
@@ -79,23 +79,55 @@ async function setValue(page, selector, value) {
   );
 }
 
-async function openSidePanelPage(browser, extensionId) {
-  const sidePanelUrl = `chrome-extension://${extensionId}/src/sidepanel.html`;
+async function openDashboardPage(browser, extensionId) {
+  const dashboardUrl = `chrome-extension://${extensionId}/src/dashboard.html`;
   const triggerAction = browser.triggerExtensionAction?.bind(browser);
-  if (triggerAction && helperUrl === "http://127.0.0.1:8765") {
-    const sidePanelTarget = browser
-      .waitForTarget((target) => target.url().startsWith(sidePanelUrl), { timeout: 8000 })
+  if (triggerAction) {
+    const dashboardTarget = browser
+      .waitForTarget((target) => target.url().startsWith(dashboardUrl), { timeout: 8000 })
       .catch(() => null);
     await triggerAction(extensionId);
-    const target = await sidePanelTarget;
+    const target = await dashboardTarget;
     const page = target ? await target.page() : null;
-    if (page) return page;
+    if (page) {
+      await page.goto(
+        `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`,
+        { waitUntil: "domcontentloaded" },
+      );
+      return page;
+    }
   }
 
   const page = await browser.newPage();
-  const url = `${sidePanelUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`;
+  const url = `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`;
   await page.goto(url, { waitUntil: "domcontentloaded" });
   return page;
+}
+
+async function verifyOfflineSetupState(browser, extensionId) {
+  const page = await browser.newPage();
+  const dashboardUrl = `chrome-extension://${extensionId}/src/dashboard.html`;
+  const deadHelperUrl = "http://127.0.0.1:65530";
+  await page.goto(
+    `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(deadHelperUrl)}`,
+    { waitUntil: "domcontentloaded" },
+  );
+  await page.waitForFunction(
+    () => document.getElementById("helperSetupPanel")
+      && !document.getElementById("helperSetupPanel").classList.contains("hidden"),
+    { timeout: 10000 },
+  );
+  await page.waitForFunction(
+    (expected) => document.getElementById("setupDiagnostic")?.textContent.includes(expected),
+    { timeout: 10000 },
+    deadHelperUrl,
+  );
+  await page.click("#setupHelper");
+  await browser.waitForTarget(
+    (target) => target.url().includes("/src/setup.html"),
+    { timeout: 10000 },
+  );
+  await page.close();
 }
 
 async function main() {
@@ -148,57 +180,106 @@ async function main() {
     );
     const extensionId = new URL(workerTarget.url()).host;
 
+    await verifyOfflineSetupState(browser, extensionId);
+
     const mockPage = await browser.newPage();
     await mockPage.goto(mockUrl, { waitUntil: "domcontentloaded" });
     await mockPage.bringToFront();
 
-    const panelPage = await openSidePanelPage(browser, extensionId);
-    await panelPage.waitForFunction(
+    const dashboardPage = await openDashboardPage(browser, extensionId);
+    await dashboardPage.waitForFunction(
       () => document.getElementById("runtimeStatus")?.textContent === "Helper Online",
       { timeout: 10000 },
     );
-
-    await panelPage.click("#launchChrome");
-    await panelPage.waitForFunction(
-      () => document.body.textContent.includes("MOCK-CHROME-READY"),
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("browserStatus")?.textContent === "Work Window Offline",
+      { timeout: 10000 },
+    );
+    const startDisabledWithoutBrowser = await dashboardPage.$eval(
+      "#startTask",
+      (button) => button.disabled,
+    );
+    if (!startDisabledWithoutBrowser) {
+      throw new Error("Start is enabled before the controlled work window is connected.");
+    }
+    if (await dashboardPage.$("#openOura")) {
+      throw new Error("Dashboard still renders the dedicated Oura button.");
+    }
+    if (await dashboardPage.$("#openSupportPage")) {
+      throw new Error("Dashboard still opens support pages in normal Chrome.");
+    }
+    await dashboardPage.waitForFunction(
+      () => Array.from(document.querySelectorAll("#sitePicker option"))
+        .some((option) => option.textContent === "Oura Ring"),
       { timeout: 10000 },
     );
 
-    await setValue(panelPage, "#cdpUrl", cdpUrlForPanel);
-    await setValue(
-      panelPage,
-      "#taskText",
-      "Mock extension smoke test: verify the side panel can start a browser-use helper run.",
+    await dashboardPage.click("#launchChrome");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CHROME-READY"),
+      { timeout: 10000 },
     );
-    await panelPage.click("#startTask");
-    await panelPage.waitForFunction(
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("browserStatus")?.textContent === "Work Window Connected",
+      { timeout: 10000 },
+    );
+
+    await setValue(dashboardPage, "#cdpUrl", cdpUrlForDashboard);
+    await setValue(
+      dashboardPage,
+      "#taskText",
+      "Mock extension smoke test: verify the dashboard can start a browser-use helper run.",
+    );
+    await dashboardPage.click("#startTask");
+    await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-RUN-OK"),
       { timeout: 10000 },
     );
 
-    await setValue(panelPage, "#taskText", "Mock checkpoint flow.");
-    await panelPage.click("#startTask");
-    await panelPage.waitForFunction(
+    await setValue(dashboardPage, "#taskText", "Mock cancel smoke.");
+    await dashboardPage.click("#startTask");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CANCEL-RUNNING"),
+      { timeout: 10000 },
+    );
+    await dashboardPage.click("#cancelTask");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CANCELLED"),
+      { timeout: 10000 },
+    );
+
+    await setValue(dashboardPage, "#taskText", "Mock checkpoint flow.");
+    await dashboardPage.click("#startTask");
+    await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("No retention offer is available."),
       { timeout: 10000 },
     );
-    await panelPage.evaluate(() => {
+    await dashboardPage.reload({ waitUntil: "domcontentloaded" });
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("runtimeStatus")?.textContent === "Helper Online",
+      { timeout: 10000 },
+    );
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("No retention offer is available."),
+      { timeout: 10000 },
+    );
+    await dashboardPage.evaluate(() => {
       const buttons = Array.from(document.querySelectorAll(".checkpoint-option"));
       const closeCard = buttons.find((button) => button.textContent.includes("Close card"));
       if (!closeCard) throw new Error("Close card checkpoint option was not rendered.");
       closeCard.click();
     });
-    await panelPage.waitForFunction(
+    await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CHECKPOINT-OK"),
       { timeout: 10000 },
     );
 
-    console.log("Extension helper side-panel smoke passed.");
+    console.log("Extension helper dashboard smoke passed.");
   } catch (error) {
     if (browser) {
       const pages = await browser.pages();
       const page = pages.at(-1);
-      await page?.screenshot({ path: "/private/tmp/flyingpig-extension-sidepanel-failure.png" });
+      await page?.screenshot({ path: "/private/tmp/flyingpig-extension-dashboard-failure.png" });
     }
     throw error;
   } finally {

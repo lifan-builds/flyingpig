@@ -72,6 +72,19 @@ class TestAmexAdapter:
         assert "Use `decision_checkpoint` instead of `ask_user`" in prompt
         assert "{decision_checkpoint_instructions}" not in prompt
 
+    def test_build_prompt_does_not_force_redundant_goal_confirmation(self):
+        prompt = self.adapter.build_task_prompt(
+            user_task="ask Amex to waive a late fee",
+            escalation_instructions="",
+            detection_instructions="",
+        )
+
+        assert "proceed without asking the user to confirm" in prompt
+        assert "ask permission to send the exact request" in prompt
+        assert "verification details" in prompt
+        assert "normal bot queues, transfers, or" in prompt
+        assert "Confirm the user's goal" not in prompt
+
     def test_build_prompt_login_instructions(self):
         prompt = self.adapter.build_task_prompt(
             user_task="test",

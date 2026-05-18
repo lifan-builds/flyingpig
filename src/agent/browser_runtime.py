@@ -23,10 +23,15 @@ class ChromeLaunchConfig:
     """Configuration for a visible CDP Chrome run."""
 
     cdp_port: int = 9222
-    chrome_profile: str = "default"
+    chrome_profile: str = "dedicated"
     chrome_user_data_dir: str | None = None
-    initial_url: str = "https://www.americanexpress.com/us/customer-service/"
+    initial_url: str = "about:blank"
     dashboard_url: str | None = None
+    disable_extensions: bool = True
+    window_width: int = 1120
+    window_height: int = 900
+    window_left: int = 560
+    window_top: int = 80
 
 
 def regular_chrome_is_running() -> bool:
@@ -73,6 +78,25 @@ def debugger_is_ready(port: int) -> bool:
         return False
 
 
+def debugger_page_info(port: int) -> dict | None:
+    """Return the first debuggable work-window page, if Chrome exposes one."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
+            targets = json.load(response)
+    except (OSError, urllib.error.URLError, ValueError):
+        return None
+
+    for target in targets:
+        if target.get("type") != "page":
+            continue
+        return {
+            "id": target.get("id"),
+            "title": target.get("title") or "",
+            "url": target.get("url") or "",
+        }
+    return None
+
+
 def wait_for_debugger(port: int, timeout_seconds: int = 20) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -116,12 +140,14 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
         "--new-window",
         "--no-first-run",
         "--no-default-browser-check",
-        "--window-size=1280,900",
-        "--window-position=80,80",
+        f"--window-size={config.window_width},{config.window_height}",
+        f"--window-position={config.window_left},{config.window_top}",
         config.initial_url,
     ]
+    if config.disable_extensions:
+        command.insert(-1, "--disable-extensions")
 
-    print("   Launching visible FlyingPig Chrome with remote debugging.")
+    print("   Launching visible Flying Pig work window with remote debugging.")
     print(f"   Profile dir: {user_data_dir}")
     subprocess.Popen(command, start_new_session=True)
     wait_for_debugger(config.cdp_port)
@@ -160,6 +186,10 @@ def open_dashboard_tab(
 
 
 def find_debugger_target_id(*, port: int, url_prefix: str) -> str | None:
+    info = debugger_page_info(port)
+    if info and str(info.get("url", "")).startswith(url_prefix):
+        return info.get("id")
+
     try:
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
             targets = json.load(response)
@@ -183,7 +213,7 @@ def ensure_default_profile_copy(destination: Path) -> None:
         raise RuntimeError(
             "The default-profile copy does not exist yet. Quit normal Chrome once "
             "to create it safely, or use --chrome-profile dedicated to launch a "
-            "FlyingPig Chrome alongside your current Chrome."
+            "Flying Pig work window alongside your current Chrome."
         )
     print("   Creating CDP-compatible copy of your default Chrome profile.")
     shutil.copytree(

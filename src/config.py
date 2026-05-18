@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
     cliproxyapi_api_key: str = ""
+    api_secret_key: str = ""
     cliproxyapi_base_url: str = "http://127.0.0.1:8317/v1"
     cliproxyapi_model: str = "gpt-5.5"
     cliproxyapi_config: str = "~/.cli-proxy-api/config.yaml"
@@ -32,6 +33,8 @@ class Settings(BaseSettings):
     browser_headless: bool = True
     recordings_dir: str = "recordings"
     max_interaction_minutes: int = 15
+    agent_max_actions_per_step: int = 4
+    agent_pending_outcome_grace_seconds: int = 75
     browser_viewport_width: int = 1920
     browser_viewport_height: int = 1080
 

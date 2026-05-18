@@ -95,7 +95,7 @@ def reset_run_manager() -> None:
     daemon_server.run_manager = daemon_server.RunManager()
 
 
-def test_agent_run_survives_side_panel_disconnect(monkeypatch):
+def test_agent_run_survives_dashboard_disconnect(monkeypatch):
     reset_run_manager()
     monkeypatch.setattr(daemon_server, "AgentBrain", FakeAgentBrain)
     app = daemon_server.create_app()
@@ -152,8 +152,27 @@ def test_browser_launch_endpoint_uses_site_adapter(monkeypatch):
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert response.json()["cdp_url"] == "http://127.0.0.1:9222"
-    assert launched["config"].chrome_profile == "default"
+    assert launched["config"].chrome_profile == "dedicated"
+    assert launched["config"].disable_extensions is True
     assert "americanexpress.com" in launched["config"].initial_url
+
+
+def test_daemon_lists_site_metadata():
+    reset_run_manager()
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            assert ws.receive_json()["status"] == "idle"
+            ws.send_json({"type": "list_sites"})
+            message = ws.receive_json()
+
+    assert message["type"] == "sites"
+    by_id = {item["id"]: item for item in message["items"]}
+    assert by_id["oura"]["label"] == "Oura Ring"
+    assert "support.ouraring.com" in by_id["oura"]["chat_url"]
+    assert by_id["generic"]["chat_url"] == ""
 
 
 def test_browser_launch_endpoint_supports_generic_current_tab(monkeypatch):
@@ -173,6 +192,49 @@ def test_browser_launch_endpoint_supports_generic_current_tab(monkeypatch):
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert launched["config"].initial_url == "about:blank"
+
+
+def test_browser_launch_endpoint_defaults_to_generic_blank_page(monkeypatch):
+    reset_run_manager()
+    launched = {}
+
+    def fake_launch(config):
+        launched["config"] = config
+        return "http://127.0.0.1:9222"
+
+    monkeypatch.setattr(daemon_server, "launch_cdp_chrome", fake_launch)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/browser/launch", json={})
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert launched["config"].initial_url == "about:blank"
+
+
+def test_browser_status_endpoint_reports_debugger_state(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "debugger_is_ready", lambda port: port == 9222)
+    monkeypatch.setattr(
+        daemon_server,
+        "debugger_page_info",
+        lambda port: {"url": "https://support.example/chat", "title": "Support"}
+        if port == 9222
+        else None,
+    )
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        connected = client.get("/browser/status?cdp_url=http://127.0.0.1:9222")
+        disconnected = client.get("/browser/status?cdp_url=http://127.0.0.1:9333")
+
+    assert connected.status_code == 200
+    assert connected.json()["connected"] is True
+    assert connected.json()["cdp_url"] == "http://127.0.0.1:9222"
+    assert connected.json()["current_url"] == "https://support.example/chat"
+    assert connected.json()["current_title"] == "Support"
+    assert disconnected.json()["connected"] is False
 
 
 def test_daemon_broadcasts_and_answers_decision_checkpoint(monkeypatch):

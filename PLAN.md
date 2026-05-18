@@ -107,8 +107,29 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - [x] Build local beta release artifact (2026-05-07) — `scripts/build_beta_release.py --clean` creates `dist/flyingpig-beta-0.1.0.zip` with helper code, side-panel extension, prompts, README, and beta install guide.
 - [x] Add model-owned Decision Checkpoints (2026-05-12) — structured human-in-the-loop choices for strategy pivots, offers, irreversible actions, verification, and timeout-risk moments; side panel renders option buttons, sends selected option id plus exact approved message, supports configurable user-attention alerts, and session artifacts save checkpoint audit events.
 - [x] Harden Decision Checkpoints v2 (2026-05-12) — schema validation now rejects malformed model-generated checkpoints, irreversible actions require exact outbound messages, pending checkpoints survive side-panel reconnects as structured choices, and daemon results expose checkpoint event counts.
-- [ ] Run supervised Amex beta smoke from the side panel with user login/MFA and send confirmation.
-- [ ] Extend the extension smoke from mock-daemon protocol coverage to a full mock-agent browser-use run once the CDP/extension install split is settled.
+- [x] Live Oura supervised run and pacing fix (2026-05-12) — Oura specialist Levi applied 3 complimentary months to `xinyiw9596@gmail.com` with reference `#6847916`; added stronger patience/tone guidance plus stale `report_outcome` guard for pending confirmation/reference details.
+- [x] Release-ready extension-first beta verification pass (2026-05-15) — mapped docs/beta.md gates to automated/manual evidence, strengthened the extension smoke for disabled Start, offline setup, launch/focus, cancel, and checkpoint reconnect, hardened helper LaunchAgent failure output, fixed helper stop to boot out the running service target, verified helper status/stop/start plus `/health`, and rebuilt `dist/flyingpig-beta-0.1.0.zip`.
+- [x] Dashboard cockpit pivot (2026-05-17) — replaced the Chrome side-panel primary surface with a dashboard tab opened by the extension action, removed the `sidePanel` manifest dependency, made the work-window URL the only task target, and renamed the extension smoke/protocol tests around the dashboard.
+- [ ] Run supervised Amex beta smoke from the dashboard with user login/MFA and send confirmation.
+- [x] Extend extension smoke coverage or document full mock-agent blocker (2026-05-15) — dashboard mock-daemon smoke now covers the release UX states; full dashboard-driven browser-use mock-agent run remains documented in docs/beta.md as blocked on deterministic LLM/CDP work-window orchestration.
+
+### 2026-05-12 Oura supervised run and pacing findings
+- Live Oura result: specialist Levi confirmed 3 complimentary membership months were applied to `xinyiw9596@gmail.com`; reference number `#6847916`.
+- First continuation failure: Flying Pig finalized while Levi had said he was still checking. It needed to continue waiting in the existing live chat.
+- Second continuation failure: Flying Pig again reported no reference/timing while Levi had said "allow me one moment please"; Computer Use saw the reference arrive immediately after.
+- Implemented follow-up: runtime policy now treats rep "checking/reviewing/one moment" messages as Active Human Work, asks for 60-90s patience, and encourages warmer appreciative follow-ups.
+- Implemented follow-up: `report_outcome` now re-inspects visible page text and blocks stale "no reference provided" finalization when pending human-work phrases or new reference numbers are visible.
+- Validation after fixes: `pytest tests/integration tests/unit` passed; `pytest tests/e2e/test_amex_e2e.py -x -vv` passed; full `pytest tests/` was attempted but browser e2e cleanup wedged after a transient mark, so the hung process was stopped.
+
+### 2026-05-15 Extension-first beta release evidence
+- Verification passed: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (116 passed, 2 deselected); elevated `npm run test:extension`; `python scripts/build_beta_release.py --clean`; `git diff --check`.
+- Beta artifact: `dist/flyingpig-beta-0.1.0.zip` rebuilt after helper stop fix, docs/install-guide fixes, and release privacy fixes. SHA-256: `4f70066a332f23a2a3b4db1d21e1fd5fd4d49cef3718e4538c45de1a603f380d`.
+- Helper service flow verified: status showed `state = running`, `/health` returned `{"ok":true,"sites":["amex","generic","oura"]}`, stop made status report not running and `/health` unavailable, start restored running state and `/health`.
+- Release-blocking helper UX fix: stale/not-loaded LaunchAgent failures now print a recovery-focused launchctl message instead of a Python traceback.
+- Release-blocking helper stop fix: `flyingpig-macos-helper stop` now boots out `gui/<uid>/com.flyingpig.helper` and fails loudly if launchctl refuses instead of printing success while the service keeps running.
+- Release privacy scan fix: removed the hardcoded API auth JWT secret from `src/api/auth.py`, added `api_secret_key` environment configuration, removed the local editable path from `requirements.txt`, and added an explicit beta gate forbidding PII/API keys/credentials/tokens/cookies/logs/recordings/user-specific account info in release artifacts.
+- Extension smoke now covers setup/offline state, disabled Start before Work Window Connected, dedicated work-window launch, active-run cancel, checkpoint restore after dashboard reload, and checkpoint answer submission.
+- Remaining manual blocker: supervised Amex beta smoke still needs a tester present for Amex login/MFA and explicit send confirmation from the dashboard. Exact smoke path and blocker taxonomy are recorded in docs/beta.md.
 
 ## Decisions
 - **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
@@ -120,6 +141,14 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - **2026-05-04** Use `BrowserSession.from_system_chrome()` as the default path instead of a Chrome extension; simpler architecture, real profile access, with the explicit tradeoff that Chrome must be closed before launch.
 - **2026-05-06** Prefer inspected CDP Chrome for live Amex runs requiring human observation. Use a persistent copied profile for Chrome CDP compatibility; do not attempt literal default-profile remote debugging.
 - **2026-05-07** Keep browser-use in a packaged local helper/native host and use the Chrome side panel as the supervised UX. Do not replace browser-use with pure extension JavaScript just to make the product feel standalone.
+- **2026-05-15** Extension-first v1 may open a separate Flying Pig Controlled Chrome Window for the actual customer-service run. The product should frame it as a purposeful work window launched from the side panel, not as the user manually starting another browser.
+- **2026-05-15** Follow the Single Cockpit Rule for v1: the extension side panel in normal Chrome is the only control surface, and the Controlled Chrome Window should run with extensions disabled.
+- **2026-05-15** V1 supervision layout should be side-by-side: the normal Chrome side panel is the cockpit, and the Controlled Chrome Window is the work area.
+- **2026-05-15** Small-screen fallback keeps the Single Cockpit model and relies on user-attention notifications plus bring-forward controls instead of adding a second in-work-window UI.
+- **2026-05-15** Use Hybrid Helper Startup: keep the existing login/background helper service for beta stabilization, then add Native Messaging so the extension can start the helper on demand.
+- **2026-05-15** Helper-offline side-panel state should lead with setup/reconnect actions and keep localhost/WebSocket diagnostics secondary.
+- **2026-05-15** First-run beta should fall back to a Dedicated Work Profile instead of asking the user to quit normal Chrome to create a copied default profile.
+- **2026-05-17** Use the Chrome extension dashboard tab as the v1 cockpit. The side panel is too cramped and makes "current tab" ambiguous once a separate Controlled Chrome Window exists.
 
 ## Archive
 (Empty — initial migration.)

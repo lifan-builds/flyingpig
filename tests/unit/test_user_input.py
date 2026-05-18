@@ -3,10 +3,17 @@ import json
 
 import pytest
 from pydantic import ValidationError
+from src.agent import user_input as user_input_module
 from src.agent.user_input import (
     DecisionCheckpointParams,
     DecisionOption,
     UserInputHandler,
+    click_visible_control_tool,
+    find_reference_numbers,
+    outcome_claims_missing_documentation,
+    outcome_claims_pending_handoff,
+    text_has_pending_human_work,
+    text_has_pending_support_handoff,
 )
 
 
@@ -142,3 +149,148 @@ def test_decision_checkpoint_requires_complete_holding_message_pair():
             ],
             holding_message="Please give me a moment.",
         )
+
+
+@pytest.mark.asyncio
+async def test_click_visible_control_tool_clicks_first_matching_frame():
+    calls = []
+
+    class FakeFrame:
+        def __init__(self, result):
+            self.result = result
+
+        async def evaluate(self, script, label):
+            calls.append(label)
+            return self.result
+
+    class FakePage:
+        frames = [
+            FakeFrame({"clicked": False, "reason": "missing"}),
+            FakeFrame({"clicked": True, "label": "open chat agent", "tag": "BUTTON"}),
+        ]
+
+    class FakeSession:
+        def __init__(self):
+            self.page = FakePage()
+
+        async def get_current_page(self):
+            return self.page
+
+    result = await click_visible_control_tool(FakeSession(), "Open Chat Agent")
+
+    assert "Clicked visible control" in result
+    assert calls == ["Open Chat Agent", "Open Chat Agent"]
+
+
+@pytest.mark.asyncio
+async def test_click_visible_control_tool_reports_missing_browser():
+    result = await click_visible_control_tool(None, "Chat")
+
+    assert result == "No browser session is attached."
+
+
+def test_outcome_guard_helpers_detect_pending_missing_reference_state():
+    details = {
+        "outcome": "Membership months will be applied.",
+        "confirmation_number": "No separate reference or confirmation number was provided.",
+        "amount_saved": "3 months",
+        "next_steps": "Follow up later.",
+    }
+    transcript = "Levi: allow me one moment please:)"
+
+    assert outcome_claims_missing_documentation(details)
+    assert text_has_pending_human_work(transcript)
+
+
+def test_outcome_guard_helpers_detect_pending_support_handoff():
+    details = {
+        "outcome": "No verified final confirmation was provided.",
+        "confirmation_number": None,
+        "amount_saved": None,
+        "next_steps": "The last verified state was still pending transfer.",
+    }
+    transcript = "Finn: I'll connect you with our Member Care Team now."
+
+    assert outcome_claims_pending_handoff(details)
+    assert text_has_pending_support_handoff(transcript)
+
+
+def test_find_reference_numbers_prefers_customer_service_reference_context():
+    transcript = (
+        "Case/code #6721213 was reviewed. "
+        "The reference number for your records is #6847916."
+    )
+
+    assert find_reference_numbers(transcript) == ["#6721213", "#6847916"]
+
+
+@pytest.mark.asyncio
+async def test_report_outcome_guard_blocks_stale_missing_reference(monkeypatch):
+    monkeypatch.setattr(
+        user_input_module.settings,
+        "agent_pending_outcome_grace_seconds",
+        0,
+    )
+
+    class FakePage:
+        calls = 0
+
+        async def evaluate(self, script):
+            self.calls += 1
+            if self.calls == 1:
+                return "Levi: allow me one moment please:)"
+            return "Levi: The reference number for your records is #6847916."
+
+    class FakeSession:
+        def __init__(self):
+            self.page = FakePage()
+
+        async def get_current_page(self):
+            return self.page
+
+    details = {
+        "outcome": "The promotion will be applied.",
+        "confirmation_number": "No separate reference number was provided.",
+        "amount_saved": "3 months",
+        "next_steps": "Monitor the account.",
+    }
+
+    guard_message = await user_input_module._guard_report_outcome(
+        FakeSession(),
+        details,
+    )
+
+    assert guard_message is not None
+    assert "#6847916" in guard_message
+
+
+@pytest.mark.asyncio
+async def test_report_outcome_guard_blocks_unresolved_pending_handoff(monkeypatch):
+    monkeypatch.setattr(
+        user_input_module.settings,
+        "agent_pending_outcome_grace_seconds",
+        0,
+    )
+
+    class FakePage:
+        async def evaluate(self, script):
+            return "Finn: I'll connect you with our Member Care Team now."
+
+    class FakeSession:
+        async def get_current_page(self):
+            return FakePage()
+
+    details = {
+        "outcome": "No verified final confirmation was provided.",
+        "confirmation_number": None,
+        "amount_saved": None,
+        "next_steps": "The last verified state was still pending transfer.",
+    }
+
+    guard_message = await user_input_module._guard_report_outcome(
+        FakeSession(),
+        details,
+    )
+
+    assert guard_message is not None
+    assert "unresolved handoff" in guard_message

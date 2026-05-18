@@ -9,11 +9,11 @@ export function formatTime(value) {
   });
 }
 
-export function siteLabel(site) {
-  if (site === "amex") return "American Express";
-  if (site === "oura") return "Oura Ring";
+export function siteLabel(site, sites = []) {
+  const match = sites.find((item) => item.id === site);
+  if (match?.label) return match.label;
   if (site === "generic") return "Generic chat";
-  if (site === "unknown" || !site) return "Current tab";
+  if (site === "unknown" || !site) return "Work window";
   return site;
 }
 

@@ -1,5 +1,12 @@
 # Agent Guide
 
+## Context Contract
+- At session start/resume, read `NOW.md` first, then `CONTEXT.md`.
+- Before planning or editing, respect `CONTEXT.md` `## Rules`.
+- If the user teaches a durable term, invariant, workflow, constraint, or correction, update `CONTEXT.md` before it scrolls away.
+- Route task-local findings to `PLAN.md`; hard-to-reverse trade-offs to ADRs.
+- Before ending, update `NOW.md` with current focus, blockers, next step, and touched files.
+
 ## Project Overview
 **Flying Pig AI** (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate website chat widgets (Amex, telecom, utilities, etc.), communicate with human or AI customer service reps, and advocate for the user — negotiating bills, resolving disputes, canceling services, or escalating issues. The core value prop: users delegate tedious customer service interactions to an AI that fights for their interests.
 

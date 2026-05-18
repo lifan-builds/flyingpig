@@ -95,6 +95,27 @@ async def root(logged_in: bool = False):
         ).replace(
             '<div id="chat-container" style="display:none; margin-top:20px;">',
             '<div id="chat-container" style="display:block; margin-top:20px;">',
+        ).replace(
+            '<button id="open-chat">Chat with Us</button>',
+            '<button id="open-chat" style="display:none;">Chat with Us</button>',
+        ).replace(
+            (
+                '<div\n'
+                '            id="chat-window"\n'
+                '            style="display:none; border:1px solid black; '
+                'padding:10px; width:300px;"\n'
+                '        >'
+            ),
+            (
+                '<div\n'
+                '            id="chat-window"\n'
+                '            style="display:block; border:1px solid black; '
+                'padding:10px; width:300px;"\n'
+                '        >'
+            ),
+        ).replace(
+            '<div id="chat-history"></div>',
+            '<div id="chat-history"><div>Agent: Hi, how can I help you today?</div></div>',
         )
     return HTMLResponse(content=html)
 

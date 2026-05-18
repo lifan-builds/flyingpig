@@ -141,10 +141,17 @@ def main():
         "--model",
         default=None,
         choices=[
-            "claude", "claude-sonnet", "claude-opus",
-            "openai", "gpt-4o",
-            "cliproxyapi", "cliproxy", "gpt-5.5",
-            "gemini", "gemini-flash", "gemini-pro",
+            "claude",
+            "claude-sonnet",
+            "claude-opus",
+            "openai",
+            "gpt-4o",
+            "cliproxyapi",
+            "cliproxy",
+            "gpt-5.5",
+            "gemini",
+            "gemini-flash",
+            "gemini-pro",
         ],
         help="LLM model to use",
     )
@@ -171,7 +178,8 @@ def main():
         help="Maximum agent steps",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Enable verbose logging",
     )

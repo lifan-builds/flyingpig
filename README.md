@@ -61,13 +61,11 @@ cd frontend && npm run dev
 python scripts/start.py
 ```
 
-This launches a FlyingPig-controlled Chrome using a persistent copy of
-your default Chrome profile, opens Amex plus the local dashboard, waits
-for you to log in or prepare the visible Amex tab, then attaches the
-agent to that same tab. The copied profile lives at
-`~/.flyingpig/chrome-cdp-default-copy/` so login can persist across runs
-without attaching CDP to the literal live Chrome profile that modern
-Chrome blocks.
+This launches a FlyingPig-controlled Chrome using an isolated work
+profile, waits for you to log in or prepare the visible customer-service
+tab, then attaches the agent to that same tab. The work profile lives at
+`~/.flyingpig/chrome-cdp-profile/` and persists login state across Flying
+Pig runs without touching the literal live Chrome profile.
 
 Common choices stay short:
 
@@ -77,9 +75,10 @@ python scripts/start.py --task "Ask Amex about my Oura Ring benefit credit."
 python scripts/start.py --model cliproxyapi --fallback-model gemini-flash
 ```
 
-If you want a clean isolated profile instead, pass `--chrome-profile
-dedicated`. The first copied-profile launch should be created with normal
-Chrome quit; after that, the copy can be launched independently.
+If you explicitly want to reuse a persistent copy of your normal Chrome
+profile, pass `--chrome-profile default`. The first copied-profile launch
+should be created with normal Chrome quit; after that, the copy can be
+launched independently.
 
 Current Chrome builds block remote debugging on the literal default user
 profile. Use `--chrome-profile default` for FlyingPig's persistent copied
@@ -129,14 +128,14 @@ there — it will not navigate away or open new tabs. Your cookies, login,
 and MFA state come for free. On exit, the agent detaches; the browser
 stays open.
 
-### Chrome Extension Side Panel
+### Chrome Extension Dashboard
 
-The preferred supervised UI is the Chrome side panel. It keeps agent
-status, questions, and controls visible beside the Amex tab while the
-local Flying Pig helper runs the browser-use agent.
+The preferred supervised UI is the Chrome dashboard. It keeps agent
+status, questions, and controls in a full browser tab while the local
+Flying Pig helper runs the browser-use agent in a separate work window.
 
 For beta, install the local helper service first. It starts the WebSocket
-helper in the background at login; the side panel can then launch a
+helper in the background at login; the dashboard can then launch a
 FlyingPig-controlled Chrome window when you are ready:
 
 ```bash
@@ -146,21 +145,28 @@ flyingpig-macos-helper install
 1. In Chrome, open `chrome://extensions`, enable developer mode, click
 **Load unpacked**, and select `extension/`.
 
-2. Click the Flying Pig extension icon and press **Launch Chrome**.
+2. Click the Flying Pig extension icon to open the dashboard, then press
+**Launch Work Window**.
 
-3. In the FlyingPig Chrome window, open or prepare the Amex
-customer-service tab.
+3. In the FlyingPig work window, open or prepare the Amex
+customer-service tab. The dashboard remains the cockpit; the work window
+runs without extensions.
 
-4. Choose a playbook, edit the task, and start. The side panel streams
+4. Choose a playbook, edit the task, and start. The dashboard streams
 browser-use progress and forwards mid-run questions.
 
-If the copied default Chrome profile has not been created yet, quit
-normal Chrome once and press **Launch Chrome** again. To use a clean
-profile that can run alongside normal Chrome during development, use:
+The dashboard shows two separate statuses:
 
-```bash
-flyingpig-helper --chrome-profile dedicated
-```
+- **Helper Online** means the local WebSocket/API helper is reachable.
+- **Work Window Connected** means a CDP-controlled Chrome window is reachable.
+
+Start is disabled until both are online. This avoids the confusing case
+where the extension is open in normal Chrome but browser-use cannot attach
+to a controllable browser.
+
+The beta default is a dedicated Flying Pig work profile so setup does not
+ask users to quit normal Chrome. To test the copied-profile path, use
+`flyingpig-helper --chrome-profile default`.
 
 For beta support:
 
@@ -171,10 +177,14 @@ flyingpig-macos-helper start
 flyingpig-macos-helper uninstall
 ```
 
+For a manual development run, `python scripts/daemon.py` now attempts to
+open the controlled Chrome window automatically. Use `--no-browser` only
+when you want the helper API without launching Chrome.
+
 Automated extension tests should use a Puppeteer-managed browser with the
 extension installed through Puppeteer's extension APIs.
 
-To run the deterministic mock side-panel smoke:
+To run the deterministic mock dashboard smoke:
 
 ```bash
 npm install
@@ -182,7 +192,7 @@ npm run test:extension
 ```
 
 This launches a Puppeteer-managed Chrome with the unpacked extension,
-starts mock Amex and helper servers, and verifies that the side panel can
+starts mock Amex and helper servers, and verifies that the dashboard can
 start a browser-use-helper run and render progress.
 
 See `docs/beta.md` for the first-cohort beta checklist and operating

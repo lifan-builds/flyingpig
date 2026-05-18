@@ -1,4 +1,4 @@
-"""Beta helper process for the Flying Pig side-panel runtime."""
+"""Beta helper process for the Flying Pig dashboard runtime."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from src.daemon.server import create_app
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the Flying Pig local helper for beta side-panel sessions.",
+        description="Run the Flying Pig local helper for beta dashboard sessions.",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Helper host")
     parser.add_argument("--port", type=int, default=8765, help="Helper WebSocket/API port")
@@ -22,10 +22,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--chrome-profile",
         choices=["default", "dedicated"],
-        default="default",
+        default="dedicated",
         help=(
-            "Chrome profile mode. 'default' uses FlyingPig's persistent copy of "
-            "the user's default profile; 'dedicated' starts clean."
+            "Chrome profile mode. 'dedicated' uses FlyingPig's isolated work profile; "
+            "'default' uses FlyingPig's persistent copy of the user's default profile."
         ),
     )
     parser.add_argument(
@@ -35,8 +35,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--initial-url",
-        default="https://www.americanexpress.com/us/customer-service/",
-        help="Page to open in the FlyingPig Chrome window",
+        default="about:blank",
+        help="Page to open in the Flying Pig work window",
     )
     parser.add_argument(
         "--no-browser",
@@ -72,8 +72,8 @@ def main() -> None:
             sys.exit(1)
 
     print(f"Flying Pig helper online: ws://{args.host}:{args.port}/ws")
-    print(f"Browser endpoint for the side panel: {cdp_url}")
-    print("Keep this helper running while the Chrome side panel controls the agent.")
+    print(f"Browser endpoint for the dashboard: {cdp_url}")
+    print("Keep this helper running while the Chrome dashboard controls the agent.")
 
     uvicorn.run(
         create_app(),

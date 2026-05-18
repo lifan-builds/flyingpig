@@ -73,7 +73,7 @@ class AgentBrain:
             {
                 "step": step_num,
                 "phase": "starting",
-                "message": f"Step {step_num} started",
+                "message": "Checking the current page and chat state before the next action.",
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         )
@@ -214,9 +214,9 @@ class AgentBrain:
             task=agent_task,
             llm=llm,
             browser_session=browser_session,
-            tools=build_tools(self.input_handler),
+            tools=build_tools(self.input_handler, browser_session=browser_session),
             use_vision=self.use_vision,
-            max_actions_per_step=2,
+            max_actions_per_step=settings.agent_max_actions_per_step,
             max_failures=5,
             llm_timeout=self.llm_timeout,
             generate_gif=True,
@@ -236,7 +236,7 @@ class AgentBrain:
             template_id=template_id,
         )
         if not self.cdp_url:
-            return agent_task
+            return self._with_runtime_policy(agent_task)
         return (
             "## Attached-Browser Mode\n"
             "You are operating inside a Chrome tab that was attached "
@@ -250,7 +250,10 @@ class AgentBrain:
             "seconds to render after attach. Only if the URL itself "
             "is clearly unrelated to the task should you ask_user to "
             "navigate.\n\n"
-        ) + agent_task
+        ) + self._with_runtime_policy(agent_task)
+
+    def _with_runtime_policy(self, agent_task: str) -> str:
+        return _runtime_policy() + agent_task
 
     def _fallback_agent_task(self, agent_task: str, primary_error: Exception) -> str:
         return (
@@ -260,3 +263,56 @@ class AgentBrain:
             "the task or open a new tab unless the current page is unusable. "
             f"Previous failure: {type(primary_error).__name__}: {primary_error}\n\n"
         ) + agent_task
+
+
+def _runtime_policy() -> str:
+    return (
+        "## Runtime Pace Policy\n"
+        "- Move efficiently. Prefer completing obvious paired actions in the same "
+        "step, such as typing a message and clicking Send, selecting a visible "
+        "choice, or submitting a simple form.\n"
+        "- Prefer `click_visible_control` for obvious visible chat launchers and "
+        "quick-reply buttons such as Chat, Open Chat Agent, Start a new chat, "
+        "Yes, or No. It reaches controls inside iframes/shadow DOM that normal "
+        "indexed clicks often miss.\n"
+        "- If a click or wait reports an uncertain/missing updated browser state, "
+        "do not finish as failed solely for that reason. Wait once briefly or "
+        "inspect the page, then continue if the chat input or next button is "
+        "visible.\n"
+        "- Ask the user sparingly. If the task already contains a clear authorized "
+        "goal and needed non-sensitive details, do not ask for pre-send "
+        "confirmation before sending that same request. Ask only for ambiguity, "
+        "missing sensitive or verification details, login blockers, irreversible "
+        "actions, accepting a material tradeoff, or user-gated recovery.\n"
+        "- Default waits should be short for bot/UI work: 3-5 seconds for bot "
+        "typing and 8-12 seconds for initial transfer mechanics. Once a human "
+        "representative has joined but has not answered yet, wait 30-60 seconds "
+        "before prompting.\n"
+        "- Human representatives get a real patience window. If a rep says they "
+        "are checking, reviewing, applying something, or asks for a moment, wait "
+        "60-90 seconds before any status check. Treat phrases such as 'please "
+        "wait', 'still checking', 'one moment', 'allow me a moment', and "
+        "'bear with me' as active work, not silence.\n"
+        "- Do not repeat passive waits indefinitely. After a true silent human "
+        "review period with no pending-work phrase, send at most one warm, "
+        "appreciative status check. Avoid repeated 'just checking' messages. "
+        "If a bot says it will connect, transfer, or hand off to a human "
+        "support team, treat that as pending transfer work rather than a final "
+        "answer: wait 60-90 seconds, send one concise transfer-status nudge if "
+        "no human appears, then wait another 60-90 seconds before reporting the "
+        "handoff as unresolved. "
+        "After a representative promises to apply a credit, promotion, "
+        "cancellation, or membership adjustment, ask for confirmation/reference "
+        "details, then wait through the human patience window if they say they "
+        "are working on it.\n"
+        "- Keep human-facing messages friendly and easygoing: thank the rep for "
+        "checking, acknowledge delays, and use phrases like 'I appreciate your "
+        "help' instead of terse pressure. Be persistent, but do not sound like a "
+        "timer went off.\n"
+        "- Before `report_outcome`, inspect the latest visible chat messages one "
+        "final time. Do not report that no reference, timing, or confirmation was "
+        "provided while the latest rep message says they are still checking or "
+        "asking for a moment. If a new reference appears, include it.\n"
+        "- Once the representative confirms the concrete outcome and any pending "
+        "documentation wait is resolved, report the outcome immediately.\n\n"
+    )

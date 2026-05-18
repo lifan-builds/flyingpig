@@ -9,7 +9,7 @@ import {
   fallbackPendingRequest,
   requestKey,
   siteLabel,
-} from "../extension/src/sidepanel_protocol.js";
+} from "../extension/src/dashboard_protocol.js";
 
 const checkpoint = {
   checkpoint_id: "cp_test",
@@ -20,7 +20,8 @@ const option = {
   message_to_send: "I would like to proceed toward closing.",
 };
 
-assert.equal(siteLabel("amex"), "American Express");
+assert.equal(siteLabel("amex", [{ id: "amex", label: "American Express" }]), "American Express");
+assert.equal(siteLabel("oura"), "oura");
 assert.equal(
   requestKey({ type: "decision_checkpoint", checkpoint }),
   "checkpoint:cp_test",
@@ -49,4 +50,4 @@ assert.deepEqual(fallbackPendingRequest({
   reason: "agent needs input",
 });
 
-console.log("Side-panel protocol unit tests passed.");
+console.log("Dashboard protocol unit tests passed.");
