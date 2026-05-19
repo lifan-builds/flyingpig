@@ -40,6 +40,7 @@ from src.agent.browser_runtime import (
 from src.daemon.run_session import (
     RunStateStore,
     now_iso,
+    progress_message,
     protocol_event_for_request,
     request_message,
     result_payload,
@@ -64,6 +65,24 @@ class BrowserLaunchRequest(BaseModel):
 
 class BrowserStatusRequest(BaseModel):
     cdp_url: str = "http://127.0.0.1:9222"
+
+
+class RunStartRequest(BaseModel):
+    site: str | None = "generic"
+    url: str = ""
+    template: str | None = None
+    task: str
+    cdp_url: str | None = None
+    target_url: str | None = None
+    model: str | None = None
+    fallback_model: str | None = None
+    max_steps: int = 80
+    navigate_on_attach: bool = False
+
+
+class RunAnswerRequest(BaseModel):
+    text: str = ""
+    payload: dict | None = None
 
 
 class RunManager:
@@ -262,20 +281,17 @@ class RunManager:
                 continue
             progress = self.brain.step_log
             for event in progress[sent:]:
-                await self.broadcast(type="progress", event=event)
                 pending_request = getattr(self.brain.input_handler, "pending_request", None)
+                display_message = progress_message(event, pending_request)
+                event_payload = dict(event)
+                event_payload["display_message"] = display_message
+                await self.broadcast(type="progress", event=event_payload)
                 await self.set_state(
                     status="needs_input" if pending_request else "running",
                     running=True,
                     needs_input=bool(pending_request),
                     step=event.get("step"),
-                    message=request_message(pending_request)
-                    or (
-                        event.get("message")
-                        or event.get("goal")
-                        or event.get("thought")
-                        or "Working"
-                    ),
+                    message=display_message,
                     pending_request=pending_request,
                 )
             sent = len(progress)
@@ -292,7 +308,7 @@ class RunManager:
             status="running",
             running=True,
             needs_input=False,
-            message="Answer received",
+            message="Answer received. Continuing the run.",
             pending_request=None,
         )
 
@@ -363,6 +379,25 @@ def create_app() -> FastAPI:
     async def browser_status(cdp_url: str = "http://127.0.0.1:9222"):
         request = BrowserStatusRequest(cdp_url=cdp_url)
         return browser_status_payload(request.cdp_url)
+
+    @app.get("/run/state")
+    async def run_state():
+        return run_manager.state.snapshot()
+
+    @app.post("/run/start")
+    async def run_start(request: RunStartRequest):
+        await run_manager.start(request.model_dump())
+        return run_manager.state.snapshot()
+
+    @app.post("/run/answer")
+    async def run_answer(request: RunAnswerRequest):
+        await run_manager.answer(request.text, payload=request.payload)
+        return run_manager.state.snapshot()
+
+    @app.post("/run/cancel")
+    async def run_cancel():
+        await run_manager.cancel()
+        return run_manager.state.snapshot()
 
     @app.post("/browser/launch")
     async def browser_launch(request: BrowserLaunchRequest):

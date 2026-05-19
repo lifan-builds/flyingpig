@@ -155,6 +155,11 @@ runs without extensions.
 4. Choose a playbook, edit the task, and start. The dashboard streams
 browser-use progress and forwards mid-run questions.
 
+For supervised live runs, use the dashboard or helper API instead of a
+background `scripts/start.py` process. If the agent hits a Decision
+Checkpoint, the dashboard/API can answer it and resume the same run; a
+background CLI process cannot read interactive input.
+
 The dashboard shows two separate statuses:
 
 - **Helper Online** means the local WebSocket/API helper is reachable.

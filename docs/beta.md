@@ -27,6 +27,25 @@
 5. In the FlyingPig work window, prepare the Amex customer-service tab.
 6. Confirm the task and supervise the run.
 
+For supervised live sessions, start the run from the dashboard or helper API,
+not from a background `scripts/start.py` process. Live chats often require
+Decision Checkpoints, verification prompts, or settlement choices; the
+dashboard/API path keeps the run alive while the user answers. A foreground CLI
+run is acceptable for developer debugging only when the terminal remains
+available for prompts.
+
+Helper API equivalents for supervised tooling:
+
+```bash
+curl http://127.0.0.1:8765/run/state
+curl -X POST http://127.0.0.1:8765/run/start \
+  -H 'Content-Type: application/json' \
+  -d '{"site":"generic","task":"...","cdp_url":"http://127.0.0.1:9222"}'
+curl -X POST http://127.0.0.1:8765/run/answer \
+  -H 'Content-Type: application/json' \
+  -d '{"payload":{"checkpoint_id":"...","selected_option_id":"...","selected_message":"..."}}'
+```
+
 The dashboard has separate helper and work-window statuses. **Helper Online**
 means the local helper is reachable; **Work Window Connected** means the
 controlled Chrome debugging endpoint is reachable. The dashboard tab is the
@@ -69,6 +88,27 @@ The bundle includes the helper code, prompts, Chrome extension, README, and beta
 - Helper-offline state in the dashboard clearly offers setup and reconnect paths.
 - Launch Work Window from the dashboard returns a CDP endpoint and opens the Amex page in an extension-free controlled window.
 - Start is disabled when the helper is online but controlled Chrome is not connected.
+- Relaunching the work window against an already-running CDP endpoint resets the task page and closes stale page targets.
+
+## Release Evidence — 2026-05-18
+
+Automated gates:
+
+| Gate | Evidence |
+| --- | --- |
+| Focused backend/browser tests | `pytest tests/unit/test_browser_runtime.py tests/unit/test_daemon_server.py -q` passed: 22 passed. |
+| Focused lint | `ruff check src/agent/browser_runtime.py src/daemon/server.py src/daemon/run_session.py tests/unit/test_browser_runtime.py tests/unit/test_daemon_server.py` passed. |
+| Dashboard protocol | `node scripts/test_dashboard_protocol.mjs` passed. |
+| Extension smoke | Elevated `npm run test:extension` passed after reinstalling root and frontend Node dependencies. |
+| Beta bundle | `python scripts/build_beta_release.py --clean` produced `dist/flyingpig-beta-0.1.0.zip` (104K). |
+| Release privacy scan | `zipgrep` found no common API-key/private-key patterns, local user paths, cookie/log/recording indicators, or known live-run PII strings in the beta zip. |
+
+Manual dashboard pass:
+
+- Opened normal Chrome, launched the extension dashboard, and verified **Helper Online** with **Work Window Offline**.
+- Verified **Start** is disabled until the controlled work window is connected.
+- Clicked **Launch Work Window**; dashboard switched to **Work Window Connected**, changed the URL label to **Work Window URL**, and followed the Oura support URL from the controlled work window rather than the dashboard URL.
+- Relaunched while CDP was already running; CDP inspection showed one debuggable `page` target for the Oura support page after stale page cleanup.
 
 ## Release Evidence — 2026-05-15
 

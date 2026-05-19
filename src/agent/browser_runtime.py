@@ -80,10 +80,8 @@ def debugger_is_ready(port: int) -> bool:
 
 def debugger_page_info(port: int) -> dict | None:
     """Return the first debuggable work-window page, if Chrome exposes one."""
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
-            targets = json.load(response)
-    except (OSError, urllib.error.URLError, ValueError):
+    targets = debugger_targets(port)
+    if targets is None:
         return None
 
     for target in targets:
@@ -95,6 +93,15 @@ def debugger_page_info(port: int) -> dict | None:
             "url": target.get("url") or "",
         }
     return None
+
+
+def debugger_targets(port: int) -> list[dict] | None:
+    """Return raw CDP targets for a running debug endpoint."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
+            return json.load(response)
+    except (OSError, urllib.error.URLError, ValueError):
+        return None
 
 
 def wait_for_debugger(port: int, timeout_seconds: int = 20) -> None:
@@ -116,6 +123,7 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
     cdp_url = f"http://127.0.0.1:{config.cdp_port}"
     if debugger_is_ready(config.cdp_port):
         print(f"   Reusing Chrome remote debugging endpoint at {cdp_url}")
+        prepare_debugger_page(port=config.cdp_port, target_url=config.initial_url)
         return cdp_url
 
     user_data_dir = chrome_user_data_dir(
@@ -140,6 +148,7 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
         "--new-window",
         "--no-first-run",
         "--no-default-browser-check",
+        "--disable-component-extensions-with-background-pages",
         f"--window-size={config.window_width},{config.window_height}",
         f"--window-position={config.window_left},{config.window_top}",
         config.initial_url,
@@ -158,6 +167,63 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
             target_url=config.initial_url,
         )
     return cdp_url
+
+
+def prepare_debugger_page(*, port: int, target_url: str) -> None:
+    """Reset a reused CDP work window to one task page.
+
+    Chrome keeps old tabs alive when we reconnect to an existing debugging
+    endpoint. A fresh launch request should not let stale Oura/Uber/etc. pages
+    become the next run target, so create the requested page, activate it, and
+    close the previous page targets.
+    """
+    targets = debugger_targets(port) or []
+    page_targets = [target for target in targets if target.get("type") == "page"]
+    if len(page_targets) == 1 and str(page_targets[0].get("url", "")) == target_url:
+        return
+
+    new_target_id = open_debugger_page(port=port, url=target_url)
+    if not new_target_id:
+        return
+    activate_debugger_target(port=port, target_id=new_target_id)
+    for target in page_targets:
+        old_target_id = target.get("id")
+        if old_target_id and old_target_id != new_target_id:
+            close_debugger_target(port=port, target_id=old_target_id)
+
+
+def open_debugger_page(*, port: int, url: str) -> str | None:
+    encoded_url = urllib.parse.quote(url or "about:blank", safe="")
+    try:
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}/json/new?{encoded_url}",
+            method="PUT",
+        )
+        with urllib.request.urlopen(request, timeout=2) as response:
+            payload = json.load(response)
+        return payload.get("id")
+    except (OSError, urllib.error.URLError, ValueError):
+        return None
+
+
+def activate_debugger_target(*, port: int, target_id: str) -> None:
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/json/activate/{target_id}",
+            timeout=2,
+        ).close()
+    except (OSError, urllib.error.URLError):
+        return
+
+
+def close_debugger_target(*, port: int, target_id: str) -> None:
+    try:
+        urllib.request.urlopen(
+            f"http://127.0.0.1:{port}/json/close/{target_id}",
+            timeout=2,
+        ).close()
+    except (OSError, urllib.error.URLError):
+        return
 
 
 def open_dashboard_tab(

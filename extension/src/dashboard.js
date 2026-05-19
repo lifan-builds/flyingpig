@@ -174,7 +174,7 @@ function pendingRunMessage(request) {
 }
 
 function progressMessage(event) {
-  const raw = event.message || event.goal || event.thought || "";
+  const raw = event.display_message || event.message || event.goal || event.thought || "";
   if (raw && !/^Step \d+ started$/.test(raw)) return raw;
   if (event.phase === "starting") {
     return "Checking the current page and chat state before the next action.";

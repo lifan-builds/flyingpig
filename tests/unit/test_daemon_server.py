@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 import src.daemon.server as daemon_server
 from fastapi.testclient import TestClient
 from src.agent.result import TaskResult, TaskStatus
+from src.daemon.run_session import progress_message
 
 
 class FakeInputHandler:
@@ -345,3 +347,92 @@ def test_daemon_snapshot_preserves_pending_decision_checkpoint(monkeypatch):
                     result = message
                     break
             assert result is not None
+
+
+def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeCheckpointAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        start = client.post(
+            "/run/start",
+            json={
+                "site": "amex",
+                "url": "https://www.americanexpress.com/us/customer-service/",
+                "task": "test checkpoint",
+                "template": "general",
+                "max_steps": 1,
+            },
+        )
+        assert start.status_code == 200
+        assert start.json()["running"] is True
+
+        state = None
+        for _ in range(20):
+            response = client.get("/run/state")
+            assert response.status_code == 200
+            state = response.json()
+            if state["needs_input"]:
+                break
+
+            time.sleep(0.05)
+
+        assert state is not None
+        assert state["pending_request"]["type"] == "decision_checkpoint"
+        assert state["pending_request"]["checkpoint"]["checkpoint_id"] == "cp_daemon"
+
+        answer = client.post(
+            "/run/answer",
+            json={
+                "payload": {
+                    "checkpoint_id": "cp_daemon",
+                    "selected_option_id": "close_card",
+                    "selected_message": "I would like to proceed toward closing.",
+                }
+            },
+        )
+        assert answer.status_code == 200
+        assert answer.json()["needs_input"] is False
+        assert answer.json()["message"] == "Answer received. Continuing the run."
+
+        result = None
+        for _ in range(20):
+            response = client.get("/run/state")
+            assert response.status_code == 200
+            result = response.json()
+            if result["status"] == "success":
+                break
+
+            time.sleep(0.05)
+
+        assert result is not None
+        assert result["status"] == "success"
+        assert '"selected_option_id": "close_card"' in result["message"]
+
+
+def test_progress_message_prefers_specific_goal_and_filters_step_noise():
+    assert (
+        progress_message(
+            {
+                "step": 7,
+                "phase": "complete",
+                "message": "Step 7 complete",
+                "goal": "Open the order-specific support page.",
+            }
+        )
+        == "Open the order-specific support page."
+    )
+    assert progress_message({"step": 8, "phase": "starting", "message": "Step 8 started"}) == (
+        "Checking the current page and chat state before the next action."
+    )
+    assert (
+        progress_message(
+            {"step": 9, "phase": "complete", "message": "Waiting"},
+            {
+                "type": "decision_checkpoint",
+                "checkpoint": {"summary": "Choose refund method."},
+            },
+        )
+        == "Choose refund method."
+    )

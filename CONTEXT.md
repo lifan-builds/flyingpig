@@ -98,9 +98,11 @@
 ## Learned Patterns
 - **CDP attach must reuse the current tab** — when attaching via CDP, never call `navigate_to(new_tab=True)`; fresh Target.createTarget lands in a new browser context and loses cookies. Use `get_current_page()` and page-level `goto()` if navigation is needed.
 - **Dashboard task URL follows the work window after CDP connects** — the dashboard tab itself is never the task target. Once the work window is connected, Refresh/Start must read the debuggable work-window page URL so the cockpit tab cannot hijack the run target.
+- **Work-window relaunch resets stale CDP pages** — when reusing an already-running CDP endpoint, a Launch Work Window request must create/activate the requested task page and close old page targets so stale Oura/Uber tabs do not become the next run target.
 - **browser-use page wrappers are not Playwright pages** — use `await page.get_url()`, `await page.get_title()`, and `await page.goto(url)`; do not use `page.url` or Playwright-only `wait_until` args.
 - **Amex chat widget scrollback is server-persisted** — cannot be cleared from the UI. Prompt must explicitly treat prior history as read-only background; otherwise agent continues old threads.
 - **ask_user needs `input_mode="api"` off the terminal** — CLI mode blocks on stdin which EOFs in background/daemon runs. Daemon uses `UserInputHandler(mode="api")` + polls `pending_question` to surface questions over WS.
+- **Supervised live runs need dashboard/API control** — do not launch live customer-service sessions from a background CLI process because Decision Checkpoints and `ask_user` prompts cannot be answered there. Use the dashboard WebSocket/API run path so user decisions resume the same agent run.
 - **Mock Amex transcript is the ground truth** — browser-use judge can false-fail because it misses delayed DOM chat text; capture `#chat-history`/visible chat transcript directly before judging outcome.
 - **LLM cooldown can strand live chats** — CLIProxy `gpt-5.5` can enter multi-hour cooldown mid-conversation; use `--fallback-model` or a non-cooling provider for real customer-service runs.
 - **Keep live-run policy behind deep modules** — browser launch/profile rules, LLM adapter creation, user input/tools, prompt rendering, and evidence capture each have their own module so live Amex fixes do not pile into `AgentBrain`.

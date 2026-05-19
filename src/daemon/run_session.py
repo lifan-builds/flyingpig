@@ -51,6 +51,32 @@ def request_message(request: dict | None) -> str | None:
     return None
 
 
+def progress_message(event: dict, request: dict | None = None) -> str:
+    """Return dashboard-facing progress text for an agent event.
+
+    browser-use emits useful `next_goal` text, but it can also emit generic
+    "Step N started" noise. Keep the dashboard focused on what the agent is
+    trying to do now, and let pending user-attention requests dominate.
+    """
+    pending_message = request_message(request)
+    if pending_message:
+        return pending_message
+
+    for key in ("message", "goal", "thought"):
+        raw = str(event.get(key) or "").strip()
+        if raw and not _is_generic_step_message(raw):
+            return raw
+    if event.get("phase") == "starting":
+        return "Checking the current page and chat state before the next action."
+    return "Working on the customer-service chat."
+
+
+def _is_generic_step_message(message: str) -> bool:
+    return message.startswith("Step ") and (
+        message.endswith(" started") or message.endswith(" complete")
+    )
+
+
 def protocol_event_for_request(request: dict) -> dict:
     if request.get("type") == "decision_checkpoint":
         return {

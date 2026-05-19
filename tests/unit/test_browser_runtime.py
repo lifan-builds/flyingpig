@@ -6,6 +6,7 @@ from src.agent.browser_runtime import (
     find_debugger_target_id,
     launch_cdp_chrome,
     open_dashboard_tab,
+    prepare_debugger_page,
 )
 
 
@@ -26,11 +27,19 @@ def test_chrome_user_data_dir_uses_existing_profile(monkeypatch, tmp_path):
 
 
 def test_launch_cdp_chrome_reuses_ready_debugger(monkeypatch):
+    prepared = {}
     monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: True)
+    monkeypatch.setattr(
+        "src.agent.browser_runtime.prepare_debugger_page",
+        lambda **kwargs: prepared.update(kwargs),
+    )
 
-    cdp_url = launch_cdp_chrome(ChromeLaunchConfig(cdp_port=9333))
+    cdp_url = launch_cdp_chrome(
+        ChromeLaunchConfig(cdp_port=9333, initial_url="https://example.com/support")
+    )
 
     assert cdp_url == "http://127.0.0.1:9333"
+    assert prepared == {"port": 9333, "target_url": "https://example.com/support"}
 
 
 def test_chrome_launch_config_defaults_to_dedicated_work_profile():
@@ -62,7 +71,41 @@ def test_launch_cdp_chrome_can_launch_dedicated_while_regular_chrome_runs(monkey
     assert cdp_url == "http://127.0.0.1:9444"
     assert any("--remote-debugging-port=9444" in arg for arg in launched["command"])
     assert "--disable-extensions" in launched["command"]
+    assert "--disable-component-extensions-with-background-pages" in launched["command"]
     assert launched["kwargs"] == {"start_new_session": True}
+
+
+def test_prepare_debugger_page_opens_target_and_closes_stale_pages(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        "src.agent.browser_runtime.debugger_targets",
+        lambda port: [
+            {"id": "old-oura", "type": "page", "url": "https://support.ouraring.com"},
+            {"id": "old-uber", "type": "page", "url": "https://ubereats.com"},
+            {"id": "worker", "type": "service_worker", "url": "chrome-extension://abc/sw.js"},
+        ],
+    )
+    monkeypatch.setattr(
+        "src.agent.browser_runtime.open_debugger_page",
+        lambda **kwargs: calls.append(("open", kwargs)) or "new-target",
+    )
+    monkeypatch.setattr(
+        "src.agent.browser_runtime.activate_debugger_target",
+        lambda **kwargs: calls.append(("activate", kwargs)),
+    )
+    monkeypatch.setattr(
+        "src.agent.browser_runtime.close_debugger_target",
+        lambda **kwargs: calls.append(("close", kwargs)),
+    )
+
+    prepare_debugger_page(port=9222, target_url="https://example.com/chat")
+
+    assert calls == [
+        ("open", {"port": 9222, "url": "https://example.com/chat"}),
+        ("activate", {"port": 9222, "target_id": "new-target"}),
+        ("close", {"port": 9222, "target_id": "old-oura"}),
+        ("close", {"port": 9222, "target_id": "old-uber"}),
+    ]
 
 
 def test_launch_cdp_chrome_opens_dashboard_tab(monkeypatch, tmp_path):
