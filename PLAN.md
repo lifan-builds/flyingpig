@@ -110,8 +110,9 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - [x] Live Oura supervised run and pacing fix (2026-05-12) — Oura specialist Levi applied 3 complimentary months to `xinyiw9596@gmail.com` with reference `#6847916`; added stronger patience/tone guidance plus stale `report_outcome` guard for pending confirmation/reference details.
 - [x] Release-ready extension-first beta verification pass (2026-05-15) — mapped docs/beta.md gates to automated/manual evidence, strengthened the extension smoke for disabled Start, offline setup, launch/focus, cancel, and checkpoint reconnect, hardened helper LaunchAgent failure output, fixed helper stop to boot out the running service target, verified helper status/stop/start plus `/health`, and rebuilt `dist/flyingpig-beta-0.1.0.zip`.
 - [x] Dashboard cockpit pivot (2026-05-17) — replaced the Chrome side-panel primary surface with a dashboard tab opened by the extension action, removed the `sidePanel` manifest dependency, made the work-window URL the only task target, and renamed the extension smoke/protocol tests around the dashboard.
+- [x] Helper-first dashboard pivot (2026-05-19) — moved the cockpit assets to `dashboard/`, served them from the helper at `/dashboard/`, made `flyingpig-helper` open the localhost dashboard without launching the work window, and changed the deterministic Puppeteer smoke to use the helper-hosted UI instead of loading an unpacked extension.
 - [ ] Run supervised Amex beta smoke from the dashboard with user login/MFA and send confirmation.
-- [x] Extend extension smoke coverage or document full mock-agent blocker (2026-05-15) — dashboard mock-daemon smoke now covers the release UX states; full dashboard-driven browser-use mock-agent run remains documented in docs/beta.md as blocked on deterministic LLM/CDP work-window orchestration.
+- [x] Extend dashboard smoke coverage or document full mock-agent blocker (2026-05-15) — dashboard mock-daemon smoke now covers the release UX states; full dashboard-driven browser-use mock-agent run remains documented in docs/beta.md as blocked on deterministic LLM/CDP work-window orchestration.
 
 ### 2026-05-12 Oura supervised run and pacing findings
 - Live Oura result: specialist Levi confirmed 3 complimentary membership months were applied to `xinyiw9596@gmail.com`; reference number `#6847916`.
@@ -128,8 +129,16 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - Release-blocking helper UX fix: stale/not-loaded LaunchAgent failures now print a recovery-focused launchctl message instead of a Python traceback.
 - Release-blocking helper stop fix: `flyingpig-macos-helper stop` now boots out `gui/<uid>/com.flyingpig.helper` and fails loudly if launchctl refuses instead of printing success while the service keeps running.
 - Release privacy scan fix: removed the hardcoded API auth JWT secret from `src/api/auth.py`, added `api_secret_key` environment configuration, removed the local editable path from `requirements.txt`, and added an explicit beta gate forbidding PII/API keys/credentials/tokens/cookies/logs/recordings/user-specific account info in release artifacts.
-- Extension smoke now covers setup/offline state, disabled Start before Work Window Connected, dedicated work-window launch, active-run cancel, checkpoint restore after dashboard reload, and checkpoint answer submission.
+- Dashboard smoke now covers setup/offline state, disabled Start before Work Window Connected, dedicated work-window launch, active-run cancel, checkpoint restore after dashboard reload, and checkpoint answer submission.
 - Remaining manual blocker: supervised Amex beta smoke still needs a tester present for Amex login/MFA and explicit send confirmation from the dashboard. Exact smoke path and blocker taxonomy are recorded in docs/beta.md.
+
+### 2026-05-19 Helper-first dashboard and external chat-surface smoke
+- Helper-first refactor verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (122 passed, 2 deselected); elevated `npm run test:dashboard`; `python scripts/build_beta_release.py --clean`; zip content check confirmed `dashboard/` is included and `extension/` is absent; `zipgrep` privacy scan found no common secret/PII/log/recording patterns; `git diff --check` passed.
+- Public chat-surface checks used headless Puppeteer to load sites, open chat widgets, and type harmless draft text without pressing Enter or submitting. Clean widget/input passes: LiveChat (`https://www.livechat.com/`) and Olark (`https://www.olark.com/`). Screenshots: `/private/tmp/flyingpig-livechat-chat-check.png`, `/private/tmp/flyingpig-olark-targeted-chat-check.png`.
+- Compatibility observations: several public sites exposed support/product links that generic text matching could confuse for chat launchers (Solved, HelpCrunch, Chaport, JivoChat, Drift/Freshworks, ProProfs, Smartsupp, REVE Chat, Chatra). This reinforces that the browser-use visual/model loop should own chat-surface selection, not a deterministic text-only rule.
+- Live LLM-driven external-site agent runs were blocked in this environment: Anthropic/OpenAI/Gemini/Cliproxy API keys were not set and `http://127.0.0.1:8317/v1/models` was unavailable. The external pass therefore verified dashboard/work-window/browser chat-surface mechanics, not a submitted customer-service conversation.
+- Follow-up correction: CLIProxyAPI was already running on `127.0.0.1:8317`; elevated model check succeeded with the configured local key. A real browser-use mock Amex run with `model=cliproxyapi` and `gpt-5.5` completed successfully: cancellation request sent, `$50` retention credit accepted, confirmation `MOCK-12345` captured, and session saved to `recordings/mock_run/session_american_express_20260519_191928.json`.
+- Helper lifecycle updated to be CLI-owned: `flyingpig-helper` opens the dashboard and waits in the foreground; users stop it with Ctrl+C. The dashboard does not own helper shutdown.
 
 ## Decisions
 - **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
@@ -149,6 +158,8 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - **2026-05-15** Helper-offline side-panel state should lead with setup/reconnect actions and keep localhost/WebSocket diagnostics secondary.
 - **2026-05-15** First-run beta should fall back to a Dedicated Work Profile instead of asking the user to quit normal Chrome to create a copied default profile.
 - **2026-05-17** Use the Chrome extension dashboard tab as the v1 cockpit. The side panel is too cramped and makes "current tab" ambiguous once a separate Controlled Chrome Window exists.
+- **2026-05-19** Use the helper-served localhost dashboard as the v1 cockpit and retire the unpacked Chrome extension from the normal beta path. The helper remains the browser-use/CDP/LLM owner; frontend JavaScript is only the control plane.
+- **2026-05-19** Helper lifecycle is CLI-owned for v1: run `flyingpig-helper`, use the opened dashboard, and press Ctrl+C when done. Do not add dashboard-side process shutdown controls.
 
 ## Archive
 (Empty — initial migration.)

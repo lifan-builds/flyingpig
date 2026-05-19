@@ -1,21 +1,32 @@
-"""Mock daemon for deterministic Chrome extension dashboard tests."""
+"""Mock daemon for deterministic helper dashboard tests."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
-app = FastAPI(title="Flying Pig Extension Mock Daemon")
+ROOT = Path(__file__).resolve().parents[2]
+
+app = FastAPI(title="Flying Pig Helper Dashboard Mock Daemon")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.mount("/dashboard", StaticFiles(directory=ROOT / "dashboard", html=True), name="dashboard")
+
+
+@app.get("/")
+async def dashboard_root():
+    return RedirectResponse(url="/dashboard/")
 
 mock_browser_connected = False
 mock_work_window_url = "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us"

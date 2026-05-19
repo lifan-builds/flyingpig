@@ -25,9 +25,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from src.agent.brain import AgentBrain, TaskStatus
@@ -49,6 +52,8 @@ from src.sites.registry import get_site_adapter, list_sites, resolve_from_url
 from src.sites.task_templates import get_templates
 
 logger = logging.getLogger(__name__)
+ROOT = Path(__file__).resolve().parents[2]
+DASHBOARD_DIR = ROOT / "dashboard"
 
 
 class BrowserLaunchRequest(BaseModel):
@@ -366,10 +371,24 @@ def create_app() -> FastAPI:
     app = FastAPI()
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origin_regex=(
+            r"^(http://127\.0\.0\.1(:\d+)?|http://localhost(:\d+)?|"
+            r"chrome-extension://[a-z]+)$"
+        ),
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    if DASHBOARD_DIR.exists():
+        app.mount(
+            "/dashboard",
+            StaticFiles(directory=DASHBOARD_DIR, html=True),
+            name="dashboard",
+        )
+
+    @app.get("/")
+    async def dashboard_root():
+        return RedirectResponse(url="/dashboard/")
 
     @app.get("/health")
     async def health():

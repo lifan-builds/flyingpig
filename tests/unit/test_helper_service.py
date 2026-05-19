@@ -3,7 +3,7 @@ from __future__ import annotations
 import subprocess
 from argparse import Namespace
 
-from src import helper_service
+from src import helper, helper_service
 
 
 def test_launch_agent_plist_runs_background_helper():
@@ -17,7 +17,7 @@ def test_launch_agent_plist_runs_background_helper():
     assert payload["ProgramArguments"][1:] == [
         "-m",
         "src.helper",
-        "--no-browser",
+        "--no-dashboard",
         "--host",
         "127.0.0.1",
         "--port",
@@ -26,6 +26,13 @@ def test_launch_agent_plist_runs_background_helper():
         "9222",
     ]
     assert payload["StandardOutPath"].endswith(".flyingpig/logs/helper.out.log")
+
+
+def test_helper_cli_opens_dashboard_without_launching_work_window_by_default():
+    args = helper.build_parser().parse_args([])
+
+    assert args.launch_browser is False
+    assert args.no_dashboard is False
 
 
 def test_launchctl_failure_message_includes_action_status_and_recovery():

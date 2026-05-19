@@ -9,7 +9,7 @@ import {
   fallbackPendingRequest,
   requestKey,
   siteLabel,
-} from "../extension/src/dashboard_protocol.js";
+} from "../dashboard/dashboard_protocol.js";
 
 const checkpoint = {
   checkpoint_id: "cp_test",

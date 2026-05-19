@@ -17,11 +17,11 @@ try {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, "..");
-const extensionDir = path.join(rootDir, "extension");
 const mockUrl = "http://127.0.0.1:8086/?logged_in=true";
 const helperPort = process.env.FLYINGPIG_HELPER_PORT || "8766";
 const helperUrl = `http://127.0.0.1:${helperPort}`;
 const helperHealthUrl = `${helperUrl}/health`;
+const dashboardUrl = `${helperUrl}/dashboard/`;
 const cdpUrlForDashboard = process.env.FLYINGPIG_CDP_URL || "http://127.0.0.1:9335";
 
 const python = process.env.PYTHON || "python";
@@ -79,34 +79,15 @@ async function setValue(page, selector, value) {
   );
 }
 
-async function openDashboardPage(browser, extensionId) {
-  const dashboardUrl = `chrome-extension://${extensionId}/src/dashboard.html`;
-  const triggerAction = browser.triggerExtensionAction?.bind(browser);
-  if (triggerAction) {
-    const dashboardTarget = browser
-      .waitForTarget((target) => target.url().startsWith(dashboardUrl), { timeout: 8000 })
-      .catch(() => null);
-    await triggerAction(extensionId);
-    const target = await dashboardTarget;
-    const page = target ? await target.page() : null;
-    if (page) {
-      await page.goto(
-        `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`,
-        { waitUntil: "domcontentloaded" },
-      );
-      return page;
-    }
-  }
-
+async function openDashboardPage(browser) {
   const page = await browser.newPage();
   const url = `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`;
   await page.goto(url, { waitUntil: "domcontentloaded" });
   return page;
 }
 
-async function verifyOfflineSetupState(browser, extensionId) {
+async function verifyOfflineSetupState(browser) {
   const page = await browser.newPage();
-  const dashboardUrl = `chrome-extension://${extensionId}/src/dashboard.html`;
   const deadHelperUrl = "http://127.0.0.1:65530";
   await page.goto(
     `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(deadHelperUrl)}`,
@@ -124,14 +105,14 @@ async function verifyOfflineSetupState(browser, extensionId) {
   );
   await page.click("#setupHelper");
   await browser.waitForTarget(
-    (target) => target.url().includes("/src/setup.html"),
+    (target) => target.url().includes("/dashboard/setup.html"),
     { timeout: 10000 },
   );
   await page.close();
 }
 
 async function main() {
-  const userDataDir = await mkdtemp(path.join(os.tmpdir(), "flyingpig-extension-e2e-"));
+  const userDataDir = await mkdtemp(path.join(os.tmpdir(), "flyingpig-dashboard-e2e-"));
   const mockServer = startServer(
     [
       "-m",
@@ -150,7 +131,7 @@ async function main() {
     [
       "-m",
       "uvicorn",
-      "tests.support.extension_daemon:app",
+      "tests.support.dashboard_daemon:app",
       "--host",
       "127.0.0.1",
       "--port",
@@ -167,26 +148,19 @@ async function main() {
     await waitForHttp(helperHealthUrl);
 
     browser = await puppeteer.launch({
-      headless: false,
+      headless: true,
       userDataDir,
       pipe: true,
-      enableExtensions: [extensionDir],
       args: ["--window-size=1280,900"],
     });
 
-    const workerTarget = await browser.waitForTarget(
-      (target) => target.type() === "service_worker" && target.url().includes("/src/background.js"),
-      { timeout: 15000 },
-    );
-    const extensionId = new URL(workerTarget.url()).host;
-
-    await verifyOfflineSetupState(browser, extensionId);
+    await verifyOfflineSetupState(browser);
 
     const mockPage = await browser.newPage();
     await mockPage.goto(mockUrl, { waitUntil: "domcontentloaded" });
     await mockPage.bringToFront();
 
-    const dashboardPage = await openDashboardPage(browser, extensionId);
+    const dashboardPage = await openDashboardPage(browser);
     await dashboardPage.waitForFunction(
       () => document.getElementById("runtimeStatus")?.textContent === "Helper Online",
       { timeout: 10000 },
@@ -228,7 +202,7 @@ async function main() {
     await setValue(
       dashboardPage,
       "#taskText",
-      "Mock extension smoke test: verify the dashboard can start a browser-use helper run.",
+      "Mock helper dashboard smoke test: verify the dashboard can start a browser-use helper run.",
     );
     await dashboardPage.click("#startTask");
     await dashboardPage.waitForFunction(
@@ -274,12 +248,12 @@ async function main() {
       { timeout: 10000 },
     );
 
-    console.log("Extension helper dashboard smoke passed.");
+    console.log("Helper dashboard smoke passed.");
   } catch (error) {
     if (browser) {
       const pages = await browser.pages();
       const page = pages.at(-1);
-      await page?.screenshot({ path: "/private/tmp/flyingpig-extension-dashboard-failure.png" });
+      await page?.screenshot({ path: "/private/tmp/flyingpig-helper-dashboard-failure.png" });
     }
     throw error;
   } finally {

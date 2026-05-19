@@ -1,22 +1,23 @@
 # Context
 
 ## Project
-**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ / FastAPI backend, browser-use + Playwright for automation, Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers, Celery + Redis for async jobs, PostgreSQL for persistence, React + TypeScript dashboard, and a Chrome extension dashboard as the supervised user surface. Release direction: preserve browser-use in a packaged local helper/native host so users do not manually run scripts, while the extension remains the control/status UI. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Docker, Puppeteer extension smoke tests.
+**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ / FastAPI backend, browser-use + Playwright for automation, Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers, Celery + Redis for async jobs, PostgreSQL for persistence, React + TypeScript dashboard, and a helper-served localhost dashboard as the supervised user surface. Release direction: preserve browser-use in a packaged local helper/native host so users do not manually run scripts; the helper hosts the dashboard and opens a separate Controlled Chrome Window for work. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Docker, Puppeteer dashboard smoke tests.
 
 ## Structure
 ```
 .
 ├── config/
 ├── frontend/           # React + TypeScript dashboard
-├── extension/          # Chrome dashboard UI that talks to local helper over WS
+├── dashboard/          # Helper-served cockpit UI that talks to local helper over WS
+├── extension/          # Legacy Chrome wrapper/reference, no longer the primary cockpit
 ├── prompts/            # LLM prompt templates by site
 │   ├── amex/
 │   └── generic/        # Site-agnostic fallback templates
-├── scripts/            # start.py, daemon.py, demo_amex.py, extension smoke tooling
+├── scripts/            # start.py, daemon.py, demo_amex.py, dashboard smoke tooling
 ├── src/
 │   ├── agent/          # Core loop: brain, navigator, browser_runtime, evidence, llm_runtime, user_input
 │   ├── api/            # FastAPI backend (dashboard-facing)
-│   ├── daemon/         # Reconnectable WebSocket helper API for extension/dashboard sessions
+│   ├── daemon/         # Reconnectable WebSocket/API helper for dashboard sessions
 │   ├── models/         # DB models
 │   ├── sites/          # Adapters: base, amex, generic + registry (URL → adapter resolver)
 │   └── utils/
@@ -54,12 +55,13 @@
 ## Language
 - **Hangup and Call-again**: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from scratch. Avoid: restarting while a human is typing/reviewing.
 - **Packaged Helper**: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the user must run.
-- **Dashboard Control Plane**: Chrome extension dashboard UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/recovery into pure extension JavaScript.
-- **Extension-First Startup**: Product flow where the Chrome extension is the user's entry point and it connects to, starts, or guides installation of the local helper. Avoid: requiring the user to manually run a script before using the dashboard.
-- **Hybrid Helper Startup**: V1 beta path where a login/background helper service is supported first, while Native Messaging remains the product goal for extension-triggered helper startup. Avoid: making terminal commands part of the normal user flow.
+- **Dashboard Control Plane**: Helper-served localhost dashboard UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/recovery into frontend JavaScript.
+- **Helper-First Startup**: Product flow where the user runs `flyingpig-helper`, it serves/opens the dashboard at `http://127.0.0.1:8765/dashboard/`, and the dashboard launches the Controlled Chrome Window on demand. Avoid: requiring an unpacked Chrome extension as the normal beta entry point.
+- **CLI-Owned Helper Lifecycle**: The foreground `flyingpig-helper` process is controlled like a normal CLI tool: run it to start the dashboard, press Ctrl+C to stop it when done. Avoid: dashboard-side process shutdown buttons or hidden helper lifecycle control for v1.
+- **Hybrid Helper Startup**: V1 beta path where a login/background helper service is supported first, while a packaged app/native launcher can later start the helper on demand. Avoid: making terminal commands part of the normal user flow.
 - **Controlled Chrome Window**: The helper-launched Chrome window that browser-use can attach to over CDP for the actual customer-service run. Avoid: implying the agent can safely control any already-open normal Chrome tab without a prepared debugging/automation channel.
 - **Dedicated Work Profile**: The isolated Chrome user-data directory used by the Controlled Chrome Window when avoiding default-profile copy friction. Avoid: treating it as an incognito profile; it may persist login state across Flying Pig runs unless explicitly reset.
-- **Single Cockpit Rule**: The Flying Pig dashboard should appear only in the user's normal Chrome entry window during v1. Avoid: showing a second Flying Pig extension UI inside the Controlled Chrome Window.
+- **Single Cockpit Rule**: The Flying Pig dashboard should appear only in the user's normal Chrome entry window during v1. Avoid: showing a second Flying Pig control UI inside the Controlled Chrome Window.
 - **User-Prepared Chat Surface**: A browser tab where the user has already navigated, logged in if needed, and exposed a plausible customer-service chat entry point or support page. Avoid: site-from-homepage support discovery.
 - **Chat Surface Check**: The agent's bounded attempt to find an already-present chat input or open an obvious chat launcher before asking the user to expose the chat manually. Avoid: roaming through general navigation to discover support.
 - **Support Profile**: Declarative knowledge for a known customer-service surface, including escalation language, verification boundaries, and support-specific vocabulary. Avoid: one-off adapter for normal chat-widget differences.
@@ -69,15 +71,15 @@
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 
 ## Relationships
-- The extension owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, and reconnectable run state.
-- Extension-First Startup should hide helper/Chrome-debugging mechanics behind the dashboard; users should not be expected to open a terminal or manually enable a debugging port for normal runs.
-- **Hybrid Helper Startup** lets the beta stabilize around the existing login/background helper service, then graduate to Native Messaging so the extension can start the helper on demand.
-- Extension-First Startup opens a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
+- The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosting, and reconnectable run state.
+- Helper-First Startup should hide Chrome-debugging mechanics behind the dashboard; users run the foreground helper command and stop it with Ctrl+C when done.
+- **Hybrid Helper Startup** lets the beta stabilize around the existing login/background helper service, then graduate to a packaged app/native launcher that starts the helper on demand.
+- Helper-First Startup opens a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
 - When the helper is offline or not installed, the dashboard should show a setup state with a primary "Set up Flying Pig" path, a reconnect option, and small diagnostics; avoid surfacing raw localhost/WebSocket failures as the main UX.
 - First-run beta should prefer a **Dedicated Work Profile** instead of blocking the user by asking them to quit normal Chrome so Flying Pig can copy the default profile. A smoother explicit profile-import path can be added later.
 - The **Dedicated Work Profile** persists login state across Flying Pig runs by default; users should have an explicit reset path when they want to clear the work profile.
 - The **Controlled Chrome Window** should not present a second Flying Pig control surface. The normal Chrome dashboard is the single cockpit; the controlled window is only the work area browser-use operates.
-- Disable extensions in the **Controlled Chrome Window** for v1 to avoid duplicate Flying Pig controls and reduce page-interference risk while browser-use operates customer-service pages.
+- Disable extensions in the **Controlled Chrome Window** for v1 to avoid duplicate controls and reduce page-interference risk while browser-use operates customer-service pages.
 - V1 supervision should use a side-by-side layout: normal Chrome with the Flying Pig dashboard as the cockpit, and the Controlled Chrome Window as the work area. The launch flow should position or guide users toward keeping both visible.
 - If side-by-side placement fails or the screen is too small, keep the same Single Cockpit model and degrade to notification-led supervision.
 - A **User-Prepared Chat Surface** is verified by one **Chat Surface Check** before the agent sends any customer-service message.
@@ -109,4 +111,4 @@
 - **Human chat waits need patience and warmth** — treat rep messages like "still checking", "please wait", or "one moment" as Active Human Work; wait 60-90 seconds before any warm status check and avoid repeated "just checking" nudges because they feel impatient and can end before the rep provides confirmation.
 - **Ask the user less during authorized runs** — when the dashboard task already contains a clear goal and needed non-sensitive context, proceed without a pre-send confirmation. Ask only for ambiguity, missing sensitive/verification details, irreversible actions, accepting a material tradeoff, or user-gated recovery such as Hangup and Call-again. Do not ask whether to send the exact task the user already authorized, and do not ask whether to wait through normal bot/human handoff mechanics.
 - **Hangup and Call-again is user-gated** — when a rep refuses or a chat dies, ask the user before ending the chat and starting a fresh one; never restart while a human is typing or reviewing.
-- **Standalone UX still needs browser-use** — the pure-extension runtime was rolled back because it would lose browser-use's planning, perception, CDP recovery, and model/tool loop. Make the release feel standalone by packaging/autostarting the helper, not by rewriting execution inside the extension.
+- **Standalone UX still needs browser-use** — the pure-extension runtime was rolled back because it would lose browser-use's planning, perception, CDP recovery, and model/tool loop. Make the release feel standalone by packaging/autostarting the helper and serving the dashboard locally, not by rewriting execution inside frontend JavaScript.

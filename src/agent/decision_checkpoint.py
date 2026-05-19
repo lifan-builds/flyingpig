@@ -105,7 +105,7 @@ def build_pending_request(params: DecisionCheckpointParams) -> dict:
 
 
 def parse_answer(params: DecisionCheckpointParams, raw: str) -> dict:
-    """Parse a side-panel or CLI answer into the canonical answer envelope."""
+    """Parse a dashboard or CLI answer into the canonical answer envelope."""
     try:
         data = json.loads(raw)
     except (json.JSONDecodeError, TypeError):

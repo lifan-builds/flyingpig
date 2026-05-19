@@ -128,9 +128,9 @@ there — it will not navigate away or open new tabs. Your cookies, login,
 and MFA state come for free. On exit, the agent detaches; the browser
 stays open.
 
-### Chrome Extension Dashboard
+### Local Dashboard
 
-The preferred supervised UI is the Chrome dashboard. It keeps agent
+The preferred supervised UI is the helper-served local dashboard. It keeps agent
 status, questions, and controls in a full browser tab while the local
 Flying Pig helper runs the browser-use agent in a separate work window.
 
@@ -142,11 +142,9 @@ FlyingPig-controlled Chrome window when you are ready:
 flyingpig-macos-helper install
 ```
 
-1. In Chrome, open `chrome://extensions`, enable developer mode, click
-**Load unpacked**, and select `extension/`.
+1. Open `http://127.0.0.1:8765/dashboard/` in Chrome.
 
-2. Click the Flying Pig extension icon to open the dashboard, then press
-**Launch Work Window**.
+2. Press **Launch Work Window**.
 
 3. In the FlyingPig work window, open or prepare the Amex
 customer-service tab. The dashboard remains the cockpit; the work window
@@ -166,12 +164,14 @@ The dashboard shows two separate statuses:
 - **Work Window Connected** means a CDP-controlled Chrome window is reachable.
 
 Start is disabled until both are online. This avoids the confusing case
-where the extension is open in normal Chrome but browser-use cannot attach
+where the dashboard is open in normal Chrome but browser-use cannot attach
 to a controllable browser.
 
-The beta default is a dedicated Flying Pig work profile so setup does not
-ask users to quit normal Chrome. To test the copied-profile path, use
-`flyingpig-helper --chrome-profile default`.
+The beta default is an on-demand foreground helper. Run `flyingpig-helper`,
+use the dashboard it opens, then press Ctrl+C in that terminal when you are
+done. The work window uses a dedicated Flying Pig profile by default so setup
+does not ask users to quit normal Chrome. To test the copied-profile path,
+use `flyingpig-helper --chrome-profile default`.
 
 For beta support:
 
@@ -182,22 +182,19 @@ flyingpig-macos-helper start
 flyingpig-macos-helper uninstall
 ```
 
-For a manual development run, `python scripts/daemon.py` now attempts to
-open the controlled Chrome window automatically. Use `--no-browser` only
-when you want the helper API without launching Chrome.
-
-Automated extension tests should use a Puppeteer-managed browser with the
-extension installed through Puppeteer's extension APIs.
+For a manual development run, `python scripts/daemon.py` starts the helper API
+and can open the controlled Chrome window for debugging. The beta user path is
+`flyingpig-helper`, then dashboard-driven **Launch Work Window**.
 
 To run the deterministic mock dashboard smoke:
 
 ```bash
 npm install
-npm run test:extension
+npm run test:dashboard
 ```
 
-This launches a Puppeteer-managed Chrome with the unpacked extension,
-starts mock Amex and helper servers, and verifies that the dashboard can
+This launches a Puppeteer-managed Chrome, starts mock Amex and helper
+servers, and verifies that the helper-served dashboard can
 start a browser-use-helper run and render progress.
 
 See `docs/beta.md` for the first-cohort beta checklist and operating

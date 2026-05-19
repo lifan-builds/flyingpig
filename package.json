@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:extension": "node scripts/test_dashboard_protocol.mjs && node scripts/test_extension_dashboard.mjs"
+    "test:dashboard": "node scripts/test_dashboard_protocol.mjs && node scripts/test_helper_dashboard.mjs",
+    "test:extension": "npm run test:dashboard"
   },
   "devDependencies": {
     "puppeteer": "^24.0.0"

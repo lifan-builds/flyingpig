@@ -159,6 +159,23 @@ def test_browser_launch_endpoint_uses_site_adapter(monkeypatch):
     assert "americanexpress.com" in launched["config"].initial_url
 
 
+def test_daemon_serves_localhost_dashboard():
+    reset_run_manager()
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        root = client.get("/", follow_redirects=False)
+        dashboard = client.get("/dashboard/")
+        script = client.get("/dashboard/dashboard.js")
+
+    assert root.status_code in {307, 308}
+    assert root.headers["location"] == "/dashboard/"
+    assert dashboard.status_code == 200
+    assert "Flying Pig Dashboard" in dashboard.text
+    assert script.status_code == 200
+    assert "localStorage" in script.text
+
+
 def test_daemon_lists_site_metadata():
     reset_run_manager()
     app = daemon_server.create_app()

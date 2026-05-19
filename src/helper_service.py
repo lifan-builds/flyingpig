@@ -25,7 +25,7 @@ def plist_payload(args: argparse.Namespace) -> dict:
         sys.executable,
         "-m",
         "src.helper",
-        "--no-browser",
+        "--no-dashboard",
         "--host",
         args.host,
         "--port",
@@ -94,7 +94,10 @@ def install(args: argparse.Namespace) -> None:
     run_launchctl_or_exit("install", "bootstrap", f"gui/{os.getuid()}", str(PLIST_PATH))
     run_launchctl_or_exit("enable", "enable", service_target())
     print(f"Installed Flying Pig helper LaunchAgent: {PLIST_PATH}")
-    print("The helper will start at login. Use the dashboard's Launch Work Window button.")
+    print(
+        "The helper will start at login. Open "
+        f"http://{args.host}:{args.port}/dashboard/ and use Launch Work Window."
+    )
 
 
 def uninstall(_args: argparse.Namespace) -> None:

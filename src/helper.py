@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+import threading
+import webbrowser
 
 import uvicorn
 
-from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome
 from src.daemon.server import create_app
 
 
@@ -39,9 +40,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Page to open in the Flying Pig work window",
     )
     parser.add_argument(
-        "--no-browser",
+        "--launch-browser",
         action="store_true",
-        help="Start only the helper daemon; do not launch Chrome",
+        help=(
+            "Launch the Flying Pig work window immediately. By default the dashboard "
+            "opens first and the work window launches when the user clicks Launch Work Window."
+        ),
+    )
+    parser.add_argument(
+        "--no-dashboard",
+        action="store_true",
+        help="Do not open the localhost dashboard in the user's browser",
     )
     parser.add_argument("--verbose", "-v", action="store_true")
     return parser
@@ -57,7 +66,9 @@ def main() -> None:
     )
 
     cdp_url = f"http://127.0.0.1:{args.cdp_port}"
-    if not args.no_browser:
+    if args.launch_browser:
+        from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome
+
         try:
             cdp_url = launch_cdp_chrome(
                 ChromeLaunchConfig(
@@ -72,8 +83,13 @@ def main() -> None:
             sys.exit(1)
 
     print(f"Flying Pig helper online: ws://{args.host}:{args.port}/ws")
+    dashboard_url = f"http://{args.host}:{args.port}/dashboard/"
+    print(f"Dashboard: {dashboard_url}")
     print(f"Browser endpoint for the dashboard: {cdp_url}")
-    print("Keep this helper running while the Chrome dashboard controls the agent.")
+    print("Press Ctrl+C in this terminal to stop the helper when you are done.")
+
+    if not args.no_dashboard:
+        threading.Timer(0.8, webbrowser.open, args=(dashboard_url,)).start()
 
     uvicorn.run(
         create_app(),

@@ -16,9 +16,9 @@ INCLUDE_PATHS = [
     "pyproject.toml",
     "requirements.txt",
     "docs/beta.md",
+    "dashboard",
     "src",
     "scripts",
-    "extension",
     "prompts",
 ]
 
@@ -70,17 +70,19 @@ def beta_install_text() -> str:
    ```bash
    pip install -e ".[dev]"
    playwright install
-   flyingpig-macos-helper install
+   flyingpig-helper
    ```
 
-3. In Chrome, open `chrome://extensions`, enable developer mode,
-   choose **Load unpacked**, and select `extension/`.
-4. Open the Flying Pig dashboard and click **Launch Work Window**.
-5. Prepare the Amex tab, choose a playbook, confirm the task, and supervise the run.
+   Keep this terminal open while using Flying Pig. Press Ctrl+C to stop.
 
-Support:
+3. Use the dashboard at `http://127.0.0.1:8765/dashboard/`.
+4. Click **Launch Work Window**.
+5. Prepare the customer-service tab, choose a playbook, confirm the task, and supervise the run.
+
+Optional background helper service:
 
 ```bash
+flyingpig-macos-helper install
 flyingpig-macos-helper status
 flyingpig-macos-helper stop
 flyingpig-macos-helper start

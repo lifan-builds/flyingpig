@@ -1,5 +1,7 @@
 # Extension-First Single Cockpit
 
+Superseded on 2026-05-19 by [0003 Helper-First Localhost Dashboard](0003-helper-first-localhost-dashboard.md).
+
 Flying Pig v1 uses the Chrome extension as the user entry point, but keeps browser-use execution in a packaged local helper/native host that launches a separate Controlled Chrome Window. The normal Chrome dashboard tab is the single cockpit for task entry, status, approvals, and Decision Checkpoints; the Controlled Chrome Window is only the work area that browser-use operates, launched with extensions disabled to avoid duplicate controls and page interference.
 
 ## Considered Options

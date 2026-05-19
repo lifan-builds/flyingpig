@@ -122,7 +122,7 @@ class ChatNavigator:
         return self._session
 
     async def _focus_target_url(self, target_url: str) -> None:
-        """Focus the user tab selected by the side panel before browser-use acts."""
+        """Focus the user tab selected by the dashboard before browser-use acts."""
         if self._session is None:
             raise RuntimeError("Browser session not started.")
 

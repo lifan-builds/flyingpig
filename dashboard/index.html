@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flying Pig Dashboard</title>
+    <link rel="stylesheet" href="dashboard.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Flying Pig</p>
+          <h1>Customer Service Copilot</h1>
+        </div>
+        <div class="status-pills">
+          <span id="runtimeStatus" class="pill disconnected">Helper Offline</span>
+          <span id="browserStatus" class="pill disconnected">Work Window Offline</span>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <span id="siteStatus">Choose a website</span>
+          <strong id="agentStatus">Ready</strong>
+        </div>
+        <p id="runMessage">Launch a work window, prepare the customer-service chat there, then start.</p>
+      </section>
+
+      <section id="helperSetupPanel" class="panel setup hidden">
+        <div>
+          <p class="eyebrow">Setup</p>
+          <h2>Flying Pig helper not ready</h2>
+          <p id="setupMessage">Set up the local helper, then reconnect this dashboard.</p>
+        </div>
+        <div class="row compact">
+          <button id="setupHelper" type="button">Set Up Flying Pig</button>
+          <button id="reconnectHelper" class="secondary" type="button">Reconnect</button>
+        </div>
+        <code id="setupDiagnostic">localhost:8765 unavailable</code>
+      </section>
+
+      <section class="dashboard-grid">
+        <section class="panel task-panel">
+          <div class="section-heading">
+            <p class="eyebrow">Task</p>
+            <h2>Run setup</h2>
+          </div>
+
+          <label for="sitePicker">Website</label>
+          <select id="sitePicker">
+            <option value="generic">Generic chat</option>
+          </select>
+
+          <label id="currentUrlLabel" for="currentUrl">Launch URL</label>
+          <input id="currentUrl" readonly placeholder="Launch the work window to connect a task tab">
+
+          <div class="row">
+            <button id="refreshTab" class="secondary" type="button">Refresh Work Window</button>
+            <button id="launchChrome" class="secondary" type="button">Launch Work Window</button>
+          </div>
+
+          <label for="taskText">Task brief</label>
+          <textarea id="taskText" rows="6">Help me with this customer-service chat. Ask for a human representative if the chatbot cannot resolve it.</textarea>
+
+          <label for="template">Playbook</label>
+          <select id="template">
+            <option value="general">General support</option>
+            <option value="negotiate_fee">Negotiate fee</option>
+            <option value="dispute_charge">Dispute charge</option>
+            <option value="retention_offer">Retention offer</option>
+          </select>
+
+          <details class="advanced">
+            <summary>Advanced</summary>
+            <label for="model">Model</label>
+            <select id="model">
+              <option value="cliproxyapi">Cliproxy API</option>
+              <option value="claude">Claude</option>
+              <option value="openai">OpenAI</option>
+              <option value="gemini-flash">Gemini Flash</option>
+            </select>
+
+            <label for="cdpUrl">Browser endpoint</label>
+            <input id="cdpUrl" placeholder="http://127.0.0.1:9222">
+
+            <label for="helperUrl">Helper endpoint</label>
+            <input id="helperUrl" placeholder="http://127.0.0.1:8765">
+
+            <fieldset class="notification-settings">
+              <legend>User attention alerts</legend>
+              <label class="check-row">
+                <input id="notifySound" type="checkbox">
+                Sound
+              </label>
+              <label class="check-row">
+                <input id="notifyOs" type="checkbox">
+                OS notification
+              </label>
+            </fieldset>
+          </details>
+
+          <div class="actions">
+            <button id="startTask" type="button">Start</button>
+            <button id="cancelTask" class="danger" type="button">Cancel</button>
+          </div>
+        </section>
+
+        <section class="work-column">
+          <section class="metrics">
+            <div>
+              <span>Step</span>
+              <strong id="stepStatus">-</strong>
+            </div>
+            <div>
+              <span>Started</span>
+              <strong id="startedAt">-</strong>
+            </div>
+            <div>
+              <span>Updated</span>
+              <strong id="updatedAt">-</strong>
+            </div>
+          </section>
+
+          <section id="questionPanel" class="panel question hidden">
+            <p class="eyebrow">Input Needed</p>
+            <p id="questionText"></p>
+            <textarea id="answerText" rows="4" placeholder="Type your answer"></textarea>
+            <button id="sendAnswer" type="button">Send Answer</button>
+          </section>
+
+          <section id="checkpointPanel" class="panel checkpoint hidden">
+            <p class="eyebrow">Decision Checkpoint</p>
+            <h2 id="checkpointType">Decision needed</h2>
+            <p id="checkpointSummary"></p>
+            <div id="checkpointOptions" class="checkpoint-options"></div>
+            <details class="custom-decision">
+              <summary>Other instruction</summary>
+              <textarea id="checkpointCustomText" rows="4" placeholder="Tell Flying Pig what to do instead"></textarea>
+              <button id="sendCheckpointCustom" type="button">Send Custom Instruction</button>
+            </details>
+          </section>
+
+          <section class="panel transcript">
+            <div class="timeline-header">
+              <div>
+                <p class="eyebrow">Activity</p>
+                <h2>Live Timeline</h2>
+              </div>
+              <button id="clearLog" class="link" type="button">Clear</button>
+            </div>
+            <ol id="log"></ol>
+          </section>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="dashboard.js"></script>
+  </body>
+</html>
