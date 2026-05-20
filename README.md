@@ -2,6 +2,16 @@
 
 An AI-powered agent that interacts with customer service chat interfaces on your behalf. Stop waiting on hold, arguing with chatbots, or navigating phone trees — let Flying Pig handle it.
 
+![Flying Pig agent history](agent_history.gif)
+
+## Status
+
+Flying Pig is an early local beta for supervised customer-service automation.
+The current product shape is a helper-served dashboard plus a separate
+Controlled Chrome Window. You prepare the support page, start a run, watch
+progress from the dashboard, and approve consequential decisions before the
+agent sends them.
+
 ## What It Does
 
 Flying Pig AI acts as your personal customer service advocate. Give it a task ("negotiate my Amex annual fee down" or "cancel my cable subscription") and it will:
@@ -10,6 +20,17 @@ Flying Pig AI acts as your personal customer service advocate. Give it a task ("
 2. Communicate with customer service (human or AI) on your behalf
 3. Negotiate, dispute, or request what you need
 4. Report back with the outcome and a full transcript
+
+## Safety Model
+
+- **User-prepared sessions** - you log in, handle MFA, and expose the chat surface before the agent acts.
+- **Controlled work browser** - Flying Pig uses a dedicated or copied Chrome profile instead of taking over your everyday browser.
+- **Decision checkpoints** - the dashboard asks before irreversible actions, accepting offers, changing strategy, or sending sensitive information.
+- **Evidence bundle** - completed runs keep the transcript, checkpoint decisions, and final result together for review.
+
+Flying Pig is not a background bot for unsupervised account changes. It is a
+local, human-in-the-loop assistant for support conversations you already
+authorized.
 
 ## Getting Started
 
@@ -23,7 +44,7 @@ Flying Pig AI acts as your personal customer service advocate. Give it a task ("
 ### Installation
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/lifan-builds/flyingpig.git
 cd flyingpig
 pip install -e ".[dev]"
 playwright install
