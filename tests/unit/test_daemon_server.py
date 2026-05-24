@@ -38,8 +38,42 @@ class FakeAgentBrain:
         return TaskResult(
             status=TaskStatus.SUCCESS,
             summary="fake run completed",
+            chat_transcript=["Human: I can help.", "Agent: Thank you."],
+            transcript_path="recordings/fake.json",
+            outcome_details={
+                "human_reached": True,
+                "amount_saved": "$10",
+                "next_steps": "Watch for confirmation email.",
+            },
             steps_taken=1,
             duration_seconds=0.2,
+        )
+
+
+class FakeWaitingRepAgentBrain:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.input_handler = FakeCheckpointInputHandler()
+        self._step_log: list[dict] = []
+
+    @property
+    def step_log(self) -> list[dict]:
+        return list(self._step_log)
+
+    async def execute(self, **kwargs) -> TaskResult:
+        self._step_log.append(
+            {
+                "step": 3,
+                "phase": "complete",
+                "message": "The representative said please wait while they are checking.",
+            }
+        )
+        await asyncio.sleep(1.0)
+        return TaskResult(
+            status=TaskStatus.SUCCESS,
+            summary="rep finished",
+            steps_taken=3,
+            duration_seconds=0.4,
         )
 
 
@@ -88,13 +122,106 @@ class FakeCheckpointAgentBrain:
         return TaskResult(
             status=TaskStatus.SUCCESS,
             summary=self.input_handler.last_response or "no answer",
+            checkpoint_events=[
+                {
+                    "event_type": "decision_checkpoint_answered",
+                    "checkpoint_id": "cp_daemon",
+                    "selected_option_id": "close_card",
+                    "selected_message": "I would like to proceed toward closing.",
+                    "timestamp": "2026-05-21T00:00:00+00:00",
+                }
+            ],
             steps_taken=1,
             duration_seconds=0.2,
         )
 
 
+class FakeManualLoginAgentBrain:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.input_handler = FakeCheckpointInputHandler()
+        self._step_log: list[dict] = []
+
+    @property
+    def step_log(self) -> list[dict]:
+        return list(self._step_log)
+
+    async def execute(self, **kwargs) -> TaskResult:
+        self.input_handler.pending_request = {
+            "type": "question",
+            "question": "Please log in in the visible browser, then tell Flying Pig to resume.",
+            "reason": "Manual login is required before customer-service chat can continue.",
+        }
+        for _ in range(40):
+            if self.input_handler.last_response:
+                break
+            await asyncio.sleep(0.05)
+        return TaskResult(
+            status=TaskStatus.SUCCESS,
+            summary="login resumed",
+            steps_taken=1,
+            duration_seconds=0.2,
+        )
+
+
+class FakeHucaAgentBrain:
+    tasks: list[str] = []
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.input_handler = FakeCheckpointInputHandler()
+        self._step_log: list[dict] = []
+
+    @property
+    def step_log(self) -> list[dict]:
+        return list(self._step_log)
+
+    async def execute(self, **kwargs) -> TaskResult:
+        task = kwargs["task"]
+        self.__class__.tasks.append(task)
+        if "HUCA recovery was explicitly requested" in task:
+            return TaskResult(
+                status=TaskStatus.SUCCESS,
+                summary="HUCA restarted the task.",
+                steps_taken=1,
+                duration_seconds=0.1,
+            )
+
+        try:
+            await asyncio.sleep(30)
+        except asyncio.CancelledError:
+            raise
+
+        return TaskResult(
+            status=TaskStatus.FAILED,
+            summary="initial run should have been cancelled",
+            steps_taken=1,
+            duration_seconds=30,
+        )
+
+
 def reset_run_manager() -> None:
     daemon_server.run_manager = daemon_server.RunManager()
+    FakeHucaAgentBrain.tasks = []
+
+
+def run_payload(**overrides) -> dict:
+    payload = {
+        "site": "amex",
+        "url": "https://www.americanexpress.com/us/customer-service/",
+        "target_url": "https://www.americanexpress.com/us/customer-service/",
+        "cdp_url": "http://127.0.0.1:9222",
+        "task": "test run",
+        "template": "general",
+        "max_steps": 1,
+        "permission_mode": "supervised_browser",
+        "user_authorized": True,
+        "evidence_capture": True,
+        "login_expectation": "manual_visible_browser",
+        "irreversible_actions_require_checkpoint": True,
+    }
+    payload.update(overrides)
+    return payload
 
 
 def test_agent_run_survives_dashboard_disconnect(monkeypatch):
@@ -105,18 +232,15 @@ def test_agent_run_survives_dashboard_disconnect(monkeypatch):
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as ws:
             assert ws.receive_json()["type"] == "ready"
-            assert ws.receive_json()["status"] == "idle"
-            ws.send_json(
-                {
-                    "type": "start",
-                    "site": "amex",
-                    "url": "https://www.americanexpress.com/us/customer-service/",
-                    "task": "test run",
-                    "template": "general",
-                    "max_steps": 1,
-                }
-            )
-            assert ws.receive_json()["type"] == "status"
+            assert ws.receive_json()["status"] == "ready_to_start"
+            ws.send_json({"type": "start", **run_payload()})
+            first = ws.receive_json()
+            if first["type"] == "state":
+                assert first["status"] == "preparing"
+                first = ws.receive_json()
+            while first["type"] != "status":
+                first = ws.receive_json()
+            assert first["type"] == "status"
             state = ws.receive_json()
             assert state["type"] == "state"
             assert state["running"] is True
@@ -125,10 +249,10 @@ def test_agent_run_survives_dashboard_disconnect(monkeypatch):
             assert ws.receive_json()["type"] == "ready"
             state = ws.receive_json()
             assert state["type"] == "state"
-            assert state["status"] in {"starting", "running", "success"}
-            assert state["status"] != "idle"
+            assert state["status"] in {"preparing", "running", "completed"}
+            assert state["status"] != "ready_to_start"
 
-            while state["status"] != "success":
+            while state["status"] != "completed":
                 message = ws.receive_json()
                 if message.get("type") == "state":
                     state = message
@@ -154,6 +278,7 @@ def test_browser_launch_endpoint_uses_site_adapter(monkeypatch):
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert response.json()["cdp_url"] == "http://127.0.0.1:9222"
+    assert response.json()["timing_span"]["name"] == "launch"
     assert launched["config"].chrome_profile == "dedicated"
     assert launched["config"].disable_extensions is True
     assert "americanexpress.com" in launched["config"].initial_url
@@ -183,7 +308,7 @@ def test_daemon_lists_site_metadata():
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as ws:
             assert ws.receive_json()["type"] == "ready"
-            assert ws.receive_json()["status"] == "idle"
+            assert ws.receive_json()["status"] == "ready_to_start"
             ws.send_json({"type": "list_sites"})
             message = ws.receive_json()
 
@@ -211,6 +336,28 @@ def test_browser_launch_endpoint_supports_generic_current_tab(monkeypatch):
     assert response.status_code == 200
     assert response.json()["ok"] is True
     assert launched["config"].initial_url == "about:blank"
+
+
+def test_browser_launch_endpoint_accepts_user_default_profile_option(monkeypatch):
+    reset_run_manager()
+    launched = {}
+
+    def fake_launch(config):
+        launched["config"] = config
+        return "http://127.0.0.1:9222"
+
+    monkeypatch.setattr(daemon_server, "launch_cdp_chrome", fake_launch)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/browser/launch",
+            json={"site": "generic", "chrome_profile": "existing"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert launched["config"].chrome_profile == "existing"
 
 
 def test_browser_launch_endpoint_defaults_to_generic_blank_page(monkeypatch):
@@ -264,17 +411,8 @@ def test_daemon_broadcasts_and_answers_decision_checkpoint(monkeypatch):
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as ws:
             assert ws.receive_json()["type"] == "ready"
-            assert ws.receive_json()["status"] == "idle"
-            ws.send_json(
-                {
-                    "type": "start",
-                    "site": "amex",
-                    "url": "https://www.americanexpress.com/us/customer-service/",
-                    "task": "test checkpoint",
-                    "template": "general",
-                    "max_steps": 1,
-                }
-            )
+            assert ws.receive_json()["status"] == "ready_to_start"
+            ws.send_json({"type": "start", **run_payload(task="test checkpoint")})
 
             checkpoint = None
             for _ in range(20):
@@ -301,7 +439,7 @@ def test_daemon_broadcasts_and_answers_decision_checkpoint(monkeypatch):
             result = None
             for _ in range(20):
                 message = ws.receive_json()
-                if message.get("type") == "result":
+                if message.get("type") == "result_ready":
                     result = message
                     break
 
@@ -317,17 +455,8 @@ def test_daemon_snapshot_preserves_pending_decision_checkpoint(monkeypatch):
     with TestClient(app) as client:
         with client.websocket_connect("/ws") as ws:
             assert ws.receive_json()["type"] == "ready"
-            assert ws.receive_json()["status"] == "idle"
-            ws.send_json(
-                {
-                    "type": "start",
-                    "site": "amex",
-                    "url": "https://www.americanexpress.com/us/customer-service/",
-                    "task": "test checkpoint",
-                    "template": "general",
-                    "max_steps": 1,
-                }
-            )
+            assert ws.receive_json()["status"] == "ready_to_start"
+            ws.send_json({"type": "start", **run_payload(task="test checkpoint")})
 
             checkpoint = None
             for _ in range(20):
@@ -344,6 +473,7 @@ def test_daemon_snapshot_preserves_pending_decision_checkpoint(monkeypatch):
             assert state["type"] == "state"
             assert state["needs_input"] is True
             assert state["pending_request"]["type"] == "decision_checkpoint"
+            assert state["status"] == "checkpoint_pending"
             assert state["pending_request"]["checkpoint"]["checkpoint_id"] == "cp_daemon"
 
             ws.send_json(
@@ -360,7 +490,7 @@ def test_daemon_snapshot_preserves_pending_decision_checkpoint(monkeypatch):
             result = None
             for _ in range(20):
                 message = ws.receive_json()
-                if message.get("type") == "result":
+                if message.get("type") == "result_ready":
                     result = message
                     break
             assert result is not None
@@ -374,13 +504,7 @@ def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
     with TestClient(app) as client:
         start = client.post(
             "/run/start",
-            json={
-                "site": "amex",
-                "url": "https://www.americanexpress.com/us/customer-service/",
-                "task": "test checkpoint",
-                "template": "general",
-                "max_steps": 1,
-            },
+            json=run_payload(task="test checkpoint"),
         )
         assert start.status_code == 200
         assert start.json()["running"] is True
@@ -397,6 +521,7 @@ def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
 
         assert state is not None
         assert state["pending_request"]["type"] == "decision_checkpoint"
+        assert state["status"] == "checkpoint_pending"
         assert state["pending_request"]["checkpoint"]["checkpoint_id"] == "cp_daemon"
 
         answer = client.post(
@@ -418,14 +543,158 @@ def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
             response = client.get("/run/state")
             assert response.status_code == 200
             result = response.json()
-            if result["status"] == "success":
+            if result["status"] == "completed":
                 break
 
             time.sleep(0.05)
 
         assert result is not None
-        assert result["status"] == "success"
+        assert result["status"] == "completed"
         assert '"selected_option_id": "close_card"' in result["message"]
+
+
+def test_huca_cancels_active_run_and_restarts_same_task(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeHucaAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        start = client.post(
+            "/run/start",
+            json=run_payload(task="Ask for a retention offer.", max_steps=80),
+        )
+        assert start.status_code == 200
+        assert start.json()["running"] is True
+
+        huca = client.post(
+            "/run/huca",
+            json=run_payload(task="Ask for a retention offer.", max_steps=80),
+        )
+        assert huca.status_code == 200
+        assert huca.json()["running"] is True
+        assert huca.json()["message"] == "Restarting fresh chat for amex"
+
+        result = None
+        for _ in range(20):
+            response = client.get("/run/state")
+            assert response.status_code == 200
+            result = response.json()
+            if result["status"] == "completed":
+                break
+
+            time.sleep(0.05)
+
+        assert result is not None
+        assert result["status"] == "completed"
+        assert FakeHucaAgentBrain.tasks[0] == "Ask for a retention offer."
+        assert "HUCA recovery was explicitly requested" in FakeHucaAgentBrain.tasks[1]
+        assert "Ask for a retention offer." in FakeHucaAgentBrain.tasks[1]
+
+
+def test_preflight_gate_failures_are_visible_without_starting_agent(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/run/start",
+            json=run_payload(
+                task="Call support and use my password to cancel without asking.",
+                user_authorized=False,
+                cdp_url="",
+                irreversible_actions_require_checkpoint=False,
+            ),
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["running"] is False
+    assert payload["status"] == "ready_to_start"
+    codes = {item["code"] for item in payload["preflight_failures"]}
+    assert "unsupported_scope" in codes
+    assert "missing_user_authorization" in codes
+    assert "missing_work_window" in codes
+    assert "checkpoint_required" in codes
+
+
+def test_waiting_on_rep_state_snapshot_from_active_human_work(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeWaitingRepAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        start = client.post("/run/start", json=run_payload())
+        assert start.status_code == 200
+
+        state = None
+        for _ in range(20):
+            response = client.get("/run/state")
+            assert response.status_code == 200
+            state = response.json()
+            if state["status"] == "waiting_on_rep":
+                break
+            time.sleep(0.05)
+
+        assert state is not None
+        assert state["status"] == "waiting_on_rep"
+        assert "checking" in state["message"].lower()
+        assert state["running"] is True
+
+
+def test_manual_login_request_is_reconnect_safe(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeManualLoginAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        start = client.post("/run/start", json=run_payload())
+        assert start.status_code == 200
+
+        state = None
+        for _ in range(20):
+            response = client.get("/run/state")
+            assert response.status_code == 200
+            state = response.json()
+            if state["needs_input"]:
+                break
+            time.sleep(0.05)
+
+        assert state is not None
+        assert state["status"] == "waiting_on_login"
+        assert state["pending_request"]["type"] == "manual_login_required"
+        assert "log in" in state["pending_request"]["question"].lower()
+
+        answer = client.post("/run/answer", json={"text": "Logged in now."})
+        assert answer.status_code == 200
+
+
+def test_result_ready_payload_shape_from_daemon(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            assert ws.receive_json()["status"] == "ready_to_start"
+            ws.send_json({"type": "start", **run_payload()})
+
+            result = None
+            for _ in range(20):
+                message = ws.receive_json()
+                if message.get("type") == "result_ready":
+                    result = message
+                    break
+
+    assert result is not None
+    assert result["outcome_summary"] == "fake run completed"
+    assert result["evidence"]["transcript_path"] == "recordings/fake.json"
+    assert result["evidence"]["chat_transcript_lines"] == 2
+    assert result["human_reached"] is True
+    assert result["offer_result"] == "$10"
+    assert result["timing_summary"]["by_name_ms"]["preflight"] >= 0
+    assert result["timing_summary"]["by_name_ms"]["agent_construction"] >= 0
 
 
 def test_progress_message_prefers_specific_goal_and_filters_step_noise():
@@ -441,7 +710,7 @@ def test_progress_message_prefers_specific_goal_and_filters_step_noise():
         == "Open the order-specific support page."
     )
     assert progress_message({"step": 8, "phase": "starting", "message": "Step 8 started"}) == (
-        "Checking the current page and chat state before the next action."
+        "Checking the page and support chat before acting."
     )
     assert (
         progress_message(

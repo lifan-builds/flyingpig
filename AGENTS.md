@@ -1,3 +1,5 @@
+<!-- context-harness-schema: v2 -->
+
 # Agent Guide
 
 ## Context Contract
@@ -69,3 +71,18 @@ flyingpig/
 - **2026-04-09:** Consumer-side positioning (agent acts for the user, not the company) — this is the market gap.
 - **2026-04-09:** AI chatbot detection is a core feature. When the target site uses an AI chatbot, the agent automatically attempts to escalate to a human rep (humans have more authority for exceptions/credits).
 - **2026-04-09:** Typeless interaction — minimize user input. Users pick from task templates or give brief descriptions; the agent handles all detailed conversation.
+
+## Context Index
+<!-- context-harness:index:start -->
+Generated from `CONTEXT.md` by `node scripts/context-index.js update`.
+Use this index to open only the `CONTEXT.md` sections relevant to the task.
+
+- `NOW.md` - current focus, blockers, and next step. Read first on start/resume.
+- `CONTEXT.md#project` - project identity and purpose.
+- `CONTEXT.md#structure` - repo map and important directories.
+- `CONTEXT.md#rules` - hard constraints, habits, and objectives. Subsections: Never, Always, Objectives.
+- `CONTEXT.md#workflow` - setup, run, test, lint, and deploy commands.
+- `CONTEXT.md#language` - canonical terms and avoided names.
+- `CONTEXT.md#relationships` - durable invariants and domain relationships.
+- `CONTEXT.md#learned-patterns` - durable lessons from corrections or failed attempts.
+<!-- context-harness:index:end -->

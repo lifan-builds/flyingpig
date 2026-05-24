@@ -3,7 +3,7 @@
 ## Beta Scope
 
 - Site: American Express.
-- UX: Helper-served localhost dashboard as the single cockpit, controlling the local helper service and a separate Flying Pig work window.
+- UX: Native desktop shell with the helper-served dashboard as the single cockpit, supervising a local helper sidecar and a separate Flying Pig work window.
 - User mode: supervised only. The user keeps the Amex tab visible and answers mid-run questions.
 - Initial playbooks: general support, benefit/credit follow-up, dispute charge.
 
@@ -16,38 +16,24 @@
    playwright install
    ```
 
-2. Start the on-demand helper:
+2. Start the desktop app:
 
    ```bash
-   flyingpig-helper
+   npm install
+   npm run desktop:dev
    ```
 
-   The helper opens the dashboard automatically. Press Ctrl+C in this
-   terminal to stop it when the session is done.
+   The desktop app starts the helper automatically, waits for `/health`, and
+   loads the dashboard.
 
-3. Use the dashboard at `http://127.0.0.1:8765/dashboard/`.
-4. Click **Launch Work Window**.
+3. Use the dashboard in the Flying Pig app.
+4. Click **Open Work Window**.
 5. In the FlyingPig work window, prepare the Amex customer-service tab.
 6. Confirm the task and supervise the run.
 
-For supervised live sessions, start the run from the dashboard or helper API,
-not from a background `scripts/start.py` process. Live chats often require
-Decision Checkpoints, verification prompts, or settlement choices; the
-dashboard/API path keeps the run alive while the user answers. A foreground CLI
-run is acceptable for developer debugging only when the terminal remains
-available for prompts.
-
-Helper API equivalents for supervised tooling:
-
-```bash
-curl http://127.0.0.1:8765/run/state
-curl -X POST http://127.0.0.1:8765/run/start \
-  -H 'Content-Type: application/json' \
-  -d '{"site":"generic","task":"...","cdp_url":"http://127.0.0.1:9222"}'
-curl -X POST http://127.0.0.1:8765/run/answer \
-  -H 'Content-Type: application/json' \
-  -d '{"payload":{"checkpoint_id":"...","selected_option_id":"...","selected_message":"..."}}'
-```
+For supervised live sessions, start the run from the desktop app. Live chats
+often require Decision Checkpoints, verification prompts, or settlement choices;
+the app keeps the run alive while the user answers.
 
 The dashboard has separate helper and work-window statuses. **Helper Online**
 means the local helper is reachable; **Work Window Connected** means the
@@ -55,17 +41,17 @@ controlled Chrome debugging endpoint is reachable. The dashboard tab is the
 cockpit, not the browser-use work area.
 
 The beta default is a dedicated Flying Pig work profile that can run
-beside normal Chrome and persists its own login state. The copied-profile
-path remains available for testing with `flyingpig-helper --chrome-profile
-default`.
+beside normal Chrome and persists its own login state. The copied-profile path
+remains available through the work-window profile picker.
 
-Optional background helper service commands:
+Helper/API/CLI entry points remain available for development and service testing
+only; they are not beta user paths:
 
 ```bash
-flyingpig-macos-helper status
-flyingpig-macos-helper stop
-flyingpig-macos-helper start
-flyingpig-macos-helper uninstall
+flyingpig-helper
+flyingpig-helper --open-dashboard
+python scripts/start.py --help
+python scripts/daemon.py --help
 ```
 
 ## Build Release Bundle
@@ -76,22 +62,51 @@ Create a local beta zip:
 python scripts/build_beta_release.py --clean
 ```
 
-The bundle includes the helper code, helper-served dashboard, prompts, README, and beta install guide.
+The bundle includes the desktop shell source, helper code, helper-served dashboard, prompts, README, and beta install guide.
+
+Create a development desktop build path:
+
+```bash
+npm run build:helper
+npm run desktop:package
+```
+
+The helper sidecar is produced with PyInstaller and bundled into the Electron
+app as an extra resource. The current macOS package target is `.zip`; DMG
+packaging is deferred until the local native-addon signing issue in the DMG
+license toolchain is resolved. The release must be scanned before publishing for
+PII, API keys, credentials, tokens, cookies, logs, recordings, and user-specific
+account data.
 
 ## Pre-Beta Gates
 
 - `ruff check src scripts tests` passes.
 - `pytest tests -q -m "not slow"` passes.
 - `npm run test:dashboard` passes.
-- `python scripts/build_beta_release.py --clean` produces `dist/flyingpig-beta-0.1.0.zip`.
+- `npm run test:desktop` passes.
+- `python scripts/build_beta_release.py --clean` produces `dist/flyingpig-beta-1.0.0.zip`.
 - The built zip is scanned for PII, API keys, credentials, tokens, cookies, logs, recordings, and user-specific account information before publishing.
-- `flyingpig-macos-helper status` shows the helper running after install.
 - A supervised Amex smoke reaches chat, sends only after user confirmation, and captures a transcript.
 - Cancel from the dashboard stops an active run.
 - Helper-offline state in the dashboard clearly offers setup and reconnect paths.
-- Launch Work Window from the dashboard returns a CDP endpoint and opens the Amex page in an extension-free controlled window.
+- Open Work Window from the dashboard returns a CDP endpoint and opens the Amex page in an extension-free controlled window.
 - Start is disabled when the helper is online but controlled Chrome is not connected.
 - Relaunching the work window against an already-running CDP endpoint resets the task page and closes stale page targets.
+
+## Release Evidence — 2026-05-24
+
+Automated gates:
+
+| Gate | Evidence |
+| --- | --- |
+| Ruff | `ruff check src scripts tests` passed. |
+| Non-slow tests | `pytest tests -q -m "not slow"` passed: 137 passed, 2 deselected. |
+| Dashboard smoke | Elevated `npm run test:dashboard` passed with benchmark output: `helper_online=2217ms`, `work_window_ready=2290ms`, `mock_run_done=2438ms`. |
+| Desktop smoke | Elevated `npm run test:desktop` passed; Electron shell reached the helper-served dashboard at `http://127.0.0.1:8865/dashboard/`. |
+| Source release bundle | `python scripts/build_beta_release.py --clean` produced `dist/flyingpig-beta-1.0.0.zip`; final SHA-256 should be computed after docs are finalized because the release bundle includes this checklist. |
+| Packaged helper sidecar | `npm run build:helper` produced `dist/helper/flyingpig-helper`. PyInstaller completed with optional-backend/cache warnings only. |
+| Desktop package | `npm run desktop:package` produced `dist/desktop/Flying Pig-1.0.0-arm64-mac.zip`; SHA-256 `dd949fd8c4f92616e0ad07fcec59c3274fbd80899556e909078cfc1d993a623a`. The app is unsigned because no local Developer ID identity is configured. |
+| Release privacy scan | `zipgrep`/filename scans found no common API-key/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.0 source bundle or desktop zip. |
 
 ## Release Evidence — 2026-05-18
 
@@ -108,9 +123,9 @@ Automated gates:
 
 Manual dashboard pass:
 
-- Opened normal Chrome to the helper-served dashboard and verified **Helper Online** with **Work Window Offline**.
+- Opened the desktop app, which loaded the helper-served dashboard, and verified **Helper Online** with **Work Window Offline**.
 - Verified **Start** is disabled until the controlled work window is connected.
-- Clicked **Launch Work Window**; dashboard switched to **Work Window Connected**, changed the URL label to **Work Window URL**, and followed the Oura support URL from the controlled work window rather than the dashboard URL.
+- Clicked **Open Work Window**; dashboard switched to **Work Window Connected**, changed the URL label to **Work Window URL**, and followed the Oura support URL from the controlled work window rather than the dashboard URL.
 - Relaunched while CDP was already running; CDP inspection showed one debuggable `page` target for the Oura support page after stale page cleanup.
 
 ## Release Evidence — 2026-05-19
@@ -140,7 +155,7 @@ Automated gates:
 | --- | --- |
 | Ruff | `ruff check src scripts tests` passed. |
 | Non-slow tests | `pytest tests -q -m "not slow"` passed: 116 passed, 2 deselected. |
-| Dashboard smoke | `npm run test:dashboard` passed after granting local-port/Chromium permission. The smoke covers helper-offline setup/reconnect, disabled Start before Work Window Connected, Launch Work Window, start/result, cancel, Decision Checkpoint option rendering after dashboard reload, and checkpoint answer submission. |
+| Dashboard smoke | `npm run test:dashboard` passed after granting local-port/Chromium permission. The smoke covers helper-offline setup/reconnect, disabled Start before Work Window Connected, Open Work Window, start/result, cancel, Decision Checkpoint option rendering after dashboard reload, and checkpoint answer submission. |
 | Beta bundle | `python scripts/build_beta_release.py --clean` produced `dist/flyingpig-beta-0.1.0.zip`. |
 | Release privacy scan | Removed a hardcoded JWT secret from `src/api/auth.py` and a local editable path from `requirements.txt`, rebuilt the zip, and verified no common API-key/private-key patterns, emails, card-number-like digit sequences, known live-run PII strings, logs, recordings, cookies, or local user paths are present. |
 
@@ -158,7 +173,7 @@ Helper service smoke:
 Manual supervised Amex smoke status:
 
 - Not completed in this run because it requires the first-cohort tester to be present in the dashboard with Amex login/MFA completed and explicit confirmation before the agent sends the first message.
-- Prepared smoke path: install helper, open `http://127.0.0.1:8765/dashboard/` in normal Chrome, click **Launch Work Window**, prepare Amex chat in the extension-free work window, enter the task, verify the agent performs Chat Surface Check, approve the first outbound message, then verify the result includes transcript path, outcome, failure stage if any, and human-escalation status.
+- Prepared smoke path: open the desktop app, click **Open Work Window**, prepare Amex chat in the extension-free work window, enter the task, verify the agent performs Chat Surface Check, approve any consequential outbound message, then verify the result includes transcript path, outcome, failure stage if any, and human-escalation status.
 - If blocked, record the blocker with the visible stage: helper setup, work-window launch, Amex login/MFA, Chat Surface Check, send confirmation, live chat/human escalation, cancel, or evidence capture.
 
 Full mock-agent dashboard smoke status:

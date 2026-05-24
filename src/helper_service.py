@@ -96,7 +96,7 @@ def install(args: argparse.Namespace) -> None:
     print(f"Installed Flying Pig helper LaunchAgent: {PLIST_PATH}")
     print(
         "The helper will start at login. Open "
-        f"http://{args.host}:{args.port}/dashboard/ and use Launch Work Window."
+        f"http://{args.host}:{args.port}/dashboard/ and use Open Work Window."
     )
 
 

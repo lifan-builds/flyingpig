@@ -10,12 +10,21 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 CHROME_APP = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 DEFAULT_CHROME_USER_DATA_DIR = Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
 DEDICATED_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-profile"
 DEFAULT_COPY_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-default-copy"
+
+
+class ChromeProfileMode(StrEnum):
+    """Supported profile modes for the Controlled Chrome Window."""
+
+    DEDICATED = "dedicated"
+    DEFAULT_COPY = "default"
+    USER_DEFAULT = "existing"
 
 
 @dataclass(frozen=True)
@@ -32,6 +41,21 @@ class ChromeLaunchConfig:
     window_height: int = 900
     window_left: int = 560
     window_top: int = 80
+
+
+def supported_chrome_profile_modes() -> set[str]:
+    """Return profile mode values accepted by the Controlled Chrome Window."""
+    return {mode.value for mode in ChromeProfileMode}
+
+
+def chrome_profile_label(profile: str) -> str:
+    """Return a user-facing label for a Controlled Chrome profile mode."""
+    labels = {
+        ChromeProfileMode.DEDICATED.value: "Dedicated Flying Pig profile",
+        ChromeProfileMode.DEFAULT_COPY.value: "Copied Chrome Default profile",
+        ChromeProfileMode.USER_DEFAULT.value: "User default profile",
+    }
+    return labels.get(profile, profile)
 
 
 def regular_chrome_is_running() -> bool:
@@ -60,9 +84,9 @@ def regular_chrome_is_running() -> bool:
 def chrome_user_data_dir(profile: str, custom_dir: str | None) -> Path:
     if custom_dir:
         return Path(custom_dir).expanduser()
-    if profile == "existing":
+    if profile == ChromeProfileMode.USER_DEFAULT.value:
         return DEFAULT_CHROME_USER_DATA_DIR
-    if profile == "default":
+    if profile == ChromeProfileMode.DEFAULT_COPY.value:
         return DEFAULT_COPY_CHROME_USER_DATA_DIR
     return DEDICATED_CHROME_USER_DATA_DIR
 
@@ -130,13 +154,19 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
         config.chrome_profile,
         config.chrome_user_data_dir,
     )
-    if config.chrome_profile == "existing" and config.chrome_user_data_dir is None:
+    if (
+        config.chrome_profile == ChromeProfileMode.USER_DEFAULT.value
+        and config.chrome_user_data_dir is None
+    ):
         raise RuntimeError(
             "Chrome blocks remote debugging on the literal default user profile. "
             "Use --chrome-profile default for FlyingPig's persistent copied profile, "
             "or pass --chrome-user-data-dir with a non-default Chrome profile."
         )
-    if config.chrome_profile == "default" and config.chrome_user_data_dir is None:
+    if (
+        config.chrome_profile == ChromeProfileMode.DEFAULT_COPY.value
+        and config.chrome_user_data_dir is None
+    ):
         ensure_default_profile_copy(user_data_dir)
     user_data_dir.mkdir(parents=True, exist_ok=True)
 

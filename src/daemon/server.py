@@ -4,19 +4,24 @@ Protocol (JSON per frame, both directions):
 
   Client -> Daemon:
     {"type": "start", "site": "amex", "template": "negotiate_fee",
-     "task": "...", "cdp_url": "http://127.0.0.1:9222"}
+     "task": "...", "cdp_url": "http://127.0.0.1:9222",
+     "permission_mode": "supervised_browser", "user_authorized": true}
     {"type": "answer", "text": "..."}                  # response to a "question"
+    {"type": "huca"}                                    # restart same task in a fresh chat
     {"type": "cancel"}
     {"type": "list_sites"}
 
   Daemon -> Client:
     {"type": "sites", "items": [...]}
+    {"type": "state", "status": "ready_to_start|running|waiting_on_rep|..."}
     {"type": "status", "text": "..."}                  # human-readable progress
     {"type": "progress", "event": {...}}                # step-level agent progress
-    {"type": "question", "question": "...", "reason": "..."}
+    {"type": "missing_information|otp_required|manual_login_required|...", ...}
     {"type": "decision_checkpoint", "checkpoint": {...}}
-    {"type": "result", "status": "success|partial|failed|needs_input",
-                       "summary": "...", "steps": N, "duration": S}
+    {"type": "active_human_work", "summary": "..."}
+    {"type": "preflight_failed", "failures": [...]}
+    {"type": "result_ready", "status": "success|partial|failed|needs_input",
+                             "summary": "...", "evidence": {...}}
     {"type": "error", "text": "..."}
 """
 
@@ -25,7 +30,9 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import sys
 from pathlib import Path
+from time import perf_counter
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,20 +46,29 @@ from src.agent.browser_runtime import (
     debugger_is_ready,
     debugger_page_info,
     launch_cdp_chrome,
+    supported_chrome_profile_modes,
 )
+from src.agent.run_orchestration import build_agent_run_plan
+from src.daemon.preflight import preflight_check, task_with_success_criteria
 from src.daemon.run_session import (
+    RunEventType,
     RunStateStore,
+    RunStatus,
+    normalize_attention_request,
     now_iso,
+    progress_event_type,
     progress_message,
     protocol_event_for_request,
     request_message,
     result_payload,
+    run_status_for_attention,
+    timing_span,
 )
 from src.sites.registry import get_site_adapter, list_sites, resolve_from_url
 from src.sites.task_templates import get_templates
 
 logger = logging.getLogger(__name__)
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 DASHBOARD_DIR = ROOT / "dashboard"
 
 
@@ -83,6 +99,12 @@ class RunStartRequest(BaseModel):
     fallback_model: str | None = None
     max_steps: int = 80
     navigate_on_attach: bool = False
+    success_criteria: str | None = None
+    permission_mode: str = "supervised_browser"
+    user_authorized: bool = False
+    evidence_capture: bool = True
+    login_expectation: str | None = None
+    irreversible_actions_require_checkpoint: bool = True
 
 
 class RunAnswerRequest(BaseModel):
@@ -101,6 +123,10 @@ class RunManager:
         self.sessions: set[Session] = set()
         self.lock = asyncio.Lock()
         self.state = RunStateStore()
+        self.current_run_request: dict | None = None
+        self.timing_spans: list[dict] = []
+        self._user_wait_started_at: float | None = None
+        self._rep_wait_started_at: float | None = None
 
     def attach(self, session: Session) -> None:
         self.sessions.add(session)
@@ -124,6 +150,12 @@ class RunManager:
     async def set_state(self, **changes) -> None:
         await self.broadcast(**self.state.apply(**changes))
 
+    async def add_timing_span(self, span: dict) -> None:
+        event = dict(span)
+        event["type"] = "timing_span"
+        self.timing_spans.append(event)
+        await self.broadcast(**event)
+
     def _sites_payload(self) -> list[dict]:
         out = []
         for site in list_sites():
@@ -145,69 +177,140 @@ class RunManager:
 
     async def start(self, msg: dict) -> None:
         async with self.lock:
-            if self.agent_task and not self.agent_task.done():
-                await self.broadcast(type="error", text="agent already running")
-                return
+            await self._start_locked(msg)
 
-            url = msg.get("url") or ""
-            requested_site = msg.get("site")
-            site = resolve_from_url(url) if requested_site in (None, "", "auto") else requested_site
-            if not site:
-                await self.broadcast(
-                    type="error",
-                    text=(
-                        "Could not resolve the work window. "
-                        "Launch a customer-service work window first."
-                    ),
-                )
-                await self.set_state(
-                    status="idle",
-                    running=False,
-                    needs_input=False,
-                    message="Open a customer-service tab first.",
-                    site=None,
-                )
-                return
+    async def _start_locked(self, msg: dict, *, huca: bool = False) -> None:
+        if self.agent_task and not self.agent_task.done():
+            await self.broadcast(type="error", text="agent already running")
+            return
 
-            template = msg.get("template") or None
-            task = msg.get("task") or ""
-            cdp_url = msg.get("cdp_url") or None
-            target_url = msg.get("target_url") or url or None
+        await self.set_state(
+            status=RunStatus.PREPARING.value,
+            running=False,
+            needs_input=False,
+            message="Checking task scope, permissions, login expectations, and evidence settings.",
+            preflight_failures=[],
+            timing_spans=[],
+        )
 
-            self.brain = AgentBrain(
-                site=site,
-                headless=False,
-                input_mode="api",
-                model=msg.get("model"),
-                fallback_model=msg.get("fallback_model"),
-                cdp_url=cdp_url,
-                target_url=target_url,
-                navigate_on_attach=bool(msg.get("navigate_on_attach")),
+        url = msg.get("url") or ""
+        requested_site = msg.get("site")
+        site = resolve_from_url(url) if requested_site in (None, "", "auto") else requested_site
+        if not site:
+            site = None
+        self.timing_spans = []
+        self._user_wait_started_at = None
+        self._rep_wait_started_at = None
+
+        preflight_started_at = perf_counter()
+        preflight = preflight_check(msg, site=site)
+        await self.add_timing_span(
+            timing_span(
+                "preflight",
+                "Pre-flight safety gate",
+                duration_ms=(perf_counter() - preflight_started_at) * 1000,
+                status="ok" if preflight.ok else "blocked",
+                metadata={"failure_count": len(preflight.failures)},
             )
-            started_at = now_iso()
-            await self.broadcast(type="status", text=f"using adapter: {site}")
+        )
+        if not preflight.ok:
+            await self.broadcast(
+                type="preflight_failed",
+                failures=preflight.failures,
+                text="Pre-flight check failed.",
+            )
             await self.set_state(
-                status="starting",
-                running=True,
+                status=RunStatus.READY_TO_START.value,
+                running=False,
                 needs_input=False,
-                site=site,
-                message=f"Starting agent for {site}",
-                step=None,
-                started_at=started_at,
-                finished_at=None,
-                transcript=None,
-                result=None,
-                pending_request=None,
+                message="Pre-flight blocked the run. Fix the listed items before starting.",
+                site=None,
+                preflight_failures=preflight.failures,
+                timing_spans=list(self.timing_spans),
             )
-            self.agent_task = asyncio.create_task(
-                self._run_agent(
-                    task=task,
-                    template_id=template,
-                    max_steps=msg.get("max_steps", 30),
+            return
+
+        user_task = msg.get("task") or ""
+        task_brief = task_with_success_criteria(user_task, msg.get("success_criteria"))
+        run_plan = build_agent_run_plan(
+            msg,
+            site=site,
+            task_brief=task_brief,
+            huca=huca,
+        )
+
+        construction_started_at = perf_counter()
+        self.brain = AgentBrain(**run_plan.agent_kwargs())
+        await self.add_timing_span(
+            timing_span(
+                "agent_construction",
+                "AgentBrain construction",
+                duration_ms=(perf_counter() - construction_started_at) * 1000,
+            )
+        )
+        started_at = now_iso()
+        self.current_run_request = {
+            **msg,
+            "site": site,
+            "url": url,
+            "template": run_plan.template_id,
+            "task": user_task,
+            "success_criteria": msg.get("success_criteria"),
+            "cdp_url": run_plan.cdp_url,
+            "target_url": run_plan.target_url,
+        }
+        status_text = f"using adapter: {site}"
+        if huca:
+            status_text = f"HUCA restart: using adapter: {site}"
+        await self.broadcast(type="status", text=status_text)
+        message = f"Starting agent for {site}"
+        if huca:
+            message = f"Restarting fresh chat for {site}"
+        await self.set_state(
+            status=RunStatus.RUNNING.value,
+            running=True,
+            needs_input=False,
+            site=site,
+            message=message,
+            step=None,
+            started_at=started_at,
+            finished_at=None,
+            transcript=None,
+            result=None,
+            pending_request=None,
+            permission_mode=run_plan.permission_mode,
+            preflight_failures=[],
+            timing_spans=list(self.timing_spans),
+        )
+        self.agent_task = asyncio.create_task(
+            self._run_agent(**run_plan.execute_kwargs())
+        )
+        self.questions_task = asyncio.create_task(self._poll_questions())
+        self.progress_task = asyncio.create_task(self._poll_progress())
+
+    async def huca(self, msg: dict) -> None:
+        async with self.lock:
+            previous_request = dict(self.current_run_request or {})
+            restart_request = {
+                **previous_request,
+                **{key: value for key, value in msg.items() if value not in (None, "")},
+            }
+            if not restart_request.get("task"):
+                await self.broadcast(type="error", text="no task available for HUCA restart")
+                return
+
+            if self.agent_task and not self.agent_task.done():
+                stopped = await self._cancel_active_run(
+                    status_message="HUCA restart requested. Stopping current chat."
                 )
-            )
-            self.questions_task = asyncio.create_task(self._poll_questions())
-            self.progress_task = asyncio.create_task(self._poll_progress())
+                if not stopped:
+                    await self.broadcast(
+                        type="error",
+                        text="could not stop the current run for HUCA restart",
+                    )
+                    return
+
+            await self._start_locked(restart_request, huca=True)
 
     async def _run_agent(self, *, task: str, template_id: str | None, max_steps: int) -> None:
         try:
@@ -215,10 +318,21 @@ class RunManager:
             result = await self.brain.execute(
                 task=task, max_steps=max_steps, template_id=template_id
             )
+            await self._finish_open_wait_spans()
+            result.timing_spans = self._merged_timing_spans(
+                self.timing_spans,
+                result.timing_spans,
+            )
+            self.timing_spans = list(result.timing_spans)
             payload = result_payload(result)
             await self.broadcast(**payload)
+            final_status = (
+                RunStatus.FAILED.value
+                if payload["status"] == "failed"
+                else RunStatus.COMPLETED.value
+            )
             await self.set_state(
-                status=payload["status"],
+                status=final_status,
                 running=False,
                 needs_input=False,
                 message=result.summary,
@@ -227,27 +341,30 @@ class RunManager:
                 transcript=payload["transcript"],
                 result=payload,
                 pending_request=None,
+                timing_spans=list(result.timing_spans),
             )
         except asyncio.CancelledError:
             await self.set_state(
-                status="cancelled",
+                status=RunStatus.CANCELLED.value,
                 running=False,
                 needs_input=False,
                 message="Cancelled",
                 finished_at=now_iso(),
                 pending_request=None,
+                timing_spans=list(self.timing_spans),
             )
             raise
         except Exception as e:
             logger.exception("agent run failed")
             await self.broadcast(type="error", text=f"{type(e).__name__}: {e}")
             await self.set_state(
-                status="error",
+                status=RunStatus.FAILED.value,
                 running=False,
                 needs_input=False,
                 message=f"{type(e).__name__}: {e}",
                 finished_at=now_iso(),
                 pending_request=None,
+                timing_spans=list(self.timing_spans),
             )
 
     async def _poll_questions(self) -> None:
@@ -260,18 +377,21 @@ class RunManager:
             request_key = json.dumps(request, sort_keys=True) if request else None
             if request and request_key != last_seen:
                 last_seen = request_key
-                await self.broadcast(**protocol_event_for_request(request))
+                pending_request = protocol_event_for_request(request)
+                await self.broadcast(**pending_request)
+                self._user_wait_started_at = perf_counter()
                 await self.set_state(
-                    status="needs_input",
+                    status=run_status_for_attention(pending_request).value,
                     running=True,
                     needs_input=True,
-                    message=request_message(request),
-                    pending_request=request,
+                    message=request_message(pending_request),
+                    pending_request=pending_request,
                 )
             elif not request and last_seen is not None:
                 last_seen = None
+                await self._finish_user_wait_span()
                 await self.set_state(
-                    status="running",
+                    status=RunStatus.RUNNING.value,
                     running=True,
                     needs_input=False,
                     message="Continuing",
@@ -286,18 +406,46 @@ class RunManager:
                 continue
             progress = self.brain.step_log
             for event in progress[sent:]:
+                if event.get("type") == "timing_span":
+                    event_payload = dict(event)
+                    self.timing_spans = self._merged_timing_spans(
+                        self.timing_spans,
+                        [event_payload],
+                    )
+                    await self.broadcast(**event_payload)
+                    await self.set_state(timing_spans=list(self.timing_spans))
+                    continue
                 pending_request = getattr(self.brain.input_handler, "pending_request", None)
-                display_message = progress_message(event, pending_request)
+                normalized_request = normalize_attention_request(pending_request)
+                display_message = progress_message(event, normalized_request)
                 event_payload = dict(event)
                 event_payload["display_message"] = display_message
+                lifecycle_type = progress_event_type(event_payload)
                 await self.broadcast(type="progress", event=event_payload)
+                if lifecycle_type == RunEventType.ACTIVE_HUMAN_WORK:
+                    if self._rep_wait_started_at is None:
+                        self._rep_wait_started_at = perf_counter()
+                    await self.broadcast(
+                        type=RunEventType.ACTIVE_HUMAN_WORK.value,
+                        summary=display_message,
+                        step=event.get("step"),
+                    )
+                status = (
+                    RunStatus.WAITING_ON_REP
+                    if lifecycle_type == RunEventType.ACTIVE_HUMAN_WORK
+                    else run_status_for_attention(normalized_request)
+                    if normalized_request
+                    else RunStatus.RUNNING
+                )
+                if lifecycle_type != RunEventType.ACTIVE_HUMAN_WORK:
+                    await self._finish_rep_wait_span()
                 await self.set_state(
-                    status="needs_input" if pending_request else "running",
+                    status=status.value,
                     running=True,
-                    needs_input=bool(pending_request),
+                    needs_input=bool(normalized_request),
                     step=event.get("step"),
                     message=display_message,
-                    pending_request=pending_request,
+                    pending_request=normalized_request,
                 )
             sent = len(progress)
 
@@ -310,25 +458,99 @@ class RunManager:
         self.brain.input_handler.provide_input(text)
         await self.broadcast(type="status", text="answer received")
         await self.set_state(
-            status="running",
+            status=RunStatus.RUNNING.value,
             running=True,
             needs_input=False,
             message="Answer received. Continuing the run.",
             pending_request=None,
         )
+        await self._finish_user_wait_span()
 
     async def cancel(self) -> None:
+        async with self.lock:
+            await self._cancel_active_run(status_message="cancelled")
+
+    async def _cancel_active_run(self, *, status_message: str) -> bool:
         if self.agent_task and not self.agent_task.done():
+            await self._cancel_observer_tasks()
             self.agent_task.cancel()
-            await self.broadcast(type="status", text="cancelled")
+            try:
+                await asyncio.wait_for(self.agent_task, timeout=15)
+            except asyncio.CancelledError:
+                pass
+            except TimeoutError:
+                logger.warning("timed out waiting for agent task cancellation")
+                return False
+            await self.broadcast(type="status", text=status_message)
             await self.set_state(
-                status="cancelled",
+                status=RunStatus.CANCELLED.value,
                 running=False,
                 needs_input=False,
-                message="Cancelled",
+                message="Cancelled" if status_message == "cancelled" else status_message,
                 finished_at=now_iso(),
                 pending_request=None,
+                timing_spans=list(self.timing_spans),
             )
+        return True
+
+    async def _finish_open_wait_spans(self) -> None:
+        await self._finish_user_wait_span()
+        await self._finish_rep_wait_span()
+
+    async def _finish_user_wait_span(self) -> None:
+        if self._user_wait_started_at is None:
+            return
+        started_at = self._user_wait_started_at
+        self._user_wait_started_at = None
+        await self.add_timing_span(
+            timing_span(
+                "user_wait",
+                "Waiting on user",
+                duration_ms=(perf_counter() - started_at) * 1000,
+            )
+        )
+
+    async def _finish_rep_wait_span(self) -> None:
+        if self._rep_wait_started_at is None:
+            return
+        started_at = self._rep_wait_started_at
+        self._rep_wait_started_at = None
+        await self.add_timing_span(
+            timing_span(
+                "representative_wait",
+                "Waiting on representative",
+                duration_ms=(perf_counter() - started_at) * 1000,
+            )
+        )
+
+    def _merged_timing_spans(self, *span_groups: list[dict]) -> list[dict]:
+        merged: list[dict] = []
+        seen: set[tuple] = set()
+        for spans in span_groups:
+            for span in spans:
+                key = (
+                    span.get("name"),
+                    span.get("timestamp"),
+                    span.get("duration_ms"),
+                    json.dumps(span.get("metadata") or {}, sort_keys=True),
+                )
+                if key in seen:
+                    continue
+                seen.add(key)
+                event = dict(span)
+                event["type"] = "timing_span"
+                merged.append(event)
+        return merged
+
+    async def _cancel_observer_tasks(self) -> None:
+        tasks = [task for task in (self.questions_task, self.progress_task) if task]
+        for task in tasks:
+            if task and not task.done():
+                task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self.questions_task = None
+        self.progress_task = None
 
 
 run_manager = RunManager()
@@ -361,6 +583,8 @@ class Session:
                 await run_manager.start(msg)
             elif mtype == "answer":
                 await run_manager.answer(msg.get("text", ""), payload=msg.get("payload"))
+            elif mtype == "huca":
+                await run_manager.huca(msg)
             elif mtype == "cancel":
                 await run_manager.cancel()
             else:
@@ -418,6 +642,11 @@ def create_app() -> FastAPI:
         await run_manager.cancel()
         return run_manager.state.snapshot()
 
+    @app.post("/run/huca")
+    async def run_huca(request: RunStartRequest):
+        await run_manager.huca(request.model_dump())
+        return run_manager.state.snapshot()
+
     @app.post("/browser/launch")
     async def browser_launch(request: BrowserLaunchRequest):
         if request.site not in list_sites():
@@ -425,15 +654,20 @@ def create_app() -> FastAPI:
                 "ok": False,
                 "error": f"Unknown site '{request.site}'. Available: {', '.join(list_sites())}",
             }
-        if request.chrome_profile not in {"dedicated", "default"}:
+        if request.chrome_profile not in supported_chrome_profile_modes():
             return {
                 "ok": False,
-                "error": "chrome_profile must be dedicated or default",
+                "error": (
+                    "chrome_profile must be dedicated, default, or existing. "
+                    "The literal existing default profile may be blocked by Chrome unless "
+                    "you provide a non-default chrome_user_data_dir."
+                ),
             }
 
         adapter = get_site_adapter(request.site)
         initial_url = request.initial_url or adapter.chat_url or "about:blank"
         try:
+            launch_started_at = perf_counter()
             cdp_url = await asyncio.to_thread(
                 launch_cdp_chrome,
                 ChromeLaunchConfig(
@@ -448,6 +682,12 @@ def create_app() -> FastAPI:
                     window_top=request.window_top,
                 ),
             )
+            launch_span = timing_span(
+                "launch",
+                "Work window launch",
+                duration_ms=(perf_counter() - launch_started_at) * 1000,
+            )
+            await run_manager.add_timing_span(launch_span)
         except Exception as exc:
             logger.exception("browser launch failed")
             return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
@@ -458,6 +698,7 @@ def create_app() -> FastAPI:
             "current_url": status.get("current_url") or initial_url,
             "current_title": status.get("current_title") or "",
             "message": "Chrome is ready. Prepare the visible tab, then start the task.",
+            "timing_span": launch_span,
         }
 
     @app.websocket("/ws")

@@ -13,10 +13,13 @@ DEFAULT_NAME = "flyingpig-beta"
 
 INCLUDE_PATHS = [
     "README.md",
+    "package.json",
+    "package-lock.json",
     "pyproject.toml",
     "requirements.txt",
     "docs/beta.md",
     "dashboard",
+    "desktop",
     "src",
     "scripts",
     "prompts",
@@ -28,10 +31,20 @@ EXCLUDE_NAMES = {
     ".ruff_cache",
     ".DS_Store",
 }
+EXCLUDE_RELATIVE_PATHS = {
+    Path("src/helper_service.py"),
+    Path("scripts/macos_helper.py"),
+}
 
 
 def should_include(path: Path) -> bool:
-    return not any(part in EXCLUDE_NAMES for part in path.parts)
+    try:
+        relative = path.relative_to(ROOT)
+    except ValueError:
+        relative = path
+    return relative not in EXCLUDE_RELATIVE_PATHS and not any(
+        part in EXCLUDE_NAMES for part in path.parts
+    )
 
 
 def add_path(zf: zipfile.ZipFile, source: Path, archive_root: str) -> None:
@@ -65,35 +78,34 @@ def beta_install_text() -> str:
     return """# Flying Pig Beta Install
 
 1. Install Python 3.12+ and Chrome.
-2. From this folder, run:
+2. From this folder, install dependencies and start the desktop app:
 
    ```bash
    pip install -e ".[dev]"
    playwright install
-   flyingpig-helper
+   npm install
+   npm run desktop:dev
    ```
 
-   Keep this terminal open while using Flying Pig. Press Ctrl+C to stop.
+   The Flying Pig desktop app starts and stops the local helper automatically.
 
-3. Use the dashboard at `http://127.0.0.1:8765/dashboard/`.
-4. Click **Launch Work Window**.
+3. Use the dashboard in the Flying Pig app.
+4. Click **Open Work Window**.
 5. Prepare the customer-service tab, choose a playbook, confirm the task, and supervise the run.
 
-Optional background helper service:
+Developer/debug helper entry points:
 
 ```bash
-flyingpig-macos-helper install
-flyingpig-macos-helper status
-flyingpig-macos-helper stop
-flyingpig-macos-helper start
-flyingpig-macos-helper uninstall
+flyingpig-helper
+flyingpig-helper --open-dashboard
+python scripts/start.py --help
 ```
 """
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", default="0.1.0")
+    parser.add_argument("--version", default="1.0.0")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
     parser.add_argument("--clean", action="store_true", help="Remove output dir before building")
     return parser

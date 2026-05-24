@@ -3,6 +3,7 @@
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from time import perf_counter
 
 from browser_use import Agent
 from browser_use.agent.views import AgentHistoryList
@@ -57,11 +58,19 @@ class AgentBrain:
         self.llm = self._create_llm()
         self.fallback_llm = create_llm(self.fallback_model) if self.fallback_model else None
         self._step_log: list[dict] = []
+        self._timing_spans: list[dict] = []
+        self._step_started_at: dict[int, float] = {}
+        self._agent_run_started_at: float | None = None
 
     @property
     def step_log(self) -> list[dict]:
         """Return a copy of user-facing progress events for active runs."""
         return list(self._step_log)
+
+    @property
+    def timing_spans(self) -> list[dict]:
+        """Return timing spans captured during the active run."""
+        return list(self._timing_spans)
 
     def _create_llm(self):
         return create_llm(self._model_name)
@@ -69,6 +78,15 @@ class AgentBrain:
     async def _on_step_start(self, agent: Agent):
         """Called at the start of each agent step."""
         step_num = agent.state.n_steps
+        now = perf_counter()
+        self._step_started_at[step_num] = now
+        if step_num == 1 and self._agent_run_started_at is not None:
+            self._record_timing_span(
+                "first_observation",
+                "First page observation",
+                duration_ms=(now - self._agent_run_started_at) * 1000,
+                metadata={"step": step_num},
+            )
         self._step_log.append(
             {
                 "step": step_num,
@@ -82,6 +100,24 @@ class AgentBrain:
     async def _on_step_end(self, agent: Agent):
         """Called at the end of each agent step. Logs step details."""
         step_num = agent.state.n_steps
+        started_at = self._step_started_at.pop(step_num, None)
+        if started_at is not None:
+            duration_ms = (perf_counter() - started_at) * 1000
+            self._record_timing_span(
+                "browser_use_step",
+                "Browser-use step",
+                duration_ms=duration_ms,
+                metadata={"step": step_num},
+            )
+            self._record_timing_span(
+                "model_call",
+                "Model planning step",
+                duration_ms=duration_ms,
+                metadata={
+                    "step": step_num,
+                    "source": "browser_use_step_elapsed",
+                },
+            )
         history = agent.history
         if history.history:
             last = history.history[-1]
@@ -143,6 +179,8 @@ class AgentBrain:
             navigate_on_attach=self.navigate_on_attach,
         )
         self._step_log = []
+        self._timing_spans = []
+        self._step_started_at = {}
 
         try:
             agent_task = self._build_agent_task(task=task, template_id=template_id)
@@ -157,9 +195,21 @@ class AgentBrain:
                     },
                 )
 
+            browser_started_at = perf_counter()
             browser_session = await navigator.open_chat()
+            self._record_timing_span(
+                "browser_attach",
+                "Work window attach",
+                duration_ms=(perf_counter() - browser_started_at) * 1000,
+            )
             if self.site_adapter.requires_login:
+                login_started_at = perf_counter()
                 await navigator.wait_for_login(self.input_handler)
+                self._record_timing_span(
+                    "login_wait",
+                    "Manual login wait",
+                    duration_ms=(perf_counter() - login_started_at) * 1000,
+                )
 
             try:
                 history = await self._run_browser_use_agent(
@@ -183,12 +233,19 @@ class AgentBrain:
                     max_steps=max_steps,
                     save_dir=save_dir,
                 )
+            capture_started_at = perf_counter()
             artifacts = await self.evidence.record_session_result(
                 history=history,
                 browser_session=browser_session,
                 save_dir=Path(save_dir),
                 checkpoint_events=self.input_handler.events,
             )
+            self._record_timing_span(
+                "result_capture",
+                "Evidence capture and result shaping",
+                duration_ms=(perf_counter() - capture_started_at) * 1000,
+            )
+            artifacts.result.timing_spans = self.timing_spans
             return artifacts.result
 
         except Exception as e:
@@ -222,11 +279,32 @@ class AgentBrain:
             generate_gif=True,
             save_conversation_path=str(Path(save_dir) / "conversation.json"),
         )
+        self._agent_run_started_at = perf_counter()
         return await agent.run(
             max_steps=max_steps,
             on_step_start=self._on_step_start,
             on_step_end=self._on_step_end,
         )
+
+    def _record_timing_span(
+        self,
+        name: str,
+        label: str,
+        *,
+        duration_ms: float,
+        status: str = "ok",
+        metadata: dict | None = None,
+    ) -> None:
+        span = {
+            "name": name,
+            "label": label,
+            "duration_ms": round(max(duration_ms, 0.0), 1),
+            "status": status,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "metadata": metadata or {},
+        }
+        self._timing_spans.append(span)
+        self._step_log.append({"type": "timing_span", **span})
 
     def _build_agent_task(self, *, task: str, template_id: str | None) -> str:
         agent_task = self.site_adapter.build_task_prompt(

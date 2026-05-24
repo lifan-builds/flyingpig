@@ -2,6 +2,7 @@
 
 import pytest
 from src.sites.profile_adapter import ProfileBackedAdapter
+from src.sites.profiles import AMEX_PROFILE, profile_prompt_context, validate_profile
 from src.sites.registry import get_site_adapter, list_sites, resolve_from_url
 
 
@@ -85,6 +86,13 @@ class TestSiteRegistry:
         assert "live Oura expert" in prompt
         assert "Do not roam through menus" in prompt
         assert "ask about my ring warranty" in prompt
+
+    def test_support_profile_authoring_module_validates_and_renders_context(self):
+        validate_profile(AMEX_PROFILE)
+        context = profile_prompt_context(AMEX_PROFILE)
+
+        assert "Known Site Profile: American Express" in context
+        assert "Verification boundaries" in context
 
     def test_generic_prompt_does_not_force_redundant_goal_confirmation(self):
         adapter = get_site_adapter("generic")

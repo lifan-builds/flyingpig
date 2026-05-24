@@ -1,0 +1,41 @@
+{
+  "appId": "ai.flyingpig.desktop",
+  "productName": "Flying Pig",
+  "directories": {
+    "output": "dist/desktop"
+  },
+  "files": [
+    "desktop/**/*",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "dist/helper",
+      "to": "helper",
+      "filter": [
+        "**/*",
+        "!**/*.log",
+        "!**/*.sqlite",
+        "!**/*.db",
+        "!**/.env",
+        "!**/recordings/**",
+        "!**/logs/**",
+        "!**/cookies/**"
+      ]
+    }
+  ],
+  "asar": true,
+  "mac": {
+    "category": "public.app-category.productivity",
+    "icon": "desktop/assets/app-icon.png",
+    "target": ["zip"]
+  },
+  "win": {
+    "icon": "desktop/assets/app-icon.ico",
+    "target": ["nsis"]
+  },
+  "linux": {
+    "icon": "desktop/assets/app-icon.png",
+    "target": ["AppImage"]
+  }
+}

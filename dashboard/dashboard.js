@@ -4,8 +4,12 @@ import {
   checkpointOptionAnswer,
   fallbackPendingRequest,
   formatTime,
+  isUserAttentionRequest,
+  progressMessage,
+  readableRunStatus,
   requestKey,
   siteLabel,
+  statusForPendingRequest,
 } from "./dashboard_protocol.js";
 
 const $ = (id) => document.getElementById(id);
@@ -20,12 +24,29 @@ const state = {
   sites: [],
   running: false,
   browserConnected: false,
+  browserLaunching: false,
   browserStatusTimer: null,
   currentCheckpoint: null,
   helperUrl: "http://127.0.0.1:8765",
   notifySound: true,
   notifyOs: true,
   notifiedRequestKey: null,
+  preflightFailures: [],
+  timingSpans: [],
+  runStatus: "ready_to_start",
+};
+
+const attentionTitles = {
+  missing_information: "Information needed",
+  otp_required: "OTP / MFA code needed",
+  auth_required: "Authentication needed",
+  manual_login_required: "Manual login needed",
+  account_access_blocked: "Account access blocked",
+  resume_after_auth: "Ready to resume?",
+  attachment_required: "Attachment needed",
+  irreversible_action_pending: "Approval needed",
+  offer_received: "Offer received",
+  recovery_pending: "Recovery decision",
 };
 
 function extensionApi() {
@@ -117,7 +138,7 @@ function notifyAttention(title, message) {
   if (api?.notifications) {
     api.notifications.create({
       type: "basic",
-      iconUrl: "notification.svg",
+      iconUrl: "assets/app-icon-64.png",
       title,
       message,
     });
@@ -125,11 +146,11 @@ function notifyAttention(title, message) {
   }
   if (!("Notification" in window)) return;
   if (Notification.permission === "granted") {
-    new Notification(title, { body: message, icon: dashboardUrl("notification.svg") });
+    new Notification(title, { body: message, icon: dashboardUrl("assets/app-icon-64.png") });
   } else if (Notification.permission !== "denied") {
     Notification.requestPermission().then((permission) => {
       if (permission === "granted") {
-        new Notification(title, { body: message, icon: dashboardUrl("notification.svg") });
+        new Notification(title, { body: message, icon: dashboardUrl("assets/app-icon-64.png") });
       }
     });
   }
@@ -151,6 +172,7 @@ function setConnection(connected) {
   if (!connected) {
     setBrowserConnection(false, "Work Window Offline");
   }
+  updateReadiness();
   updateButtons();
 }
 
@@ -159,6 +181,7 @@ function setBrowserConnection(connected, label) {
   $("browserStatus").textContent = label || (connected ? "Work Window Connected" : "Work Window Offline");
   $("browserStatus").className = `pill ${connected ? "connected" : "disconnected"}`;
   $("currentUrlLabel").textContent = connected ? "Work Window URL" : "Launch URL";
+  updateReadiness();
   updateButtons();
 }
 
@@ -170,6 +193,7 @@ function setRunState(message) {
   }
   const pendingRequest = message.pending_request || fallbackPendingRequest(message);
   const status = message.status || (state.running ? "running" : "ready");
+  state.runStatus = status;
   $("agentStatus").textContent = formatAgentStatus(status);
   $("stepStatus").textContent = message.step ? String(message.step) : "-";
   $("runMessage").textContent = pendingRequest
@@ -177,6 +201,21 @@ function setRunState(message) {
     : message.message || "Ready";
   $("startedAt").textContent = formatTime(message.started_at);
   $("updatedAt").textContent = formatTime(message.updated_at);
+  if (message.permission_mode) {
+    $("permissionMode").textContent = permissionModeLabel(message.permission_mode);
+  }
+  if (Array.isArray(message.preflight_failures) && message.preflight_failures.length) {
+    state.preflightFailures = message.preflight_failures;
+    renderPreflightFailures(message.preflight_failures);
+  } else if (Array.isArray(message.preflight_failures)) {
+    state.preflightFailures = [];
+  }
+  if (Array.isArray(message.timing_spans)) {
+    renderTimingSpans(message.timing_spans);
+  }
+  if (message.result) {
+    renderResult(message.result);
+  }
 
   if (pendingRequest) {
     renderPendingRequest(pendingRequest);
@@ -187,15 +226,67 @@ function setRunState(message) {
     state.currentCheckpoint = null;
     state.notifiedRequestKey = null;
   }
+  updateReadiness();
   updateButtons();
 }
 
 function updateButtons() {
   const hasTask = Boolean($("taskText").value.trim());
-  $("startTask").disabled = !state.connected || !state.browserConnected || state.running || !hasTask;
+  const canLaunchBrowser = state.connected && !state.running && !state.browserLaunching;
+  const startReason = startDisabledReason({ hasTask });
+  $("startTask").disabled = Boolean(startReason);
+  $("hucaTask").disabled = !state.connected || !state.browserConnected || !hasTask;
   $("cancelTask").disabled = !state.connected || !state.running;
-  $("launchChrome").disabled = !state.connected || state.running;
+  $("launchChrome").disabled = !canLaunchBrowser;
   $("refreshTab").disabled = !state.connected || !state.browserConnected;
+  $("statusLaunchChrome").classList.toggle("hidden", !state.connected || state.browserConnected);
+  $("statusLaunchChrome").disabled = !canLaunchBrowser;
+  $("startDisabledReason").textContent = startReason || "Ready to start when the chat surface is prepared.";
+  $("startDisabledReason").classList.toggle("ready", !startReason);
+  updateReadiness();
+}
+
+function startDisabledReason({ hasTask } = { hasTask: Boolean($("taskText").value.trim()) }) {
+  if (!state.connected) return "Reconnect the Flying Pig helper before starting.";
+  if (state.browserLaunching) return "Wait for the work window to finish opening.";
+  if (!state.browserConnected) return "Open the work window before starting.";
+  if (!state.activeUrl) return "Prepare a visible support page or chat surface in the work window.";
+  if (!hasTask) return "Add a problem brief before starting.";
+  if (state.running) return "A run is already active.";
+  return "";
+}
+
+function readinessItem(id, ready, text) {
+  const element = $(id);
+  if (!element) return;
+  element.textContent = text;
+  element.closest(".readiness-item")?.setAttribute("data-ready", ready);
+}
+
+function updateReadiness() {
+  const taskReady = Boolean($("taskText")?.value.trim());
+  const hasUrl = Boolean(state.activeUrl);
+  const pendingAuth = state.running && ["waiting_on_login", "waiting_on_auth"].includes(
+    state.runStatus,
+  );
+  readinessItem("readyHelper", state.connected ? "true" : "false", state.connected ? "Online" : "Offline");
+  readinessItem(
+    "readyWorkWindow",
+    state.browserConnected ? "true" : "false",
+    state.browserConnected ? "Connected" : "Open it",
+  );
+  readinessItem(
+    "readyChatSurface",
+    state.browserConnected && hasUrl ? "true" : "false",
+    state.browserConnected && hasUrl ? "Selected" : "Prepare tab",
+  );
+  readinessItem("readyTaskBrief", taskReady ? "true" : "false", taskReady ? "Ready" : "Needed");
+  readinessItem("readyAuth", pendingAuth ? "warn" : "true", pendingAuth ? "Action needed" : "Browser only");
+  readinessItem(
+    "readySafetyGate",
+    state.preflightFailures.length ? "false" : "true",
+    state.preflightFailures.length ? `${state.preflightFailures.length} blocked` : "Ready",
+  );
 }
 
 function updateSetupDiagnostic() {
@@ -211,27 +302,28 @@ function siteForAction() {
 }
 
 function formatAgentStatus(status) {
-  if (status === "needs_input") return "Needs input";
-  if (status === "running") return "Running";
-  if (status === "starting") return "Starting";
-  if (status === "idle") return "Ready";
-  return status || "Ready";
+  return readableRunStatus(status);
+}
+
+function permissionModeLabel(mode) {
+  if (mode === "supervised_browser") return "Supervised browser only";
+  return mode || "Supervised browser only";
 }
 
 function pendingRunMessage(request) {
-  if (request?.type === "decision_checkpoint") {
+  if (request?.type === "decision_checkpoint" || request?.original_type === "decision_checkpoint") {
     return "Choose how Flying Pig should proceed below.";
   }
-  return "Answer the prompt below so Flying Pig can continue.";
-}
-
-function progressMessage(event) {
-  const raw = event.display_message || event.message || event.goal || event.thought || "";
-  if (raw && !/^Step \d+ started$/.test(raw)) return raw;
-  if (event.phase === "starting") {
-    return "Checking the current page and chat state before the next action.";
+  if (request?.type === "manual_login_required") {
+    return "Complete login in the visible work window. Flying Pig will resume after you confirm.";
   }
-  return "Working on the customer-service chat.";
+  if (request?.type === "otp_required" || request?.type === "auth_required") {
+    return "Complete verification in the visible work window or provide only the requested code.";
+  }
+  if (request?.type === "account_access_blocked") {
+    return "Account access is blocked. Review the visible browser state before continuing.";
+  }
+  return "Answer the prompt below so Flying Pig can continue.";
 }
 
 function setTaskUrl(url, { workWindow = false } = {}) {
@@ -243,11 +335,45 @@ function setTaskUrl(url, { workWindow = false } = {}) {
   if (state.connected && state.activeUrl && state.activeUrl !== previousUrl) {
     state.socket?.send(JSON.stringify({ type: "resolve", url: state.activeUrl }));
   }
+  updateReadiness();
+  updateButtons();
 }
 
 function applyBrowserPayload(payload) {
   if (!payload?.connected || !payload.current_url) return;
   setTaskUrl(payload.current_url, { workWindow: true });
+}
+
+function formatDuration(ms) {
+  const value = Number(ms || 0);
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}s`;
+  return `${Math.round(value)}ms`;
+}
+
+function renderTimingSpans(spans) {
+  state.timingSpans = Array.isArray(spans) ? spans.slice(-16) : [];
+  const total = state.timingSpans.reduce((sum, span) => sum + Number(span.duration_ms || 0), 0);
+  $("timingTotal").textContent = formatDuration(total);
+  const list = $("timingList");
+  list.replaceChildren();
+  for (const span of state.timingSpans.slice().reverse()) {
+    const item = document.createElement("li");
+    const title = document.createElement("strong");
+    const body = document.createElement("span");
+    title.textContent = `${span.label || span.name || "Timing"} · ${formatDuration(span.duration_ms)}`;
+    body.textContent = span.status && span.status !== "ok" ? span.status : span.name || "";
+    item.append(title, body);
+    list.append(item);
+  }
+}
+
+function addTimingSpan(span) {
+  if (!span) return;
+  const key = `${span.name}:${span.timestamp}:${span.duration_ms}`;
+  const existing = new Set(state.timingSpans.map((item) => `${item.name}:${item.timestamp}:${item.duration_ms}`));
+  const spans = existing.has(key) ? state.timingSpans : [...state.timingSpans, span];
+  renderTimingSpans(spans);
+  log("timing", `${span.label || span.name}: ${formatDuration(span.duration_ms)}`);
 }
 
 function renderSites(items) {
@@ -329,7 +455,9 @@ async function workWindowPlacement() {
 }
 
 async function launchChrome() {
-  if (!state.connected || state.running) return;
+  if (!state.connected || state.running || state.browserLaunching) return;
+  state.browserLaunching = true;
+  updateButtons();
   $("agentStatus").textContent = "launching";
   $("runMessage").textContent = "Launching Flying Pig work window.";
   log("browser", "Launch requested.");
@@ -338,13 +466,15 @@ async function launchChrome() {
     const site = siteForAction();
     const initialUrl = site === "generic" && state.activeUrl ? state.activeUrl : undefined;
     const placement = await workWindowPlacement();
+    const chromeProfile = $("chromeProfile").value || "dedicated";
+    storageSet({ chromeProfile });
     const response = await fetch(`${state.helperUrl}/browser/launch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         site,
         cdp_port: 9222,
-        chrome_profile: "dedicated",
+        chrome_profile: chromeProfile,
         initial_url: initialUrl,
         ...placement,
       }),
@@ -357,6 +487,7 @@ async function launchChrome() {
     storageSet({ cdpUrl: $("cdpUrl").value });
     setBrowserConnection(true, "Work Window Connected");
     applyBrowserPayload({ ...payload, connected: true });
+    addTimingSpan(payload.timing_span);
     $("agentStatus").textContent = "ready";
     $("runMessage").textContent = payload.message || "Work window is ready.";
     log("browser", payload.message || "Work window is ready.");
@@ -364,6 +495,9 @@ async function launchChrome() {
     $("agentStatus").textContent = "error";
     $("runMessage").textContent = error.message || "Browser launch failed.";
     log("error", error.message || "Browser launch failed.");
+  } finally {
+    state.browserLaunching = false;
+    updateButtons();
   }
 }
 
@@ -409,10 +543,13 @@ async function refreshBrowserStatus() {
 async function loadSettings() {
   const saved = await storageGet([
     "cdpUrl",
+    "briefStarter",
     "taskText",
+    "successCriteria",
     "template",
     "model",
     "helperUrl",
+    "chromeProfile",
     "notifySound",
     "notifyOs",
     "selectedSite",
@@ -423,9 +560,14 @@ async function loadSettings() {
     || "http://127.0.0.1:8765";
   $("helperUrl").value = state.helperUrl;
   updateSetupDiagnostic();
+  if (saved.briefStarter && $("briefStarter").querySelector(`option[value="${CSS.escape(saved.briefStarter)}"]`)) {
+    $("briefStarter").value = saved.briefStarter;
+  }
   if (saved.taskText) $("taskText").value = saved.taskText;
+  if (saved.successCriteria) $("successCriteria").value = saved.successCriteria;
   if (saved.template) $("template").value = saved.template;
   if (saved.model) $("model").value = saved.model;
+  if (saved.chromeProfile) $("chromeProfile").value = saved.chromeProfile;
   state.selectedSite = saved.selectedSite && saved.selectedSite !== "auto"
     ? saved.selectedSite
     : "generic";
@@ -434,6 +576,24 @@ async function loadSettings() {
   state.notifyOs = saved.notifyOs ?? true;
   $("notifySound").checked = state.notifySound;
   $("notifyOs").checked = state.notifyOs;
+}
+
+function applyBriefStarter() {
+  const option = $("briefStarter").selectedOptions[0];
+  if (!option) return;
+  const task = option.dataset.task;
+  if (task !== undefined) {
+    $("taskText").value = task;
+  }
+  if (option.dataset.template) {
+    $("template").value = option.dataset.template;
+  }
+  storageSet({
+    briefStarter: $("briefStarter").value,
+    taskText: $("taskText").value.trim(),
+    template: $("template").value,
+  });
+  updateButtons();
 }
 
 function saveHelperUrl() {
@@ -513,37 +673,50 @@ function handleHelperMessage(message) {
   } else if (message.type === "sites") {
     renderSites(message.items || []);
   } else if (message.type === "status") {
-    $("agentStatus").textContent = message.text || "working";
+    $("agentStatus").textContent = message.text || "Working";
     log("status", message.text || "Status updated.");
   } else if (message.type === "progress") {
     const event = message.event || {};
-    $("agentStatus").textContent = "Running";
+    $("agentStatus").textContent = "Working";
     $("stepStatus").textContent = event.step ? String(event.step) : $("stepStatus").textContent;
     const text = progressMessage(event);
     $("runMessage").textContent = text;
     log(`step ${event.step || ""}`, text);
-  } else if (message.type === "question") {
-    const request = {
-      type: "question",
-      question: message.question || "The agent needs input.",
-      reason: message.reason || "agent needs input",
-    };
+  } else if (message.type === "timing_span") {
+    addTimingSpan(message);
+  } else if (isUserAttentionRequest(message)) {
+    const request = message.original_type === "decision_checkpoint" || message.type === "decision_checkpoint"
+      ? {
+          type: message.type,
+          original_type: "decision_checkpoint",
+          checkpoint: message.checkpoint || {},
+          summary: message.summary,
+        }
+      : {
+          type: message.type,
+          original_type: message.original_type || "question",
+          question: message.question || message.summary || "The agent needs input.",
+          reason: message.reason || "agent needs input",
+        };
     renderPendingRequest(request);
     maybeNotifyRequest(request);
-    log("input", message.question || "The agent needs input.");
-  } else if (message.type === "decision_checkpoint") {
-    const request = {
-      type: "decision_checkpoint",
-      checkpoint: message.checkpoint || {},
-    };
-    renderPendingRequest(request);
-    maybeNotifyRequest(request);
-    log("decision", message.checkpoint?.summary || "Decision checkpoint.");
-  } else if (message.type === "result") {
+    log("input", request.question || request.checkpoint?.summary || "The agent needs input.");
+  } else if (message.type === "active_human_work") {
+    $("agentStatus").textContent = readableRunStatus("waiting_on_rep");
+    $("runMessage").textContent = message.summary || "The representative is reviewing. Flying Pig is waiting.";
+    log("waiting", message.summary || "Representative is working.");
+  } else if (message.type === "preflight_failed") {
     state.running = false;
     updateButtons();
-    $("agentStatus").textContent = message.status || "finished";
+    $("agentStatus").textContent = "Pre-flight blocked";
+    renderPreflightFailures(message.failures || []);
+    log("preflight", message.text || "Pre-flight check failed.");
+  } else if (message.type === "result" || message.type === "result_ready") {
+    state.running = false;
+    updateButtons();
+    $("agentStatus").textContent = readableRunStatus("completed");
     $("runMessage").textContent = message.summary || "Task finished.";
+    renderResult(message);
     log(message.status || "result", message.summary || "Task finished.");
   } else if (message.type === "error") {
     state.running = false;
@@ -555,16 +728,54 @@ function handleHelperMessage(message) {
 }
 
 function renderPendingRequest(request) {
-  $("agentStatus").textContent = "Needs input";
+  $("agentStatus").textContent = formatAgentStatus(statusForPendingRequest(request));
   $("runMessage").textContent = pendingRunMessage(request);
-  if (request.type === "decision_checkpoint") {
+  if (request.type === "decision_checkpoint" || request.original_type === "decision_checkpoint") {
     renderDecisionCheckpoint(request.checkpoint || {});
     return;
   }
   $("questionPanel").classList.remove("hidden");
+  $("questionTitle").textContent = attentionTitles[request.type] || "Input needed";
   $("questionText").textContent = request.question || "The agent needs input.";
   $("checkpointPanel").classList.add("hidden");
   state.currentCheckpoint = null;
+}
+
+function renderPreflightFailures(failures) {
+  const items = Array.isArray(failures) ? failures : [];
+  state.preflightFailures = items;
+  updateReadiness();
+  const text = items.map((item) => item.message || item.code).filter(Boolean).join(" ");
+  $("runMessage").textContent = text || "Pre-flight check failed.";
+  for (const item of items) {
+    log("preflight", item.message || item.code || "Pre-flight check failed.");
+  }
+}
+
+function renderResult(result) {
+  if (!result) return;
+  if (Array.isArray(result.timing_spans)) {
+    renderTimingSpans(result.timing_spans);
+  }
+  $("resultPanel").classList.remove("hidden");
+  $("resultSummary").textContent = result.outcome_summary || result.summary || "Task finished.";
+  const details = $("resultDetails");
+  details.replaceChildren();
+  const rows = [
+    ["Human reached", result.human_reached === null || result.human_reached === undefined ? "Unknown" : (result.human_reached ? "Yes" : "No")],
+    ["Offer / result", result.offer_result || "Not captured"],
+    ["Transcript", result.evidence?.transcript_path || result.transcript || "Not saved yet"],
+    ["Timing", result.timing_summary ? `${formatDuration(result.timing_summary.total_ms)} across ${result.timing_summary.span_count} spans` : "Not captured"],
+    ["Approvals", String(result.checkpoint_decisions?.length ?? result.checkpoint_events_count ?? 0)],
+    ["Unresolved", Array.isArray(result.unresolved_items) && result.unresolved_items.length ? result.unresolved_items.join("; ") : "None captured"],
+  ];
+  for (const [label, value] of rows) {
+    const dt = document.createElement("dt");
+    const dd = document.createElement("dd");
+    dt.textContent = label;
+    dd.textContent = value;
+    details.append(dt, dd);
+  }
 }
 
 function renderDecisionCheckpoint(checkpoint) {
@@ -613,29 +824,64 @@ async function startTask() {
   const task = $("taskText").value.trim();
   if (!task) return;
 
+  const payload = buildRunPayload(task);
+  state.running = true;
+  updateButtons();
+  $("agentStatus").textContent = "Preparing";
+  $("runMessage").textContent = "Checking permissions and preparing the supervised run.";
+  state.socket.send(JSON.stringify({ type: "start", ...payload }));
+  log("start", "Started Flying Pig for the work window.");
+}
+
+async function hucaTask() {
+  const browserReady = await refreshBrowserStatus();
+  if (!browserReady) {
+    $("agentStatus").textContent = "waiting";
+    $("runMessage").textContent = "Launch the work window before restarting.";
+    log("browser", "Controlled Chrome is not connected.");
+    return;
+  }
+  const task = $("taskText").value.trim();
+  if (!task) return;
+
+  const payload = buildRunPayload(task);
+  state.running = true;
+  updateButtons();
+  $("agentStatus").textContent = "restarting";
+  $("runMessage").textContent = "Starting a fresh chat for the same task.";
+  state.socket.send(JSON.stringify({ type: "huca", ...payload }));
+  $("questionPanel").classList.add("hidden");
+  $("checkpointPanel").classList.add("hidden");
+  state.currentCheckpoint = null;
+  state.notifiedRequestKey = null;
+  log("huca", "Requested a fresh chat for the same task.");
+}
+
+function buildRunPayload(task) {
   const cdpUrl = $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
   const template = $("template").value;
   const model = $("model").value;
+  const successCriteria = $("successCriteria").value.trim();
   saveHelperUrl();
-  storageSet({ taskText: task, cdpUrl, template, model });
+  storageSet({ taskText: task, successCriteria, cdpUrl, template, model });
 
-  state.running = true;
-  updateButtons();
-  $("agentStatus").textContent = "starting";
-  $("runMessage").textContent = "Starting browser-use agent.";
-  state.socket.send(JSON.stringify({
-    type: "start",
+  return {
     site: state.selectedSite || state.activeSite || "generic",
     url: state.activeUrl,
     template,
     task,
+    success_criteria: successCriteria,
     cdp_url: cdpUrl,
     target_url: state.activeUrl,
     target_tab_id: state.activeTabId,
     model,
     max_steps: 80,
-  }));
-  log("start", "Started Flying Pig for the work window.");
+    permission_mode: "supervised_browser",
+    user_authorized: true,
+    evidence_capture: true,
+    login_expectation: "manual_visible_browser",
+    irreversible_actions_require_checkpoint: true,
+  };
 }
 
 function cancelTask() {
@@ -689,6 +935,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   $("refreshTab").addEventListener("click", refreshTab);
   $("launchChrome").addEventListener("click", launchChrome);
+  $("statusLaunchChrome").addEventListener("click", launchChrome);
   $("setupHelper").addEventListener("click", openSetup);
   $("reconnectHelper").addEventListener("click", () => {
     state.socket?.close();
@@ -700,7 +947,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     storageSet({ selectedSite: state.selectedSite });
     updateButtons();
   });
-  $("taskText").addEventListener("input", updateButtons);
+  $("chromeProfile").addEventListener("change", () => {
+    storageSet({ chromeProfile: $("chromeProfile").value || "dedicated" });
+  });
+  $("briefStarter").addEventListener("change", applyBriefStarter);
+  $("taskText").addEventListener("input", () => {
+    storageSet({ taskText: $("taskText").value.trim() });
+    updateButtons();
+  });
+  $("successCriteria").addEventListener("input", () => {
+    storageSet({ successCriteria: $("successCriteria").value.trim() });
+  });
   $("notifySound").addEventListener("change", saveNotificationSettings);
   $("notifyOs").addEventListener("change", saveNotificationSettings);
   $("helperUrl").addEventListener("change", () => {
@@ -710,6 +967,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     connectHelper();
   });
   $("startTask").addEventListener("click", startTask);
+  $("hucaTask").addEventListener("click", hucaTask);
   $("cancelTask").addEventListener("click", cancelTask);
   $("sendAnswer").addEventListener("click", sendAnswer);
   $("sendCheckpointCustom").addEventListener("click", sendCheckpointCustom);

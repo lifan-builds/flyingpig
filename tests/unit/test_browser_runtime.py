@@ -2,11 +2,13 @@ from pathlib import Path
 
 from src.agent.browser_runtime import (
     ChromeLaunchConfig,
+    chrome_profile_label,
     chrome_user_data_dir,
     find_debugger_target_id,
     launch_cdp_chrome,
     open_dashboard_tab,
     prepare_debugger_page,
+    supported_chrome_profile_modes,
 )
 
 
@@ -49,6 +51,11 @@ def test_chrome_launch_config_defaults_to_dedicated_work_profile():
     assert config.initial_url == "about:blank"
     assert config.dashboard_url is None
     assert config.disable_extensions is True
+
+
+def test_chrome_profile_modes_are_domain_values():
+    assert supported_chrome_profile_modes() == {"dedicated", "default", "existing"}
+    assert chrome_profile_label("existing") == "User default profile"
 
 
 def test_launch_cdp_chrome_can_launch_dedicated_while_regular_chrome_runs(monkeypatch):

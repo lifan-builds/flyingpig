@@ -22,3 +22,4 @@ class TaskResult:
     outcome_details: dict = field(default_factory=dict)
     steps_taken: int = 0
     duration_seconds: float = 0.0
+    timing_spans: list[dict] = field(default_factory=list)

@@ -1,0 +1,4 @@
+HUCA recovery was explicitly requested by the user. Start a fresh customer-service chat for the same task in the current browser session. If the current refused, dead, or disconnected chat must be ended first, use the visible end-chat, close-chat, start-new-chat, or new-conversation controls. Do not open a new tab. Treat all previous chat messages as read-only background and restate the original task from scratch without referencing old representative names.
+
+Original task:
+{task}

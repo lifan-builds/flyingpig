@@ -1,18 +1,20 @@
 import asyncio
 import logging
-import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from src.agent.brain import AgentBrain
-from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome
+from src.agent.browser_runtime import (
+    ChromeLaunchConfig,
+    launch_cdp_chrome,
+    supported_chrome_profile_modes,
+)
 from src.api.auth import get_current_user
 from src.api.auth import router as auth_router
 from src.models.db import AsyncSessionLocal, init_db
@@ -175,7 +177,7 @@ async def launch_browser(
             status_code=400,
             detail=f"Unknown site '{request.site}'. Available: {', '.join(list_sites())}",
         )
-    if request.chrome_profile not in {"dedicated", "default", "existing"}:
+    if request.chrome_profile not in supported_chrome_profile_modes():
         raise HTTPException(
             status_code=400,
             detail="chrome_profile must be dedicated, default, or existing",
@@ -376,8 +378,3 @@ async def list_tasks(current_user: User = Depends(get_current_user)):
             for r in records
         ]
     }
-
-
-frontend_path = os.path.join(os.path.dirname(__file__), "../../frontend/dist")
-if os.path.exists(frontend_path):
-    app.mount("/", StaticFiles(directory=frontend_path, html=True), name="frontend")

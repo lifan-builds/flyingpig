@@ -4,18 +4,27 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Flying Pig Dashboard</title>
+    <link rel="icon" href="assets/app-icon-64.png">
     <link rel="stylesheet" href="dashboard.css">
   </head>
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">Flying Pig</p>
-          <h1>Customer Service Copilot</h1>
+        <div class="brand-lockup">
+          <img src="assets/app-icon-64.png" alt="" width="44" height="44">
+          <div>
+            <p class="eyebrow">Flying Pig</p>
+            <h1>Customer Service Copilot</h1>
+          </div>
         </div>
         <div class="status-pills">
-          <span id="runtimeStatus" class="pill disconnected">Helper Offline</span>
-          <span id="browserStatus" class="pill disconnected">Work Window Offline</span>
+          <div class="status-row">
+            <span id="runtimeStatus" class="pill disconnected">Helper Offline</span>
+          </div>
+          <div class="status-row">
+            <span id="browserStatus" class="pill disconnected">Work Window Offline</span>
+            <button id="statusLaunchChrome" class="status-action hidden" type="button">Open Work Window</button>
+          </div>
         </div>
       </header>
 
@@ -24,7 +33,34 @@
           <span id="siteStatus">Choose a website</span>
           <strong id="agentStatus">Ready</strong>
         </div>
-        <p id="runMessage">Launch a work window, prepare the customer-service chat there, then start.</p>
+        <p id="runMessage">Tell Flying Pig the customer-service problem, then supervise it in the visible work window.</p>
+      </section>
+
+      <section class="readiness-strip" aria-label="Run readiness">
+        <div class="readiness-item" data-ready="false">
+          <span>Helper</span>
+          <strong id="readyHelper">Offline</strong>
+        </div>
+        <div class="readiness-item" data-ready="false">
+          <span>Work Window</span>
+          <strong id="readyWorkWindow">Open it</strong>
+        </div>
+        <div class="readiness-item" data-ready="false">
+          <span>Chat Surface</span>
+          <strong id="readyChatSurface">Prepare tab</strong>
+        </div>
+        <div class="readiness-item" data-ready="true">
+          <span>Task Brief</span>
+          <strong id="readyTaskBrief">Ready</strong>
+        </div>
+        <div class="readiness-item" data-ready="true">
+          <span>Login/Auth</span>
+          <strong id="readyAuth">Browser only</strong>
+        </div>
+        <div class="readiness-item" data-ready="true">
+          <span>Safety Gate</span>
+          <strong id="readySafetyGate">Ready</strong>
+        </div>
       </section>
 
       <section id="helperSetupPanel" class="panel setup hidden">
@@ -43,9 +79,36 @@
       <section class="dashboard-grid">
         <section class="panel task-panel">
           <div class="section-heading">
-            <p class="eyebrow">Task</p>
-            <h2>Run setup</h2>
+            <p class="eyebrow">Task brief</p>
+            <h2>What customer-service problem do you want handled?</h2>
           </div>
+
+          <label for="briefStarter">Brief starter</label>
+          <select id="briefStarter">
+            <option value="custom" data-template="general">Custom brief</option>
+            <option value="retention_offer" data-template="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
+            <option value="cancel_subscription" data-template="general" data-task="Help me cancel this subscription or service. Before confirming any irreversible cancellation, ask me for approval with the exact message.">Cancel subscription</option>
+            <option value="dispute_charge" data-template="dispute_charge" data-task="Help me dispute a fee or charge. Ask for any missing amount, merchant, or date details before sending.">Dispute fee or charge</option>
+          </select>
+
+          <label for="taskText">Problem brief (editable)</label>
+          <textarea id="taskText" rows="5" placeholder="Example: Ask Amex to review this fee and request a courtesy credit.">Help me with this customer-service chat. Ask for a human representative if the chatbot cannot resolve it.</textarea>
+
+          <label for="successCriteria">What counts as done?</label>
+          <textarea id="successCriteria" rows="3" placeholder="Example: A confirmed refund, credit amount, cancellation confirmation, reference number, or clear unresolved next step."></textarea>
+
+          <section class="trust-boundary" aria-label="Permission boundaries">
+            <div>
+              <p class="eyebrow">Permission mode</p>
+              <strong id="permissionMode">Supervised browser only</strong>
+            </div>
+            <ul>
+              <li>May navigate, read support chat, and send routine task messages.</li>
+              <li>Asks before irreversible changes, offers, recovery, or sensitive verification.</li>
+              <li>No password collection or storage. Login and MFA stay in your browser.</li>
+              <li>Saves transcript and evidence references for the final result.</li>
+            </ul>
+          </section>
 
           <label for="sitePicker">Website</label>
           <select id="sitePicker">
@@ -55,13 +118,17 @@
           <label id="currentUrlLabel" for="currentUrl">Launch URL</label>
           <input id="currentUrl" readonly placeholder="Launch the work window to connect a task tab">
 
+          <label for="chromeProfile">Work window profile</label>
+          <select id="chromeProfile">
+            <option value="dedicated">Dedicated Flying Pig profile</option>
+            <option value="default">Copied Chrome Default profile</option>
+            <option value="existing">User default profile (advanced)</option>
+          </select>
+
           <div class="row">
             <button id="refreshTab" class="secondary" type="button">Refresh Work Window</button>
-            <button id="launchChrome" class="secondary" type="button">Launch Work Window</button>
+            <button id="launchChrome" class="secondary" type="button">Open Work Window</button>
           </div>
-
-          <label for="taskText">Task brief</label>
-          <textarea id="taskText" rows="6">Help me with this customer-service chat. Ask for a human representative if the chatbot cannot resolve it.</textarea>
 
           <label for="template">Playbook</label>
           <select id="template">
@@ -102,8 +169,10 @@
 
           <div class="actions">
             <button id="startTask" type="button">Start</button>
+            <button id="hucaTask" class="huca" type="button">HUCA</button>
             <button id="cancelTask" class="danger" type="button">Cancel</button>
           </div>
+          <p id="startDisabledReason" class="start-reason">Open the work window before starting.</p>
         </section>
 
         <section class="work-column">
@@ -122,8 +191,19 @@
             </div>
           </section>
 
+          <section class="panel timing">
+            <div class="timeline-header">
+              <div>
+                <p class="eyebrow">Timing</p>
+                <h2>Run Speed</h2>
+              </div>
+              <strong id="timingTotal">0.0s</strong>
+            </div>
+            <ol id="timingList"></ol>
+          </section>
+
           <section id="questionPanel" class="panel question hidden">
-            <p class="eyebrow">Input Needed</p>
+            <p id="questionTitle" class="eyebrow">Input Needed</p>
             <p id="questionText"></p>
             <textarea id="answerText" rows="4" placeholder="Type your answer"></textarea>
             <button id="sendAnswer" type="button">Send Answer</button>
@@ -139,6 +219,12 @@
               <textarea id="checkpointCustomText" rows="4" placeholder="Tell Flying Pig what to do instead"></textarea>
               <button id="sendCheckpointCustom" type="button">Send Custom Instruction</button>
             </details>
+          </section>
+
+          <section id="resultPanel" class="panel result hidden">
+            <p class="eyebrow">Result</p>
+            <h2 id="resultSummary">Task finished</h2>
+            <dl id="resultDetails"></dl>
           </section>
 
           <section class="panel transcript">

@@ -27,6 +27,62 @@ class SiteProfile:
     support_notes: list[str] = field(default_factory=list)
 
 
+def validate_profile(profile: SiteProfile) -> None:
+    """Validate the Support Profile authoring contract."""
+    missing = [
+        name
+        for name in ("site_id", "name", "chat_url")
+        if not str(getattr(profile, name) or "").strip()
+    ]
+    if missing:
+        raise ValueError(
+            f"Support Profile {profile.site_id or '<unknown>'} is missing: "
+            f"{', '.join(missing)}"
+        )
+    if not profile.hostname_patterns:
+        raise ValueError(f"Support Profile {profile.site_id} needs hostname_patterns")
+    if profile.requires_login and not profile.login_url:
+        raise ValueError(f"Support Profile {profile.site_id} requires login_url")
+    if not profile.verification_boundaries:
+        raise ValueError(
+            f"Support Profile {profile.site_id} must declare verification_boundaries"
+        )
+
+
+def validate_profiles(profiles: dict[str, SiteProfile]) -> None:
+    """Validate all configured Support Profiles."""
+    for site_id, profile in profiles.items():
+        if site_id != profile.site_id:
+            raise ValueError(
+                f"Support Profile key {site_id} does not match site_id {profile.site_id}"
+            )
+        validate_profile(profile)
+
+
+def profile_prompt_context(profile: SiteProfile) -> str:
+    """Render validated Support Profile guidance for prompt templates."""
+    validate_profile(profile)
+    sections = [
+        f"## Known Site Profile: {profile.name}",
+        (
+            "Use this profile as guidance after you verify the current tab is "
+            f"actually on {profile.name} or its support surface."
+        ),
+    ]
+    sections.extend(_format_list("Chat discovery hints", profile.chat_discovery_hints))
+    sections.extend(_format_list("Pre-chat expectations", profile.pre_chat_expectations))
+    sections.extend(_format_list("Verification boundaries", profile.verification_boundaries))
+    sections.extend(_format_list("Communication guidance", profile.communication_guidance))
+    sections.extend(_format_list("Support notes", profile.support_notes))
+    return "\n".join(sections).strip()
+
+
+def _format_list(title: str, items: list[str]) -> list[str]:
+    if not items:
+        return []
+    return ["", f"### {title}", *[f"- {item}" for item in items]]
+
+
 DEFAULT_ESCALATION_KEYWORDS = [
     "supervisor",
     "manager",
@@ -178,6 +234,8 @@ PROFILES: dict[str, SiteProfile] = {
         ],
     ),
 }
+
+validate_profiles(PROFILES)
 
 
 PROFILE_TEMPLATE_FALLBACKS: dict[str, str] = {

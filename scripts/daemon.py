@@ -17,7 +17,11 @@ import uvicorn
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome  # noqa: E402
+from src.agent.browser_runtime import (  # noqa: E402
+    ChromeLaunchConfig,
+    launch_cdp_chrome,
+    supported_chrome_profile_modes,
+)
 from src.daemon.server import create_app  # noqa: E402
 
 
@@ -28,11 +32,12 @@ def main() -> None:
     p.add_argument("--cdp-port", type=int, default=9222, help="Chrome debugging port")
     p.add_argument(
         "--chrome-profile",
-        choices=["default", "dedicated"],
+        choices=sorted(supported_chrome_profile_modes()),
         default="dedicated",
         help=(
             "Chrome profile mode. 'dedicated' uses FlyingPig's isolated work profile; "
-            "'default' uses FlyingPig's persistent copy of the user's default profile."
+            "'default' uses FlyingPig's persistent copy of the user's default profile; "
+            "'existing' uses an explicit user profile directory when provided."
         ),
     )
     p.add_argument(
@@ -73,7 +78,7 @@ def main() -> None:
             print(f"🐷 Could not launch controlled Chrome: {type(exc).__name__}: {exc}")
             print(
                 "   Continuing with helper only. Use the dashboard's "
-                "Launch Work Window button."
+                "Open Work Window button."
             )
 
     app = create_app()

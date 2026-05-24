@@ -7,10 +7,11 @@ An AI-powered agent that interacts with customer service chat interfaces on your
 ## Status
 
 Flying Pig is an early local beta for supervised customer-service automation.
-The current product shape is a helper-served dashboard plus a separate
-Controlled Chrome Window. You prepare the support page, start a run, watch
-progress from the dashboard, and approve consequential decisions before the
-agent sends them.
+The current product shape is a native desktop app that starts a local Python
+helper, opens the helper-served dashboard as the cockpit, and keeps the
+Controlled Chrome Window separate as the work area. You prepare the support
+page, start a run, watch progress from the dashboard, and approve consequential
+decisions before the agent sends them.
 
 ## What It Does
 
@@ -36,9 +37,8 @@ authorized.
 
 ### Prerequisites
 - Python 3.12+
-- Node.js 20+ (for frontend)
-- PostgreSQL 16+
-- Redis (for task queue)
+- Node.js 20+ (for the desktop shell)
+- Google Chrome
 - A local CLIProxyAPI setup, or a provider API key
 
 ### Installation
@@ -58,52 +58,33 @@ Copy the example environment file and fill in your API keys:
 cp .env.example .env
 ```
 
-### Usage
+### Run The App
 
-#### Option A: Docker Compose (Recommended)
-You can launch the entire stack (PostgreSQL + API + React Frontend) using Docker:
-```bash
-docker-compose up --build
-```
-Access the application at `http://localhost:8000`.
-
-#### Option B: Local Development
-```bash
-# Start the API server
-uvicorn src.api.main:app --reload
-
-# Start the frontend (in another terminal)
-cd frontend && npm run dev
-```
-
-#### Option C: Friendly supervised launch
+The desktop app is the only normal product entry point:
 
 ```bash
-python scripts/start.py
+npm install
+npm run desktop:dev
 ```
 
-This launches a FlyingPig-controlled Chrome using an isolated work
-profile, waits for you to log in or prepare the visible customer-service
-tab, then attaches the agent to that same tab. The work profile lives at
-`~/.flyingpig/chrome-cdp-profile/` and persists login state across Flying
-Pig runs without touching the literal live Chrome profile.
+The desktop app chooses an available local helper port, starts the Python helper
+without opening a browser tab, waits for `/health`, then loads the dashboard in
+the app window. Click **Open Work Window** from the dashboard when you are
+ready to prepare the customer-service tab.
 
-Common choices stay short:
+For packaged builds, create the helper sidecar first and then package Electron:
 
 ```bash
-python scripts/start.py --template dispute_charge
-python scripts/start.py --task "Ask Amex about my Oura Ring benefit credit."
-python scripts/start.py --model cliproxyapi --fallback-model gemini-flash
+npm run build:helper
+npm run desktop:package
 ```
 
-If you explicitly want to reuse a persistent copy of your normal Chrome
-profile, pass `--chrome-profile default`. The first copied-profile launch
-should be created with normal Chrome quit; after that, the copy can be
-launched independently.
+The current macOS packaging target is `.zip`. DMG packaging is intentionally not
+enabled until the local native-addon signing issue in the DMG license toolchain
+is resolved.
 
-Current Chrome builds block remote debugging on the literal default user
-profile. Use `--chrome-profile default` for FlyingPig's persistent copied
-profile, or provide a non-default `--chrome-user-data-dir`.
+The packaged app must be scanned before release for PII, API keys, credentials,
+tokens, cookies, logs, recordings, and user-specific account data.
 
 By default, the app uses local CLIProxyAPI via `DEFAULT_LLM=cliproxyapi`.
 It reads `CLIPROXYAPI_API_KEY` from `.env` if set, otherwise it falls back
@@ -112,60 +93,11 @@ to the first `sk-local-...` key in `~/.cli-proxy-api/config.yaml`.
 For direct providers, set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
 `GOOGLE_API_KEY` in `.env` depending on which `--model` you pick.
 
-#### Option D: Attach to an existing remote-debugging tab
+### Manual End-To-End Smoke
 
-The agent can also attach to a Chrome window that you started with a
-remote-debugging port. This is the existing-tab path.
+1. Open the Flying Pig app with `npm run desktop:dev`.
 
-**Setup (once):** quit Chrome, then relaunch it with the remote-debugging
-port open. Use a dedicated user-data dir so it doesn't conflict with your
-normal profile:
-
-```bash
-# macOS example
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
-  --remote-debugging-port=9222 \
-  --user-data-dir=/tmp/flyingpig-chrome
-```
-
-**Run a task:**
-
-1. In that Chrome window, log in to Amex and navigate to the chat page
-   (e.g. https://www.americanexpress.com/us/customer-service/contact-us/
-   and click "Chat With Us"). Make sure that tab is the active one.
-2. In a terminal:
-
-```bash
-python scripts/start.py \
-  --attach http://localhost:9222 \
-  --template general \
-  --model cliproxyapi \
-  --fallback-model gemini-flash \
-  --task "Ask Amex about my Oura Ring benefit credit."
-```
-
-The agent attaches to whatever tab is currently focused and operates from
-there — it will not navigate away or open new tabs. Your cookies, login,
-and MFA state come for free. On exit, the agent detaches; the browser
-stays open.
-
-### Local Dashboard
-
-The preferred supervised UI is the helper-served local dashboard. It keeps agent
-status, questions, and controls in a full browser tab while the local
-Flying Pig helper runs the browser-use agent in a separate work window.
-
-For beta, install the local helper service first. It starts the WebSocket
-helper in the background at login; the dashboard can then launch a
-FlyingPig-controlled Chrome window when you are ready:
-
-```bash
-flyingpig-macos-helper install
-```
-
-1. Open `http://127.0.0.1:8765/dashboard/` in Chrome.
-
-2. Press **Launch Work Window**.
+2. Press **Open Work Window**.
 
 3. In the FlyingPig work window, open or prepare the Amex
 customer-service tab. The dashboard remains the cockpit; the work window
@@ -174,10 +106,10 @@ runs without extensions.
 4. Choose a playbook, edit the task, and start. The dashboard streams
 browser-use progress and forwards mid-run questions.
 
-For supervised live runs, use the dashboard or helper API instead of a
-background `scripts/start.py` process. If the agent hits a Decision
-Checkpoint, the dashboard/API can answer it and resume the same run; a
-background CLI process cannot read interactive input.
+For supervised live runs, use the desktop app instead of a background
+`scripts/start.py` process. If the agent hits a Decision Checkpoint, the app can
+answer it and resume the same run; a background CLI process cannot read
+interactive input.
 
 The dashboard shows two separate statuses:
 
@@ -188,35 +120,34 @@ Start is disabled until both are online. This avoids the confusing case
 where the dashboard is open in normal Chrome but browser-use cannot attach
 to a controllable browser.
 
-The beta default is an on-demand foreground helper. Run `flyingpig-helper`,
-use the dashboard it opens, then press Ctrl+C in that terminal when you are
-done. The work window uses a dedicated Flying Pig profile by default so setup
-does not ask users to quit normal Chrome. To test the copied-profile path,
-use `flyingpig-helper --chrome-profile default`.
+The desktop app is the intended beta entry point. The beta work window uses a
+dedicated Flying Pig profile by default so setup does not ask users to quit
+normal Chrome. To test the copied-profile path, use the work-window profile
+picker in the app.
 
-For beta support:
+### Development Commands
 
-```bash
-flyingpig-macos-helper status
-flyingpig-macos-helper stop
-flyingpig-macos-helper start
-flyingpig-macos-helper uninstall
-```
-
-For a manual development run, `python scripts/daemon.py` starts the helper API
-and can open the controlled Chrome window for debugging. The beta user path is
-`flyingpig-helper`, then dashboard-driven **Launch Work Window**.
-
-To run the deterministic mock dashboard smoke:
+These are developer/test surfaces, not separate product entry points:
 
 ```bash
-npm install
+ruff check src scripts tests
+pytest tests -q -m "not slow"
 npm run test:dashboard
+npm run test:desktop
 ```
 
-This launches a Puppeteer-managed Chrome, starts mock Amex and helper
-servers, and verifies that the helper-served dashboard can
-start a browser-use-helper run and render progress.
+`npm run test:dashboard` is a fast protocol/UI smoke for the helper-served
+dashboard. `npm run test:desktop` checks that the native shell can supervise the
+helper and reach the dashboard.
+
+Advanced helper/CLI entry points remain for debugging only:
+
+```bash
+flyingpig-helper
+flyingpig-helper --open-dashboard
+python scripts/start.py --help
+python scripts/daemon.py --help
+```
 
 See `docs/beta.md` for the first-cohort beta checklist and operating
 rules.
@@ -240,12 +171,13 @@ ruff format src/
 src/
 ├── agent/          # Core AI agent (LLM + browser automation)
 ├── sites/          # Per-site adapters (Amex, etc.)
-├── api/            # FastAPI backend
-├── models/         # Database models
-└── utils/          # Shared utilities
-frontend/           # React + TypeScript dashboard
+├── daemon/         # Helper API, WebSocket protocol, dashboard static host
+├── api/            # Legacy FastAPI app kept for development compatibility
+└── models/         # Legacy DB models kept for development compatibility
+dashboard/          # Helper-served cockpit loaded by the desktop app
+desktop/            # Electron shell and helper supervision
+docs/legacy/        # Archived old extension and React frontend references
 tests/              # Test suite
-config/             # Configuration files
 ```
 
 ## Supported Sites

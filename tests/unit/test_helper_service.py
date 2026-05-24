@@ -28,11 +28,15 @@ def test_launch_agent_plist_runs_background_helper():
     assert payload["StandardOutPath"].endswith(".flyingpig/logs/helper.out.log")
 
 
-def test_helper_cli_opens_dashboard_without_launching_work_window_by_default():
+def test_helper_cli_is_debug_only_without_opening_dashboard_by_default():
     args = helper.build_parser().parse_args([])
 
     assert args.launch_browser is False
     assert args.no_dashboard is False
+    assert args.open_dashboard is False
+
+    open_args = helper.build_parser().parse_args(["--open-dashboard"])
+    assert open_args.open_dashboard is True
 
 
 def test_launchctl_failure_message_includes_action_status_and_recovery():

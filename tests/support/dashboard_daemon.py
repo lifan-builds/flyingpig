@@ -32,11 +32,11 @@ mock_browser_connected = False
 mock_work_window_url = "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us"
 mock_state = {
     "type": "state",
-    "status": "idle",
+    "status": "ready_to_start",
     "running": False,
     "needs_input": False,
     "site": None,
-    "message": "Idle",
+    "message": "Ready to start a supervised customer-service task.",
     "step": None,
     "updated_at": None,
     "started_at": None,
@@ -44,6 +44,7 @@ mock_state = {
     "transcript": None,
     "result": None,
     "pending_request": None,
+    "timing_spans": [],
 }
 
 
@@ -56,6 +57,25 @@ def apply_state(**changes) -> dict:
     mock_state["type"] = "state"
     mock_state["updated_at"] = now()
     return dict(mock_state)
+
+
+def timing_span(name: str, label: str, duration_ms: float, status: str = "ok") -> dict:
+    return {
+        "type": "timing_span",
+        "name": name,
+        "label": label,
+        "duration_ms": duration_ms,
+        "status": status,
+        "timestamp": now(),
+        "metadata": {},
+    }
+
+
+def add_timing_span(span: dict) -> dict:
+    spans = list(mock_state.get("timing_spans") or [])
+    spans.append(span)
+    apply_state(timing_spans=spans)
+    return span
 
 
 def checkpoint_request() -> dict:
@@ -106,12 +126,14 @@ async def browser_launch(request: Request):
         }
     mock_browser_connected = True
     mock_work_window_url = payload.get("initial_url") or mock_work_window_url
+    span = add_timing_span(timing_span("launch", "Work window launch", 42.0))
     return {
         "ok": True,
         "cdp_url": "http://127.0.0.1:9335",
         "current_url": mock_work_window_url,
         "current_title": "Mock work window",
         "message": "MOCK-CHROME-READY",
+        "timing_span": span,
     }
 
 
@@ -186,6 +208,10 @@ async def ws_endpoint(ws: WebSocket):
                     )
                 )
             elif mtype == "start":
+                preflight_span = add_timing_span(
+                    timing_span("preflight", "Pre-flight safety gate", 7.0)
+                )
+                await ws.send_text(json.dumps(preflight_span))
                 if "checkpoint" in (msg.get("task") or "").lower():
                     request = checkpoint_request()
                     await ws.send_text(json.dumps(request))
@@ -251,15 +277,32 @@ async def ws_endpoint(ws: WebSocket):
                         }
                     )
                 )
+                step_span = add_timing_span(
+                    timing_span("browser_use_step", "Browser-use step", 83.0)
+                )
+                model_span = add_timing_span(
+                    timing_span("model_call", "Model planning step", 83.0)
+                )
+                await ws.send_text(json.dumps(step_span))
+                await ws.send_text(json.dumps(model_span))
                 await asyncio.sleep(0.1)
+                result_timing = list(mock_state["timing_spans"])
+                timing_summary = {
+                    "total_ms": sum(span["duration_ms"] for span in result_timing),
+                    "span_count": len(result_timing),
+                    "by_name_ms": {span["name"]: span["duration_ms"] for span in result_timing},
+                }
                 await ws.send_text(
                     json.dumps(
                         {
-                            "type": "result",
+                            "type": "result_ready",
                             "status": "success",
                             "summary": "MOCK-RUN-OK dashboard protocol completed.",
+                            "outcome_summary": "MOCK-RUN-OK dashboard protocol completed.",
                             "steps": 1,
                             "duration": 0.1,
+                            "timing_spans": result_timing,
+                            "timing_summary": timing_summary,
                         }
                     )
                 )
@@ -278,11 +321,15 @@ async def ws_endpoint(ws: WebSocket):
                             result={
                                 "status": "success",
                                 "summary": "MOCK-RUN-OK dashboard protocol completed.",
+                                "outcome_summary": "MOCK-RUN-OK dashboard protocol completed.",
                                 "steps": 1,
                                 "duration": 0.1,
                                 "transcript": "recordings/mock.json",
+                                "timing_spans": result_timing,
+                                "timing_summary": timing_summary,
                             },
                             pending_request=None,
+                            timing_spans=result_timing,
                         )
                     )
                 )
@@ -321,6 +368,54 @@ async def ws_endpoint(ws: WebSocket):
                     )
                     continue
                 await ws.send_text(json.dumps({"type": "status", "text": "answer received"}))
+            elif mtype == "huca":
+                await ws.send_text(json.dumps({"type": "status", "text": "HUCA restart"}))
+                await ws.send_text(
+                    json.dumps(
+                        apply_state(
+                            status="starting",
+                            running=True,
+                            needs_input=False,
+                            site=msg.get("site") or "amex",
+                            message="MOCK-HUCA-RESTARTING",
+                            step=None,
+                            started_at=now(),
+                            finished_at=None,
+                            pending_request=None,
+                        )
+                    )
+                )
+                await asyncio.sleep(0.1)
+                await ws.send_text(
+                    json.dumps(
+                        {
+                            "type": "result",
+                            "status": "success",
+                            "summary": "MOCK-HUCA-OK fresh chat requested.",
+                            "steps": 1,
+                            "duration": 0.1,
+                        }
+                    )
+                )
+                await ws.send_text(
+                    json.dumps(
+                        apply_state(
+                            status="success",
+                            running=False,
+                            needs_input=False,
+                            message="MOCK-HUCA-OK fresh chat requested.",
+                            step=1,
+                            finished_at=now(),
+                            result={
+                                "status": "success",
+                                "summary": "MOCK-HUCA-OK fresh chat requested.",
+                                "steps": 1,
+                                "duration": 0.1,
+                            },
+                            pending_request=None,
+                        )
+                    )
+                )
             elif mtype == "cancel":
                 await ws.send_text(json.dumps({"type": "status", "text": "cancelled"}))
                 await ws.send_text(

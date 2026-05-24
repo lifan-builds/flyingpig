@@ -111,6 +111,14 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - [x] Release-ready extension-first beta verification pass (2026-05-15) — mapped docs/beta.md gates to automated/manual evidence, strengthened the extension smoke for disabled Start, offline setup, launch/focus, cancel, and checkpoint reconnect, hardened helper LaunchAgent failure output, fixed helper stop to boot out the running service target, verified helper status/stop/start plus `/health`, and rebuilt `dist/flyingpig-beta-0.1.0.zip`.
 - [x] Dashboard cockpit pivot (2026-05-17) — replaced the Chrome side-panel primary surface with a dashboard tab opened by the extension action, removed the `sidePanel` manifest dependency, made the work-window URL the only task target, and renamed the extension smoke/protocol tests around the dashboard.
 - [x] Helper-first dashboard pivot (2026-05-19) — moved the cockpit assets to `dashboard/`, served them from the helper at `/dashboard/`, made `flyingpig-helper` open the localhost dashboard without launching the work window, and changed the deterministic Puppeteer smoke to use the helper-hosted UI instead of loading an unpacked extension.
+- [x] Dashboard HUCA restart control (2026-05-20) — added a helper-owned `huca` command and dashboard button that cancels any active run, preserves the same task/work-window settings, and starts a fresh-chat browser-use run with explicit Hangup and Call-again instructions.
+- [x] Native desktop shell v1 (2026-05-20) — added an Electron desktop shell that starts a development helper or packaged sidecar, chooses an available helper port, waits for `/health`, loads the helper-served `/dashboard/`, shows retry/diagnostics on helper startup failure, and stops the helper on normal app quit. Added PyInstaller/electron-builder packaging path plus desktop unit/smoke coverage. Packaged macOS app was built as a zip target, launched against the PyInstaller sidecar, verified through `/health`, helper logs, Chromium remote-debugging DOM inspection, and app-close helper shutdown.
+- [x] Packaged helper browser-use prompt resources (2026-05-20) — fixed PyInstaller sidecar packaging to include `browser_use.agent.system_prompts` Markdown resources. Verified the packaged app against a local mock page with `max_steps=0`: browser-use initialized and returned `partial / No result captured` instead of failing with `No module named 'browser_use.agent.system_prompts'`.
+- [x] Pine-informed protocol hardening (2026-05-21) — made the helper/dashboard run protocol explicit around structured user-attention/auth/result events, backend-owned wait states, pre-flight safety gates, evidence-linked results, and a task-first dashboard surface while preserving the supervised browser-first wedge.
+- [x] Desktop-first product-path cleanup (2026-05-21) — made Electron the only normal user-facing entry point, archived the old Chrome extension and React frontend under `docs/legacy/`, kept helper/dashboard as internal runtime/UI details, and removed helper service/extension aliases from active docs/release.
+- [x] Dashboard task-brief and work-window affordance cleanup (2026-05-21) — replaced the six task shortcut buttons with one editable brief starter selector, made the problem brief label explicit, added an Open Work Window action beside the offline status pill, and aligned smoke coverage/docs with the new label.
+- [x] Run readiness and speed dashboard (2026-05-23) — added helper/runtime timing spans, evidence-linked timing summaries, guided readiness checklist, exact Start-disabled reasons, timing panel, reconnect-safe timing snapshots, and dashboard smoke benchmark output.
+- [x] Prepare and package 1.0.0 release (2026-05-24) — bumped active version to 1.0.0, built source and macOS desktop zip artifacts, scanned release contents, and prepared `v1.0.0` for push.
 - [ ] Run supervised Amex beta smoke from the dashboard with user login/MFA and send confirmation.
 - [x] Extend dashboard smoke coverage or document full mock-agent blocker (2026-05-15) — dashboard mock-daemon smoke now covers the release UX states; full dashboard-driven browser-use mock-agent run remains documented in docs/beta.md as blocked on deterministic LLM/CDP work-window orchestration.
 
@@ -140,6 +148,55 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - Follow-up correction: CLIProxyAPI was already running on `127.0.0.1:8317`; elevated model check succeeded with the configured local key. A real browser-use mock Amex run with `model=cliproxyapi` and `gpt-5.5` completed successfully: cancellation request sent, `$50` retention credit accepted, confirmation `MOCK-12345` captured, and session saved to `recordings/mock_run/session_american_express_20260519_191928.json`.
 - Helper lifecycle updated to be CLI-owned: `flyingpig-helper` opens the dashboard and waits in the foreground; users stop it with Ctrl+C. The dashboard does not own helper shutdown.
 
+### 2026-05-20 Dashboard HUCA restart control
+- Added first-class `huca` support to the helper WebSocket and REST run APIs. The helper now stores the current run request, cancels the active agent run when needed, and restarts against the same site, task, CDP endpoint, and target URL.
+- HUCA restarts prepend an explicit recovery preamble telling browser-use to end/leave a refused or dead chat, start a fresh chat in the same browser session, treat prior scrollback as read-only background, and restate the original task from scratch.
+- Dashboard UX now exposes a `HUCA` button beside Start/Cancel. It is enabled when the helper, work window, and task brief are available, including during an active run.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (124 passed, 2 deselected); elevated `npm run test:dashboard`; focused daemon tests (`pytest tests/unit/test_daemon_server.py tests/unit/test_daemon_run_session.py -q`) passed.
+
+### 2026-05-21 Pine-informed protocol hardening
+- Dashboard now starts from the customer-service chore: task brief question, common shortcuts (lower bill, cancel subscription, dispute fee, refund/courtesy credit, escalate to human, continue chat), success criteria, and visible permission boundaries before the browser mechanics.
+- Helper run state now uses explicit statuses: `preparing`, `ready_to_start`, `running`, `waiting_on_user`, `waiting_on_rep`, `waiting_on_login`, `waiting_on_auth`, `checkpoint_pending`, `recovery_pending`, `completed`, `failed`, and `cancelled`.
+- User-attention protocol now normalizes pending requests into structured events for decision checkpoints, missing information, OTP/MFA, manual login, auth, account-blocked, resume-after-auth, attachments, irreversible actions, offers, and recovery. Pending structured events remain in the reconnect snapshot.
+- Added helper-side pre-flight validation before starting a run: task/site presence, supervised-browser permission, user authorization, work-window/target URL, evidence capture, login expectation, unsupported phone/email/credential scope, and checkpoint requirement for irreversible actions.
+- Active Human Work progress phrases now surface as `waiting_on_rep` plus an `active_human_work` event so the dashboard shows representative review/wait states distinctly from generic running.
+- Final results now broadcast `result_ready` with outcome summary, evidence/transcript reference counts, human reached, offer/result, unresolved items, time-saved field when available, and checkpoint decisions.
+- Tests added/updated for reconnect-safe structured attention, pre-flight failures, waiting-on-rep snapshots, manual-login snapshots, evidence-linked result payloads, and dashboard protocol helpers.
+- Verification: `ruff check src scripts tests`; `pytest tests/unit/test_daemon_run_session.py tests/unit/test_daemon_server.py -q` (21 passed); elevated `npm run test:dashboard`; `pytest tests -q -m "not slow"` (130 passed, 2 deselected); `git diff --check`.
+- Remaining: supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
+
+### 2026-05-21 Architecture deepening follow-up
+- Extracted Active Human Work phrase/result-guard semantics into `src/agent/human_work.py` so daemon progress classification and `report_outcome` stale-result prevention share one module.
+- Extracted helper-owned run-start policy into `src/daemon/preflight.py`; REST/WebSocket start paths now use the same Pre-flight Safety Gate instead of keeping policy inside transport code.
+- Added `src/agent/run_orchestration.py` as the Agent Run Plan seam between daemon transport and `AgentBrain`; HUCA recovery instructions moved to `prompts/generic/huca_recovery.txt`.
+- Moved result-ready payload shaping into Evidence Bundle code (`src/agent/evidence.py`) and kept `src/daemon/run_session.py` as a compatibility publisher over that shape.
+- Deepened Controlled Chrome profile handling with domain profile modes and exposed the advanced user default profile option in the dashboard/helper paths while preserving the explicit Chrome default-profile guard.
+- Centralized Support Profile validation and prompt-context rendering in `src/sites/profiles.py`; profile-backed adapters now consume the rendered context.
+- Shifted dashboard pending-request status/progress decoding into `dashboard/dashboard_protocol.js` with protocol smoke coverage.
+- Verification: `ruff check src scripts tests`; focused module tests (`pytest tests/unit/test_human_work.py tests/unit/test_run_orchestration.py tests/unit/test_daemon_run_session.py tests/unit/test_daemon_server.py tests/unit/test_browser_runtime.py tests/unit/test_registry.py -q`, 53 passed); `pytest tests -q -m "not slow"` (137 passed, 2 deselected); `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:dashboard`; `git diff --check`.
+
+### 2026-05-21 Desktop-first product-path cleanup
+- Accepted ADR-0005: the Electron desktop app is the only normal user-facing product path. The Python helper remains a sidecar/runtime, and the helper-served dashboard remains the cockpit UI loaded inside the app.
+- Archived the old Chrome extension and old React frontend under `docs/legacy/` so they are reference code only, not active product surfaces.
+- Removed the `test:extension` package alias and removed `flyingpig-macos-helper` from console scripts. The LaunchAgent helper service source remains only as legacy/dev reference and is excluded from the beta zip.
+- Changed direct `flyingpig-helper` behavior so it no longer opens a browser dashboard by default; `--open-dashboard` is now the explicit developer convenience flag.
+- Updated README, beta docs, setup UI, CONTEXT, release install text, and ADR-0003 supersession language around the single app path.
+- Verification: `ruff check src scripts tests`; `pytest tests/unit/test_helper_service.py tests/unit/test_daemon_server.py tests/unit/test_browser_runtime.py -q` (33 passed); elevated `npm run test:desktop`; elevated `npm run test:dashboard`; `pytest tests -q -m "not slow"` (137 passed, 2 deselected); `python scripts/build_beta_release.py --clean`; release zip content check found no `extension`, `frontend`, `docs/legacy`, `helper_service`, or `macos_helper` entries; `git diff --check`.
+
+### 2026-05-23 Run readiness and speed dashboard
+- Added a PII-free `Run Timing Span` path: launch, pre-flight, AgentBrain construction, work-window attach, first observation, browser-use step, model planning step, user wait, representative wait, and result capture spans can flow through WebSocket/REST state and final `result_ready` payloads.
+- Final results now include inline `timing_spans` and `timing_summary` data linked to the Evidence Bundle payload, while timing metadata stays phase/duration/status-only.
+- Dashboard first viewport now includes a readiness checklist for Helper, Work Window, Chat Surface, Task Brief, Login/Auth, and Safety Gate plus an exact Start-disabled reason beside Start.
+- Dashboard renders timing spans in a Run Speed panel and in result details; the mock dashboard smoke now checks readiness transitions, disabled Start copy, timing/progress rendering, reconnect behavior, narrow-width layout, and benchmark output.
+- Verification: `pytest tests/unit/test_daemon_run_session.py tests/unit/test_daemon_server.py -q` (22 passed); `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:dashboard` with benchmark output (`helper_online=2264ms`, `work_window_ready=2341ms`, `mock_run_done=2483ms`); `ruff check src scripts tests`; `git diff --check`.
+
+### 2026-05-24 Release 1.0.0 preparation
+- Bumped active Python/Node release version from `0.1.0` to `1.0.0`; `scripts/build_beta_release.py` now defaults to `1.0.0`.
+- Built source release bundle `dist/flyingpig-beta-1.0.0.zip` with SHA-256 `60646a86dd915b8c1bf0488e0201f2fa3e5b5e890e21cbe470936b82524784bb`.
+- Built packaged helper sidecar `dist/helper/flyingpig-helper` and desktop artifact `dist/desktop/Flying Pig-1.0.0-arm64-mac.zip` with SHA-256 `dd949fd8c4f92616e0ad07fcec59c3274fbd80899556e909078cfc1d993a623a`; desktop package is unsigned because no local Developer ID identity is configured.
+- Release scans found no common secret/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.0 source bundle or desktop zip.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (137 passed, 2 deselected); elevated `npm run test:dashboard`; elevated `npm run test:desktop`; `python scripts/build_beta_release.py`; `npm run build:helper`; `npm run desktop:package`.
+
 ## Decisions
 - **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
 - **2026-04-09** Consumer-side positioning — the market gap.
@@ -160,6 +217,110 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - **2026-05-17** Use the Chrome extension dashboard tab as the v1 cockpit. The side panel is too cramped and makes "current tab" ambiguous once a separate Controlled Chrome Window exists.
 - **2026-05-19** Use the helper-served localhost dashboard as the v1 cockpit and retire the unpacked Chrome extension from the normal beta path. The helper remains the browser-use/CDP/LLM owner; frontend JavaScript is only the control plane.
 - **2026-05-19** Helper lifecycle is CLI-owned for v1: run `flyingpig-helper`, use the opened dashboard, and press Ctrl+C when done. Do not add dashboard-side process shutdown controls.
+- **2026-05-20** Use Electron as the v1 Native Desktop Shell. Electron owns app startup, helper supervision, retry/failure UX, and packaging; Python remains the owner of browser-use, CDP policy, LLM calls, run state, dashboard hosting, and evidence/session behavior. See `docs/adr/0004-electron-native-desktop-shell.md`.
+
+## Long-Running Coding Agent Task: Pine-Informed Product/Protocol Hardening
+
+Use this prompt to deploy a coding agent:
+
+```text
+You are working in /Users/lfan/Project/flyingpig. Read NOW.md first, then CONTEXT.md, then PLAN.md and FINDINGS.md. Respect CONTEXT.md Rules. Do not revert unrelated user changes.
+
+Goal:
+Improve Flying Pig using Pine AI / 19pine.ai learnings while preserving Flying Pig's narrower supervised browser-first customer-service wedge. This is not a broad Pine clone and does not add phone/email/backend credential delegation. The target is a more explicit, reconnect-safe, auditable customer-service product surface: clearer task intake, structured run/session protocol, visible trust and permission boundaries, first-class auth/login handling, backend-owned wait states, pre-flight safety gates, and evidence-linked final results.
+
+Context:
+Flying Pig already has a helper-served localhost dashboard, a Python daemon/helper that owns browser-use execution, a Controlled Chrome Window, Decision Checkpoints, HUCA restart, Run Session state, and Evidence Bundle concepts.
+
+Pine's useful public lessons:
+- UI starts from the user's chore, not from automation mechanics.
+- Common-problem shortcuts/templates reduce blank-page friction.
+- Trust, permission boundaries, and pricing/success expectations are visible product surfaces.
+- Their backend appears to use delegated account access, simulated browsers/virtual devices, and structured OTP/auth events; Flying Pig should not copy credential delegation, but should make manual login/auth interruptions first-class.
+- Their technical shape suggests explicit task/call state machines, structured user-input events, backend-owned waits, safety/billing gates before outbound actions, and first-class final result/evidence summaries.
+
+Primary deliverables:
+1. Inspect the current dashboard, run/session, WebSocket protocol, user-attention/checkpoint, auth/login handling, evidence, and daemon API code. Identify where state/events are too loose, where UI exposes implementation mechanics, and where auth/login/user-permission moments are not first-class.
+2. Improve the dashboard's first screen and run surface so it starts from a customer-service problem rather than helper/CDP mechanics. Keep the UI compact and operational. Add or refine:
+   - a task brief entry point framed around "what customer-service problem do you want handled?"
+   - common task shortcuts/templates where practical, such as lower bill, cancel subscription, dispute fee, request refund/courtesy credit, escalate to human, continue existing support chat
+   - clear visible permission boundaries: what Flying Pig may do without asking vs. what requires approval
+   - run progress labels that read like user-facing work states, not internal logs
+3. Implement or tighten a typed structured event model for user-attention and run lifecycle events, covering at least:
+   - decision_checkpoint
+   - missing_information
+   - otp_required
+   - auth_required
+   - manual_login_required
+   - account_access_blocked
+   - resume_after_auth
+   - attachment_required
+   - active_human_work
+   - irreversible_action_pending
+   - offer_received
+   - recovery_pending
+   - result_ready
+4. Add or tighten explicit run states so waits and auth pauses are not just generic "running":
+   - preparing
+   - ready_to_start
+   - running
+   - waiting_on_user
+   - waiting_on_rep
+   - waiting_on_login
+   - waiting_on_auth
+   - checkpoint_pending
+   - recovery_pending
+   - completed
+   - failed
+   - cancelled
+5. Add a pre-flight safety gate before starting/sending an external customer-service action. It should validate that the task is allowed, user authorization exists, required task/site fields are present, evidence capture is configured, login/auth expectations are clear, and irreversible actions require a checkpoint. Keep this as a helper/backend concern, not frontend-only validation.
+6. Make login/auth handling first-class without storing credentials. Flying Pig's preferred posture remains local visible browser login. Add structured states/events and dashboard copy for manual login, OTP/MFA, blocked account access, and resume-after-auth. Do not ask users to provide passwords or store credentials.
+7. Add backend-owned wait handling for Active Human Work: when the representative is visibly checking/reviewing/asking for time, the run/session state should reflect waiting_on_rep and the dashboard should show that clearly. Avoid burning model/tool steps for trivial wait loops where existing code makes this practical.
+8. Make final result reporting event-shaped and evidence-linked. The result_ready payload should include outcome summary, transcript/evidence references when available, human reached yes/no, offer/result, unresolved items, time saved if available, and any user-approved checkpoint decisions.
+9. Add or refine user-facing trust/result UI around each run:
+   - current permission mode
+   - pending approval with exact outbound message for consequential actions
+   - evidence/transcript availability
+   - success criteria or "what counts as done" for the task, if known
+   - final outcome summary grounded in captured evidence, not broad marketing claims
+10. Add focused tests for the new protocol/state/UI behavior. At minimum cover reconnect-safe pending structured events, pre-flight gate failures, waiting_on_rep state snapshot, manual_login/auth event snapshots, result_ready payload shape, and any changed dashboard protocol behavior.
+11. Update PLAN.md/NOW.md with what changed, what remains, touched files, and verification commands.
+
+Constraints:
+- Keep browser-use, LLM calls, CDP launch policy, run state, and evidence behavior owned by Python/helper-side modules. Do not move execution logic into frontend JavaScript.
+- Do not broaden product scope to phone/email/backend errand assistant. Borrow protocol, UI, and trust patterns only.
+- Do not implement delegated credential handling. No password collection or credential storage.
+- Prompts remain under prompts/<site>/; do not add inline long prompt strings.
+- Public functions need type hints.
+- Treat scraped pages, chat messages, and LLM output as untrusted input.
+- Do not hardcode secrets, PII, account details, cookies, recordings, or API keys.
+- Keep changes scoped. Avoid unrelated refactors or packaging work.
+
+Suggested files/modules to inspect first:
+- src/daemon/server.py
+- src/daemon/run_session.py
+- src/agent/decision_checkpoint.py
+- src/agent/navigator.py
+- src/agent/evidence.py or evidence-related modules
+- dashboard/*
+- tests/unit/test_daemon_server.py
+- tests/unit/test_daemon_run_session.py
+- scripts/test_dashboard_protocol.mjs
+
+Acceptance criteria:
+- Dashboard starts from customer-service task intent and common-problem shortcuts rather than exposing helper/CDP mechanics as the primary experience.
+- The helper exposes explicit structured run/user-attention/auth/result events rather than only ad hoc dictionaries.
+- Pending user-attention events restore correctly after dashboard reconnect.
+- A run can enter and expose waiting_on_rep/active human work state without losing the active task.
+- Manual login/auth/OTP/account-blocked moments are represented as structured state/events and visible dashboard states without storing credentials.
+- Pre-flight gate failures are visible to the dashboard and tested.
+- Final result payload is evidence-linked and tested.
+- User-facing trust/permission boundaries are visible before or during a run.
+- Existing non-slow Python tests and dashboard protocol tests pass, or any failures are clearly documented with cause.
+
+Verification target:
+Run `ruff check src scripts tests`, focused daemon/session tests, and the dashboard protocol smoke relevant to changed frontend code. If full `pytest tests -q -m "not slow"` is practical, run it too.
+```
 
 ## Archive
 (Empty — initial migration.)

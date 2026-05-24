@@ -1,19 +1,19 @@
 # Context
 
 ## Project
-**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ / FastAPI backend, browser-use + Playwright for automation, Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers, Celery + Redis for async jobs, PostgreSQL for persistence, React + TypeScript dashboard, and a helper-served localhost dashboard as the supervised user surface. Release direction: preserve browser-use in a packaged local helper/native host so users do not manually run scripts; the helper hosts the dashboard and opens a separate Controlled Chrome Window for work. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Docker, Puppeteer dashboard smoke tests.
+**Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ helper runtime, Electron desktop shell, helper-served dashboard, browser-use + Playwright for automation, and Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers. Product direction: one user-facing desktop app; the Python helper and dashboard are internal runtime/UI implementation details. The helper owns browser-use execution, dashboard static hosting, run/session protocol, and Controlled Chrome Window launch. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Puppeteer dashboard smoke tests, Electron desktop smoke tests.
 
 ## Structure
 ```
 .
 ├── config/
-├── frontend/           # React + TypeScript dashboard
 ├── dashboard/          # Helper-served cockpit UI that talks to local helper over WS
-├── extension/          # Legacy Chrome wrapper/reference, no longer the primary cockpit
+├── desktop/            # Electron desktop shell and helper supervision
+├── docs/legacy/        # Archived old extension and React frontend references
 ├── prompts/            # LLM prompt templates by site
 │   ├── amex/
 │   └── generic/        # Site-agnostic fallback templates
-├── scripts/            # start.py, daemon.py, demo_amex.py, dashboard smoke tooling
+├── scripts/            # start.py/daemon.py debug paths, release and smoke tooling
 ├── src/
 │   ├── agent/          # Core loop: brain, navigator, browser_runtime, evidence, llm_runtime, user_input
 │   ├── api/            # FastAPI backend (dashboard-facing)
@@ -44,10 +44,11 @@
 
 ## Workflow
 - Setup: `pip install -e ".[dev]"`
-- Run (CLI): `python scripts/start.py --model gemini`
-- Run live attach: `python scripts/start.py --cdp-url http://127.0.0.1:9222 --model <model> --fallback-model <backup-model> ...`
-- Run live controlled Chrome: `python scripts/start.py --launch-flyingpig-chrome --chrome-profile default --model <model> --fallback-model <backup-model> ...`
-- Run daemon: `python scripts/daemon.py --port 8765`
+- Run product app: `npm run desktop:dev`
+- Build helper sidecar: `npm run build:helper`
+- Package desktop app: `npm run desktop:package`
+- Debug helper only: `flyingpig-helper`
+- Debug CLI run only: `python scripts/start.py --model <model> ...`
 - Test: `pytest tests/`
 - Lint: `ruff check src/`
 - Format: `ruff format src/`
@@ -56,34 +57,45 @@
 - **Hangup and Call-again**: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from scratch. Avoid: restarting while a human is typing/reviewing.
 - **Packaged Helper**: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the user must run.
 - **Dashboard Control Plane**: Helper-served localhost dashboard UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/recovery into frontend JavaScript.
-- **Helper-First Startup**: Product flow where the user runs `flyingpig-helper`, it serves/opens the dashboard at `http://127.0.0.1:8765/dashboard/`, and the dashboard launches the Controlled Chrome Window on demand. Avoid: requiring an unpacked Chrome extension as the normal beta entry point.
-- **CLI-Owned Helper Lifecycle**: The foreground `flyingpig-helper` process is controlled like a normal CLI tool: run it to start the dashboard, press Ctrl+C to stop it when done. Avoid: dashboard-side process shutdown buttons or hidden helper lifecycle control for v1.
-- **Hybrid Helper Startup**: V1 beta path where a login/background helper service is supported first, while a packaged app/native launcher can later start the helper on demand. Avoid: making terminal commands part of the normal user flow.
+- **Helper-First Startup**: Superseded helper/dashboard product path kept as historical language for older ADRs. Avoid: reintroducing `flyingpig-helper` or localhost dashboard launch as the normal user flow.
+- **CLI-Owned Helper Lifecycle**: Development-only helper lifecycle where a foreground `flyingpig-helper` process is stopped with Ctrl+C. Avoid: describing this as a beta user path.
+- **Hybrid Helper Startup**: Superseded beta path where a login/background helper service could start before a packaged app. Avoid: making terminal commands part of the normal user flow.
+- **Native Desktop Shell**: Electron app that starts/supervises the packaged Python helper sidecar, waits for `/health`, and loads the helper-served dashboard. Avoid: moving browser-use, CDP launch policy, LLM calls, run state, or evidence behavior into Electron or frontend JavaScript.
+- **Desktop-First Product Path**: The only normal user-facing launch path: open the Flying Pig desktop app, which starts the helper and loads the dashboard internally. Avoid: presenting `flyingpig-helper`, raw localhost URLs, old React frontend, Chrome extension, or CLI runs as equivalent user paths.
 - **Controlled Chrome Window**: The helper-launched Chrome window that browser-use can attach to over CDP for the actual customer-service run. Avoid: implying the agent can safely control any already-open normal Chrome tab without a prepared debugging/automation channel.
 - **Dedicated Work Profile**: The isolated Chrome user-data directory used by the Controlled Chrome Window when avoiding default-profile copy friction. Avoid: treating it as an incognito profile; it may persist login state across Flying Pig runs unless explicitly reset.
-- **Single Cockpit Rule**: The Flying Pig dashboard should appear only in the user's normal Chrome entry window during v1. Avoid: showing a second Flying Pig control UI inside the Controlled Chrome Window.
+- **User Default Profile Mode**: Advanced Controlled Chrome profile option for an explicit user profile directory. Avoid: promising literal normal Chrome default-profile CDP control; current Chrome blocks remote debugging against the literal default profile, so the default user-data directory without an override must fail clearly.
+- **Single Cockpit Rule**: The Flying Pig dashboard should appear only in the desktop app during v1. Avoid: showing a second Flying Pig control UI inside the Controlled Chrome Window.
 - **User-Prepared Chat Surface**: A browser tab where the user has already navigated, logged in if needed, and exposed a plausible customer-service chat entry point or support page. Avoid: site-from-homepage support discovery.
 - **Chat Surface Check**: The agent's bounded attempt to find an already-present chat input or open an obvious chat launcher before asking the user to expose the chat manually. Avoid: roaming through general navigation to discover support.
 - **Support Profile**: Declarative knowledge for a known customer-service surface, including escalation language, verification boundaries, and support-specific vocabulary. Avoid: one-off adapter for normal chat-widget differences.
+- **Pre-flight Safety Gate**: Helper-owned validation before browser-use starts acting externally, covering supported scope, visible-browser permission, login expectations, evidence capture, work-window readiness, and checkpoint requirements. Avoid: relying on frontend-only validation for safety policy.
+- **Agent Run Plan**: Backend-prepared normalized plan for one supervised browser-use run, including AgentBrain construction settings, task text, template id, target URL, max steps, and recovery wrapping. Avoid: assembling AgentBrain kwargs and run task kwargs throughout transport code.
 - **Decision Checkpoint**: A structured human-in-the-loop pause where Flying Pig asks the user to choose among consequential next actions, such as accepting an offer, pivoting strategy after a refusal, approving an irreversible account change, or responding before a live chat times out. Avoid: treating these as generic free-text `ask_user` prompts.
 - **Active Human Work**: A live representative state where the rep says they are checking, reviewing, applying something, or need a moment. Avoid: treating it as silence or a dead chat.
 - **Run Session**: The reconnectable helper-side state model for one active agent run, including status, progress, pending user-attention request, result payload, and snapshots sent to dashboard clients. Avoid: hand-building run-state dictionaries throughout WebSocket code.
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
+- **Run Timing Span**: PII-free duration event for helper/runtime phases such as launch, pre-flight, first observation, browser-use steps, model planning, user waits, representative waits, and result capture. Avoid: including raw chat text, URLs with private data, credentials, or account details in timing metadata.
 
 ## Relationships
 - The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosting, and reconnectable run state.
-- Helper-First Startup should hide Chrome-debugging mechanics behind the dashboard; users run the foreground helper command and stop it with Ctrl+C when done.
-- **Hybrid Helper Startup** lets the beta stabilize around the existing login/background helper service, then graduate to a packaged app/native launcher that starts the helper on demand.
-- Helper-First Startup opens a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
+- Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.
+- The desktop app starts the helper and the dashboard launches a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
+- When the dashboard shows **Work Window Offline** while the helper is online, it should expose an immediate Open Work Window action beside that status instead of forcing users to scroll to browser controls.
+- Task intake should make the editable problem brief the source of truth. Use a small starter selector for common chores; avoid large button grids that imply the user is making a final choice while the textarea remains editable.
+- The **Native Desktop Shell** is the product entry point for v1: Electron owns startup, helper process supervision, window creation, retry/failure UX, and desktop packaging while the Python helper remains the runtime owner.
 - When the helper is offline or not installed, the dashboard should show a setup state with a primary "Set up Flying Pig" path, a reconnect option, and small diagnostics; avoid surfacing raw localhost/WebSocket failures as the main UX.
 - First-run beta should prefer a **Dedicated Work Profile** instead of blocking the user by asking them to quit normal Chrome so Flying Pig can copy the default profile. A smoother explicit profile-import path can be added later.
 - The **Dedicated Work Profile** persists login state across Flying Pig runs by default; users should have an explicit reset path when they want to clear the work profile.
-- The **Controlled Chrome Window** should not present a second Flying Pig control surface. The normal Chrome dashboard is the single cockpit; the controlled window is only the work area browser-use operates.
+- The **Controlled Chrome Window** should not present a second Flying Pig control surface. The desktop app is the single cockpit; the controlled window is only the work area browser-use operates.
 - Disable extensions in the **Controlled Chrome Window** for v1 to avoid duplicate controls and reduce page-interference risk while browser-use operates customer-service pages.
-- V1 supervision should use a side-by-side layout: normal Chrome with the Flying Pig dashboard as the cockpit, and the Controlled Chrome Window as the work area. The launch flow should position or guide users toward keeping both visible.
+- V1 supervision should use a side-by-side layout: the Flying Pig desktop app as the cockpit, and the Controlled Chrome Window as the work area. The launch flow should position or guide users toward keeping both visible.
 - If side-by-side placement fails or the screen is too small, keep the same Single Cockpit model and degrade to notification-led supervision.
 - A **User-Prepared Chat Surface** is verified by one **Chat Surface Check** before the agent sends any customer-service message.
 - Most known sites use a **Support Profile** through the shared adapter; bespoke adapters are reserved for unusual mechanics or recovery policies.
+- **Support Profile** authoring and prompt-context rendering belong in the profile module; adapters should consume rendered profile context rather than hand-building profile prose.
+- The **Pre-flight Safety Gate** is a helper/backend module and must remain consistent across REST, WebSocket, and dashboard starts.
+- The **Agent Run Plan** is the seam between daemon transport and `AgentBrain`; transport code should not know browser-use construction details beyond passing a prepared plan.
 - A **Decision Checkpoint** is distinct from missing-information collection: `ask_user` can gather facts, while Decision Checkpoints present explicit options and consequences for user choice.
 - The model loop owns when to raise a **Decision Checkpoint**; the helper and dashboard render and deliver checkpoints but do not maintain a separate deterministic checkpoint-detection rule engine.
 - A v1 **Decision Checkpoint** carries a checkpoint type, a short summary, explicit options, one recommended option, and the exact customer-service message for each option that sends one.
@@ -96,6 +108,8 @@
 - Final result reporting must be based on the freshest visible chat text; if a representative says they need a moment for confirmation/reference details, `report_outcome` should wait or re-inspect before claiming none were provided.
 - The **Run Session** module owns state snapshots and protocol events for pending user-attention requests; FastAPI/WebSocket code is an adapter over that state.
 - The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
+- **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
+- The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.
 
 ## Learned Patterns
 - **CDP attach must reuse the current tab** — when attaching via CDP, never call `navigate_to(new_tab=True)`; fresh Target.createTarget lands in a new browser context and loses cookies. Use `get_current_page()` and page-level `goto()` if navigation is needed.

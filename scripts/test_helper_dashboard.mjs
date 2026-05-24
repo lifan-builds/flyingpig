@@ -113,6 +113,8 @@ async function verifyOfflineSetupState(browser) {
 
 async function main() {
   const userDataDir = await mkdtemp(path.join(os.tmpdir(), "flyingpig-dashboard-e2e-"));
+  const benchmark = {};
+  const startedAt = performance.now();
   const mockServer = startServer(
     [
       "-m",
@@ -165,6 +167,7 @@ async function main() {
       () => document.getElementById("runtimeStatus")?.textContent === "Helper Online",
       { timeout: 10000 },
     );
+    benchmark.helperOnlineMs = Math.round(performance.now() - startedAt);
     await dashboardPage.waitForFunction(
       () => document.getElementById("browserStatus")?.textContent === "Work Window Offline",
       { timeout: 10000 },
@@ -175,6 +178,45 @@ async function main() {
     );
     if (!startDisabledWithoutBrowser) {
       throw new Error("Start is enabled before the controlled work window is connected.");
+    }
+    const startReason = await dashboardPage.$eval(
+      "#startDisabledReason",
+      (element) => element.textContent,
+    );
+    if (!startReason.includes("Open the work window")) {
+      throw new Error(`Start-disabled reason is not specific: ${startReason}`);
+    }
+    const readinessBeforeLaunch = await dashboardPage.$$eval(
+      ".readiness-item",
+      (items) => items.map((item) => `${item.textContent}:${item.dataset.ready}`),
+    );
+    if (!readinessBeforeLaunch.some((item) => item.includes("Work Window") && item.endsWith("false"))) {
+      throw new Error(`Readiness did not show missing work window: ${readinessBeforeLaunch.join(" | ")}`);
+    }
+    await dashboardPage.setViewport({ width: 390, height: 860, deviceScaleFactor: 1 });
+    const narrowLayout = await dashboardPage.evaluate(() => ({
+      overflowX: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+      readinessColumns: getComputedStyle(document.querySelector(".readiness-strip"))
+        .gridTemplateColumns
+        .split(" ").length,
+    }));
+    if (narrowLayout.overflowX || narrowLayout.readinessColumns > 2) {
+      throw new Error(`Narrow dashboard layout overflowed: ${JSON.stringify(narrowLayout)}`);
+    }
+    await dashboardPage.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
+    const statusLaunchVisible = await dashboardPage.$eval(
+      "#statusLaunchChrome",
+      (button) => !button.classList.contains("hidden") && !button.disabled,
+    );
+    if (!statusLaunchVisible) {
+      throw new Error("Dashboard does not expose an enabled status-level work window button.");
+    }
+    const briefStarterOptions = await dashboardPage.$$eval(
+      "#briefStarter option",
+      (options) => options.map((option) => option.textContent),
+    );
+    if (briefStarterOptions.length > 4 || !briefStarterOptions.includes("Custom brief")) {
+      throw new Error(`Unexpected brief starter options: ${briefStarterOptions.join(", ")}`);
     }
     if (await dashboardPage.$("#openOura")) {
       throw new Error("Dashboard still renders the dedicated Oura button.");
@@ -187,8 +229,26 @@ async function main() {
         .some((option) => option.textContent === "Oura Ring"),
       { timeout: 10000 },
     );
+    const defaultChromeProfile = await dashboardPage.$eval("#chromeProfile", (select) => select.value);
+    if (defaultChromeProfile !== "dedicated") {
+      throw new Error(`Expected dedicated profile by default, got ${defaultChromeProfile}.`);
+    }
+    const hasDefaultProfileOption = await dashboardPage.$eval(
+      "#chromeProfile",
+      (select) => Array.from(select.options).some((option) => option.value === "default"),
+    );
+    if (!hasDefaultProfileOption) {
+      throw new Error("Dashboard does not expose the copied default profile option.");
+    }
+    const hasUserDefaultProfileOption = await dashboardPage.$eval(
+      "#chromeProfile",
+      (select) => Array.from(select.options).some((option) => option.value === "existing"),
+    );
+    if (!hasUserDefaultProfileOption) {
+      throw new Error("Dashboard does not expose the user default profile option.");
+    }
 
-    await dashboardPage.click("#launchChrome");
+    await dashboardPage.click("#statusLaunchChrome");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CHROME-READY"),
       { timeout: 10000 },
@@ -197,6 +257,18 @@ async function main() {
       () => document.getElementById("browserStatus")?.textContent === "Work Window Connected",
       { timeout: 10000 },
     );
+    benchmark.workWindowReadyMs = Math.round(performance.now() - startedAt);
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("Work window launch"),
+      { timeout: 10000 },
+    );
+    const readinessAfterLaunch = await dashboardPage.$$eval(
+      ".readiness-item",
+      (items) => items.map((item) => `${item.textContent}:${item.dataset.ready}`),
+    );
+    if (!readinessAfterLaunch.some((item) => item.includes("Work Window") && item.endsWith("true"))) {
+      throw new Error(`Readiness did not update after work-window connection: ${readinessAfterLaunch.join(" | ")}`);
+    }
 
     await setValue(dashboardPage, "#cdpUrl", cdpUrlForDashboard);
     await setValue(
@@ -207,6 +279,19 @@ async function main() {
     await dashboardPage.click("#startTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-RUN-OK"),
+      { timeout: 10000 },
+    );
+    benchmark.mockRunDoneMs = Math.round(performance.now() - startedAt);
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("Model planning step")
+        && document.body.textContent.includes("Timing"),
+      { timeout: 10000 },
+    );
+
+    await setValue(dashboardPage, "#taskText", "Mock HUCA smoke.");
+    await dashboardPage.click("#hucaTask");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-HUCA-OK"),
       { timeout: 10000 },
     );
 
@@ -248,6 +333,11 @@ async function main() {
       { timeout: 10000 },
     );
 
+    console.log(
+      `Dashboard benchmark: helper_online=${benchmark.helperOnlineMs}ms `
+      + `work_window_ready=${benchmark.workWindowReadyMs}ms `
+      + `mock_run_done=${benchmark.mockRunDoneMs}ms`,
+    );
     console.log("Helper dashboard smoke passed.");
   } catch (error) {
     if (browser) {

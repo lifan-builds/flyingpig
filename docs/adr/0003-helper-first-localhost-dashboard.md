@@ -1,4 +1,6 @@
-# Helper-First Localhost Dashboard
+# ADR 0003: Helper-First Localhost Dashboard
+
+Superseded on 2026-05-21 by [0005 Desktop-First Product Path](0005-desktop-first-product-path.md).
 
 Flying Pig v1 uses the packaged helper as the product entry point. The user runs `flyingpig-helper`, the helper serves/opens the dashboard at `http://127.0.0.1:8765/dashboard/`, and the user stops the foreground helper with Ctrl+C when done. The helper owns browser-use execution and launches a separate Controlled Chrome Window for the customer-service run only when the dashboard asks. The dashboard is still the single cockpit for task entry, live status, approvals, and Decision Checkpoints.
 

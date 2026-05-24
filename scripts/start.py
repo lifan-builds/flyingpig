@@ -19,7 +19,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.agent.brain import AgentBrain, TaskStatus  # noqa: E402
-from src.agent.browser_runtime import ChromeLaunchConfig, launch_cdp_chrome  # noqa: E402
+from src.agent.browser_runtime import (  # noqa: E402
+    ChromeLaunchConfig,
+    launch_cdp_chrome,
+    supported_chrome_profile_modes,
+)
 
 
 async def run(args: argparse.Namespace) -> int:
@@ -182,7 +186,7 @@ def main() -> None:
     p.add_argument("--cdp-port", type=int, default=9222, help=argparse.SUPPRESS)
     p.add_argument(
         "--chrome-profile",
-        choices=["dedicated", "default", "existing"],
+        choices=sorted(supported_chrome_profile_modes()),
         default="dedicated",
         help=argparse.SUPPRESS,
     )

@@ -196,3 +196,69 @@ class EvidenceRecorder:
             checkpoint_events=checkpoint_events,
             result=result,
         )
+
+
+def result_ready_payload(result: TaskResult) -> dict:
+    """Build the event-shaped, evidence-linked final result payload."""
+    status = str(result.status).split(".")[-1].lower()
+    details = result.outcome_details or {}
+    timing_summary = timing_summary_payload(result.timing_spans)
+    checkpoint_decisions = [
+        {
+            "checkpoint_id": event.get("checkpoint_id") or event.get("expected_checkpoint_id"),
+            "selected_option_id": event.get("selected_option_id"),
+            "selected_message": event.get("selected_message"),
+            "free_text": event.get("free_text"),
+            "timestamp": event.get("timestamp"),
+        }
+        for event in result.checkpoint_events
+        if event.get("event_type") == "decision_checkpoint_answered"
+    ]
+    unresolved_items = details.get("unresolved_items")
+    if isinstance(unresolved_items, str):
+        unresolved_items = [unresolved_items]
+    elif not isinstance(unresolved_items, list):
+        unresolved_items = []
+    if details.get("next_steps"):
+        unresolved_items.append(str(details["next_steps"]))
+
+    return {
+        "type": "result_ready",
+        "status": status,
+        "summary": result.summary,
+        "outcome_summary": result.summary,
+        "steps": result.steps_taken,
+        "duration": result.duration_seconds,
+        "transcript": str(result.transcript_path) if result.transcript_path else None,
+        "evidence": {
+            "transcript_path": str(result.transcript_path) if result.transcript_path else None,
+            "chat_transcript_lines": len(result.chat_transcript),
+            "checkpoint_events_count": len(result.checkpoint_events),
+            "timing_spans_count": len(result.timing_spans),
+        },
+        "timing_spans": result.timing_spans,
+        "timing_summary": timing_summary,
+        "human_reached": details.get("human_reached"),
+        "offer_result": details.get("amount_saved")
+        or details.get("offer")
+        or details.get("result")
+        or details.get("confirmation_number"),
+        "unresolved_items": unresolved_items,
+        "time_saved": details.get("time_saved"),
+        "checkpoint_decisions": checkpoint_decisions,
+        "checkpoint_events_count": len(result.checkpoint_events),
+    }
+
+
+def timing_summary_payload(spans: list[dict]) -> dict:
+    """Return a compact timing summary with no chat content or PII."""
+    totals: dict[str, float] = {}
+    for span in spans:
+        name = str(span.get("name") or "unknown")
+        duration = float(span.get("duration_ms") or 0.0)
+        totals[name] = round(totals.get(name, 0.0) + duration, 1)
+    return {
+        "total_ms": round(sum(totals.values()), 1),
+        "span_count": len(spans),
+        "by_name_ms": totals,
+    }

@@ -1,6 +1,6 @@
 [project]
 name = "flyingpig"
-version = "0.1.0"
+version = "1.0.0"
 description = "Flying Pig AI (客服上树) — AI agent that interacts with customer service on your behalf"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -31,6 +31,7 @@ dev = [
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
     "pytest-cov>=6.0.0",
+    "pyinstaller>=6.11.0",
     "ruff>=0.8.0",
     "mypy>=1.13.0",
 ]
@@ -38,7 +39,6 @@ dev = [
 [project.scripts]
 flyingpig = "src.cli:main"
 flyingpig-helper = "src.helper:main"
-flyingpig-macos-helper = "src.helper_service:main"
 
 [tool.ruff]
 target-version = "py312"

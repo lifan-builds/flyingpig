@@ -11,23 +11,24 @@
       <header class="topbar">
         <div>
           <p class="eyebrow">Flying Pig</p>
-          <h1>Helper Setup</h1>
+          <h1>Desktop Setup</h1>
         </div>
       </header>
 
       <section class="panel setup">
         <p class="eyebrow">Beta</p>
-        <h2>Install the local helper</h2>
-        <p>The helper runs browser-use locally and opens the work window for supervised tasks.</p>
+        <h2>Start Flying Pig from the desktop app</h2>
+        <p>The desktop app starts the local helper and opens this dashboard internally.</p>
         <code>pip install -e ".[dev]"</code>
-        <code>flyingpig-macos-helper install</code>
+        <code>npm install</code>
+        <code>npm run desktop:dev</code>
       </section>
 
       <section class="panel setup">
         <p class="eyebrow">Reconnect</p>
         <h2>Return to the dashboard</h2>
-        <p>After setup, open Flying Pig again and press Reconnect.</p>
-        <code>flyingpig-macos-helper status</code>
+        <p>After setup, reopen Flying Pig or press Reconnect in the app.</p>
+        <code>npm run test:desktop</code>
       </section>
     </main>
   </body>
