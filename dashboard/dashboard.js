@@ -34,6 +34,8 @@ const state = {
   preflightFailures: [],
   timingSpans: [],
   runStatus: "ready_to_start",
+  modelSettings: null,
+  modelSavedLocally: false,
 };
 
 const attentionTitles = {
@@ -174,6 +176,7 @@ function setConnection(connected) {
   }
   updateReadiness();
   updateButtons();
+  updateModelSettingsView();
 }
 
 function setBrowserConnection(connected, label) {
@@ -291,6 +294,100 @@ function updateReadiness() {
 
 function updateSetupDiagnostic() {
   $("setupDiagnostic").textContent = `${state.helperUrl} unavailable`;
+}
+
+function providerForModel(model) {
+  if (model === "claude-opus") return "claude";
+  if (model === "gemini-pro") return "gemini-flash";
+  if (model === "gpt-5.5" || model === "cliproxy") return "cliproxyapi";
+  return model || "cliproxyapi";
+}
+
+function selectedProviderSettings() {
+  const providerId = providerForModel($("model").value);
+  const providers = state.modelSettings?.providers || [];
+  return providers.find((provider) => provider.id === providerId) || {
+    id: providerId,
+    label: modelLabel($("model").value),
+    configured: false,
+    help: "Save an API key for this provider before live model runs.",
+  };
+}
+
+function modelLabel(model) {
+  const option = $("model")?.querySelector(`option[value="${CSS.escape(model || "")}"]`);
+  return option?.textContent || model || "Model";
+}
+
+function updateModelSettingsView() {
+  const provider = selectedProviderSettings();
+  $("modelKeyTitle").textContent = `${provider.label} API key`;
+  if (!state.connected) {
+    $("modelKeyStatus").textContent = "Connect the helper to check credential status.";
+  } else if (!state.modelSettings) {
+    $("modelKeyStatus").textContent = "Credential status unavailable.";
+  } else {
+    $("modelKeyStatus").textContent = provider.configured
+      ? `${provider.label} key is configured.`
+      : `${provider.label} key is not configured.`;
+  }
+  $("modelKeyHelp").textContent = provider.help
+    || "Keys are stored only in your local Flying Pig env file.";
+}
+
+async function loadModelSettings() {
+  if (!state.connected) {
+    state.modelSettings = null;
+    updateModelSettingsView();
+    return;
+  }
+  try {
+    const response = await fetch(`${state.helperUrl}/model/settings`);
+    const payload = await response.json();
+    if (!payload.ok) throw new Error(payload.error || "Model settings unavailable.");
+    state.modelSettings = payload;
+    if (!state.modelSavedLocally && payload.default_model) {
+      const option = $("model").querySelector(`option[value="${CSS.escape(payload.default_model)}"]`);
+      if (option) $("model").value = payload.default_model;
+    }
+    updateModelSettingsView();
+  } catch {
+    state.modelSettings = null;
+    updateModelSettingsView();
+  }
+}
+
+async function saveModelSettings({ clearKey = false } = {}) {
+  if (!state.connected) {
+    $("modelKeyStatus").textContent = "Reconnect the helper before saving model settings.";
+    return;
+  }
+  const model = $("model").value || "cliproxyapi";
+  const provider = providerForModel(model);
+  const apiKey = $("modelApiKey").value.trim();
+  storageSet({ model });
+  state.modelSavedLocally = true;
+  try {
+    const response = await fetch(`${state.helperUrl}/model/settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        default_model: model,
+        provider,
+        api_key: clearKey ? "" : apiKey,
+        clear_key: clearKey,
+      }),
+    });
+    const payload = await response.json();
+    if (!payload.ok) throw new Error(payload.error || "Could not save model settings.");
+    $("modelApiKey").value = "";
+    state.modelSettings = payload;
+    updateModelSettingsView();
+    log("settings", clearKey ? "Cleared saved model key." : "Saved model settings.");
+  } catch (error) {
+    $("modelKeyStatus").textContent = error.message || "Could not save model settings.";
+    log("error", error.message || "Could not save model settings.");
+  }
 }
 
 function siteForAction() {
@@ -547,6 +644,7 @@ async function loadSettings() {
     "taskText",
     "successCriteria",
     "template",
+    "templateManual",
     "model",
     "helperUrl",
     "chromeProfile",
@@ -565,8 +663,15 @@ async function loadSettings() {
   }
   if (saved.taskText) $("taskText").value = saved.taskText;
   if (saved.successCriteria) $("successCriteria").value = saved.successCriteria;
-  if (saved.template) $("template").value = saved.template;
+  if (
+    saved.templateManual
+    && saved.template
+    && $("template").querySelector(`option[value="${CSS.escape(saved.template)}"]`)
+  ) {
+    $("template").value = saved.template;
+  }
   if (saved.model) $("model").value = saved.model;
+  state.modelSavedLocally = Boolean(saved.model);
   if (saved.chromeProfile) $("chromeProfile").value = saved.chromeProfile;
   state.selectedSite = saved.selectedSite && saved.selectedSite !== "auto"
     ? saved.selectedSite
@@ -585,13 +690,9 @@ function applyBriefStarter() {
   if (task !== undefined) {
     $("taskText").value = task;
   }
-  if (option.dataset.template) {
-    $("template").value = option.dataset.template;
-  }
   storageSet({
     briefStarter: $("briefStarter").value,
     taskText: $("taskText").value.trim(),
-    template: $("template").value,
   });
   updateButtons();
 }
@@ -611,6 +712,14 @@ function saveNotificationSettings() {
   });
 }
 
+function saveTemplatePreference() {
+  const template = $("template").value || null;
+  storageSet({
+    template,
+    templateManual: Boolean(template),
+  });
+}
+
 function connectHelper() {
   if (state.socket?.readyState === WebSocket.OPEN) return;
 
@@ -627,6 +736,7 @@ function connectHelper() {
     socket.send(JSON.stringify({ type: "list_sites" }));
     socket.send(JSON.stringify({ type: "resolve", url: state.activeUrl }));
     refreshBrowserStatus();
+    loadModelSettings();
     if (state.browserStatusTimer) clearInterval(state.browserStatusTimer);
     state.browserStatusTimer = setInterval(refreshBrowserStatus, 5000);
   });
@@ -638,6 +748,7 @@ function connectHelper() {
     state.browserStatusTimer = null;
     $("agentStatus").textContent = "offline";
     $("runMessage").textContent = "Set up or reconnect the local Flying Pig helper.";
+    updateModelSettingsView();
     log("helper", "Disconnected from local Flying Pig helper.");
   });
 
@@ -648,6 +759,7 @@ function connectHelper() {
     state.browserStatusTimer = null;
     $("agentStatus").textContent = "error";
     $("runMessage").textContent = "Set up or reconnect the local Flying Pig helper.";
+    updateModelSettingsView();
     log("error", `Helper unavailable at ${state.helperUrl}.`);
   });
 
@@ -859,11 +971,18 @@ async function hucaTask() {
 
 function buildRunPayload(task) {
   const cdpUrl = $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
-  const template = $("template").value;
+  const template = $("template").value || null;
   const model = $("model").value;
   const successCriteria = $("successCriteria").value.trim();
   saveHelperUrl();
-  storageSet({ taskText: task, successCriteria, cdpUrl, template, model });
+  storageSet({
+    taskText: task,
+    successCriteria,
+    cdpUrl,
+    template,
+    templateManual: Boolean(template),
+    model,
+  });
 
   return {
     site: state.selectedSite || state.activeSite || "generic",
@@ -951,6 +1070,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     storageSet({ chromeProfile: $("chromeProfile").value || "dedicated" });
   });
   $("briefStarter").addEventListener("change", applyBriefStarter);
+  $("template").addEventListener("change", saveTemplatePreference);
+  $("model").addEventListener("change", () => {
+    storageSet({ model: $("model").value });
+    state.modelSavedLocally = true;
+    updateModelSettingsView();
+  });
+  $("saveModelSettings").addEventListener("click", () => saveModelSettings());
+  $("clearModelKey").addEventListener("click", () => saveModelSettings({ clearKey: true }));
   $("taskText").addEventListener("input", () => {
     storageSet({ taskText: $("taskText").value.trim() });
     updateButtons();

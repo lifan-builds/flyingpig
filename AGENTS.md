@@ -1,4 +1,4 @@
-<!-- context-harness-schema: v2 -->
+<!-- context-harness:schema v2 -->
 
 # Agent Guide
 
@@ -84,5 +84,6 @@ Use this index to open only the `CONTEXT.md` sections relevant to the task.
 - `CONTEXT.md#workflow` - setup, run, test, lint, and deploy commands.
 - `CONTEXT.md#language` - canonical terms and avoided names.
 - `CONTEXT.md#relationships` - durable invariants and domain relationships.
+- `CONTEXT.md#flagged-ambiguities` - resolved naming or meaning conflicts.
 - `CONTEXT.md#learned-patterns` - durable lessons from corrections or failed attempts.
 <!-- context-harness:index:end -->

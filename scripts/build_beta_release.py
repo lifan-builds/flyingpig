@@ -18,6 +18,8 @@ INCLUDE_PATHS = [
     "pyproject.toml",
     "requirements.txt",
     "docs/beta.md",
+    "docs/releases",
+    "docs/release-assets",
     "dashboard",
     "desktop",
     "src",
@@ -105,7 +107,7 @@ python scripts/start.py --help
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--version", default="1.0.0")
+    parser.add_argument("--version", default="1.0.1")
     parser.add_argument("--output-dir", type=Path, default=ROOT / "dist")
     parser.add_argument("--clean", action="store_true", help="Remove output dir before building")
     return parser

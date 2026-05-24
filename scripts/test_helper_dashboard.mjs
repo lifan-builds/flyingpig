@@ -172,6 +172,43 @@ async function main() {
       () => document.getElementById("browserStatus")?.textContent === "Work Window Offline",
       { timeout: 10000 },
     );
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("modelKeyStatus")?.textContent.includes("key is configured"),
+      { timeout: 10000 },
+    );
+    await dashboardPage.$eval(".advanced", (details) => {
+      details.open = true;
+    });
+    const modelKeyField = await dashboardPage.$eval("#modelApiKey", (input) => ({
+      type: input.type,
+      value: input.value,
+      autocomplete: input.getAttribute("autocomplete"),
+    }));
+    if (
+      modelKeyField.type !== "password"
+      || modelKeyField.value !== ""
+      || modelKeyField.autocomplete !== "off"
+    ) {
+      throw new Error(`Model key field is not safe by default: ${JSON.stringify(modelKeyField)}`);
+    }
+    await setValue(dashboardPage, "#model", "claude");
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("modelKeyStatus")?.textContent.includes("not configured"),
+      { timeout: 10000 },
+    );
+    await setValue(dashboardPage, "#modelApiKey", "sk-ant-test-dashboard");
+    await dashboardPage.click("#saveModelSettings");
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("modelKeyStatus")?.textContent.includes("key is configured")
+        && document.getElementById("modelApiKey")?.value === "",
+      { timeout: 10000 },
+    );
+    await dashboardPage.click("#clearModelKey");
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("modelKeyStatus")?.textContent.includes("not configured"),
+      { timeout: 10000 },
+    );
+    await setValue(dashboardPage, "#model", "cliproxyapi");
     const startDisabledWithoutBrowser = await dashboardPage.$eval(
       "#startTask",
       (button) => button.disabled,
@@ -218,6 +255,47 @@ async function main() {
     if (briefStarterOptions.length > 4 || !briefStarterOptions.includes("Custom brief")) {
       throw new Error(`Unexpected brief starter options: ${briefStarterOptions.join(", ")}`);
     }
+    const agentApproach = await dashboardPage.$eval("#template", (select) => ({
+      label: document.querySelector('label[for="template"]')?.textContent || "",
+      value: select.value,
+      firstOption: select.options[0]?.textContent || "",
+      inAdvanced: select.closest("details")?.classList.contains("advanced") || false,
+      bodyText: document.body.textContent || "",
+    }));
+    if (
+      agentApproach.label !== "Agent approach"
+      || agentApproach.value !== ""
+      || agentApproach.firstOption !== "Automatic (agent decides)"
+      || !agentApproach.inAdvanced
+      || agentApproach.bodyText.includes("Playbook")
+    ) {
+      throw new Error(`Unexpected agent approach UI: ${JSON.stringify(agentApproach)}`);
+    }
+    await dashboardPage.evaluate(() => {
+      localStorage.setItem("flyingpig.template", JSON.stringify("retention_offer"));
+      localStorage.removeItem("flyingpig.templateManual");
+    });
+    await dashboardPage.reload({ waitUntil: "domcontentloaded" });
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("runtimeStatus")?.textContent === "Helper Online",
+      { timeout: 10000 },
+    );
+    const migratedTemplate = await dashboardPage.$eval("#template", (select) => select.value);
+    if (migratedTemplate !== "") {
+      throw new Error(`Legacy saved template should migrate to automatic, got ${migratedTemplate}.`);
+    }
+    await setValue(dashboardPage, "#briefStarter", "retention_offer");
+    const templateAfterStarter = await dashboardPage.$eval("#template", (select) => select.value);
+    if (templateAfterStarter !== "") {
+      throw new Error(`Brief starter should leave agent approach automatic, got ${templateAfterStarter}.`);
+    }
+    await setValue(dashboardPage, "#template", "negotiate_fee");
+    await setValue(dashboardPage, "#briefStarter", "dispute_charge");
+    const templateAfterManualChoice = await dashboardPage.$eval("#template", (select) => select.value);
+    if (templateAfterManualChoice !== "negotiate_fee") {
+      throw new Error(`Brief starter overwrote manual agent approach: ${templateAfterManualChoice}.`);
+    }
+    await setValue(dashboardPage, "#template", "");
     if (await dashboardPage.$("#openOura")) {
       throw new Error("Dashboard still renders the dedicated Oura button.");
     }

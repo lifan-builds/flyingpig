@@ -49,6 +49,7 @@ from src.agent.browser_runtime import (
     supported_chrome_profile_modes,
 )
 from src.agent.run_orchestration import build_agent_run_plan
+from src.daemon.model_settings import model_settings_payload, save_model_settings
 from src.daemon.preflight import preflight_check, task_with_success_criteria
 from src.daemon.run_session import (
     RunEventType,
@@ -110,6 +111,13 @@ class RunStartRequest(BaseModel):
 class RunAnswerRequest(BaseModel):
     text: str = ""
     payload: dict | None = None
+
+
+class ModelSettingsRequest(BaseModel):
+    default_model: str | None = None
+    provider: str | None = None
+    api_key: str | None = None
+    clear_key: bool = False
 
 
 class RunManager:
@@ -626,6 +634,17 @@ def create_app() -> FastAPI:
     @app.get("/run/state")
     async def run_state():
         return run_manager.state.snapshot()
+
+    @app.get("/model/settings")
+    async def model_settings():
+        return model_settings_payload()
+
+    @app.post("/model/settings")
+    async def model_settings_update(request: ModelSettingsRequest):
+        try:
+            return save_model_settings(**request.model_dump())
+        except ValueError as exc:
+            return {**model_settings_payload(), "ok": False, "error": str(exc)}
 
     @app.post("/run/start")
     async def run_start(request: RunStartRequest):

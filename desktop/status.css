@@ -1,72 +1,85 @@
+:root {
+  color-scheme: light;
+  --bg: oklch(96.5% 0.014 78);
+  --bg-2: oklch(93.5% 0.018 82);
+  --panel: oklch(98.5% 0.009 82);
+  --ink: oklch(25% 0.034 74);
+  --text: oklch(34% 0.03 74);
+  --muted: oklch(50% 0.026 82);
+  --border: oklch(84% 0.024 82);
+  --border-strong: oklch(72% 0.034 82);
+  --accent: oklch(52% 0.13 157);
+  --accent-strong: oklch(42% 0.12 157);
+  --field: oklch(94% 0.012 82);
+  --shadow: 0 18px 48px oklch(26% 0.03 74 / 0.11);
+}
+
 * {
   box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  color: #fbf5e9;
   background:
-    radial-gradient(circle at 20% 8%, rgba(255, 139, 114, 0.18), transparent 280px),
-    radial-gradient(circle at 82% 0%, rgba(102, 211, 155, 0.16), transparent 320px),
-    #0f1514;
+    linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 100%);
+  color: var(--text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 .status-shell {
-  min-height: 100vh;
   display: grid;
-  place-items: center;
+  min-height: 100vh;
   padding: 48px 24px;
+  place-items: center;
 }
 
 .status-panel {
-  width: min(640px, 100%);
-  border: 1px solid rgba(245, 234, 213, 0.13);
+  background: var(--panel);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent),
-    rgba(23, 31, 29, 0.98);
+  box-shadow: var(--shadow);
   padding: 32px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  width: min(640px, 100%);
 }
 
 .app-icon {
-  border-radius: 20px;
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+  border-radius: 16px;
+  box-shadow: 0 10px 24px oklch(26% 0.03 74 / 0.14);
   display: block;
   margin-bottom: 18px;
 }
 
 .eyebrow {
-  margin: 0 0 8px;
-  color: #a9b8af;
+  color: var(--muted);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 780;
   letter-spacing: 0;
+  margin: 0 0 8px;
   text-transform: uppercase;
 }
 
 h1 {
-  margin: 0 0 12px;
+  color: var(--ink);
   font-size: 2rem;
   line-height: 1.12;
+  margin: 0 0 12px;
 }
 
 p {
-  margin: 0;
-  color: #d8ded8;
+  color: var(--text);
   line-height: 1.5;
+  margin: 0;
 }
 
 .spinner {
-  width: 36px;
+  animation: spin 0.9s linear infinite;
+  border: 4px solid oklch(80% 0.026 82);
+  border-radius: 50%;
+  border-top-color: var(--accent);
   height: 36px;
   margin-top: 28px;
-  border: 4px solid rgba(251, 245, 233, 0.18);
-  border-top-color: #66d39b;
-  border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  width: 36px;
 }
 
 .failure {
@@ -75,27 +88,31 @@ p {
 
 .actions {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 24px;
 }
 
 button {
-  min-height: 42px;
-  border: 0;
-  border-radius: 6px;
-  background: #66d39b;
-  color: #06140e;
-  padding: 0 18px;
-  font: inherit;
-  font-weight: 700;
+  background: var(--accent);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: oklch(98% 0.012 142);
   cursor: pointer;
+  font: inherit;
+  font-weight: 780;
+  min-height: 42px;
+  padding: 0 18px;
+}
+
+button:hover {
+  background: var(--accent-strong);
 }
 
 button.secondary {
-  border: 1px solid #344742;
-  background: #212b28;
-  color: #fbf5e9;
+  background: var(--field);
+  border-color: var(--border-strong);
+  color: var(--ink);
 }
 
 dl {
@@ -106,22 +123,23 @@ dl {
 
 dl > div {
   display: grid;
-  grid-template-columns: 120px minmax(0, 1fr);
   gap: 16px;
+  grid-template-columns: 120px minmax(0, 1fr);
 }
 
 dt {
-  color: #a9b8af;
+  color: var(--muted);
   font-size: 0.88rem;
-  font-weight: 700;
+  font-weight: 760;
 }
 
 dd {
-  min-width: 0;
-  margin: 0;
-  overflow-wrap: anywhere;
+  color: var(--ink);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.88rem;
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .hidden {

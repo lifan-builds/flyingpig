@@ -84,7 +84,7 @@ account data.
 - `pytest tests -q -m "not slow"` passes.
 - `npm run test:dashboard` passes.
 - `npm run test:desktop` passes.
-- `python scripts/build_beta_release.py --clean` produces `dist/flyingpig-beta-1.0.0.zip`.
+- `python scripts/build_beta_release.py --clean` produces `dist/flyingpig-beta-1.0.1.zip`.
 - The built zip is scanned for PII, API keys, credentials, tokens, cookies, logs, recordings, and user-specific account information before publishing.
 - A supervised Amex smoke reaches chat, sends only after user confirmation, and captures a transcript.
 - Cancel from the dashboard stops an active run.
@@ -100,13 +100,13 @@ Automated gates:
 | Gate | Evidence |
 | --- | --- |
 | Ruff | `ruff check src scripts tests` passed. |
-| Non-slow tests | `pytest tests -q -m "not slow"` passed: 137 passed, 2 deselected. |
-| Dashboard smoke | Elevated `npm run test:dashboard` passed with benchmark output: `helper_online=2217ms`, `work_window_ready=2290ms`, `mock_run_done=2438ms`. |
+| Non-slow tests | `pytest tests -q -m "not slow"` passed: 138 passed, 2 deselected. |
+| Dashboard smoke | Elevated `npm run test:dashboard` passed with benchmark output: `helper_online=1828ms`, `work_window_ready=2052ms`, `mock_run_done=2199ms`. |
 | Desktop smoke | Elevated `npm run test:desktop` passed; Electron shell reached the helper-served dashboard at `http://127.0.0.1:8865/dashboard/`. |
-| Source release bundle | `python scripts/build_beta_release.py --clean` produced `dist/flyingpig-beta-1.0.0.zip`; final SHA-256 should be computed after docs are finalized because the release bundle includes this checklist. |
+| Source release bundle | `python scripts/build_beta_release.py` produced `dist/flyingpig-beta-1.0.1.zip`; final SHA-256 should be computed after docs are finalized because the release bundle includes this checklist. |
 | Packaged helper sidecar | `npm run build:helper` produced `dist/helper/flyingpig-helper`. PyInstaller completed with optional-backend/cache warnings only. |
-| Desktop package | `npm run desktop:package` produced `dist/desktop/Flying Pig-1.0.0-arm64-mac.zip`; SHA-256 `dd949fd8c4f92616e0ad07fcec59c3274fbd80899556e909078cfc1d993a623a`. The app is unsigned because no local Developer ID identity is configured. |
-| Release privacy scan | `zipgrep`/filename scans found no common API-key/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.0 source bundle or desktop zip. |
+| Desktop package | `npm run desktop:package` produced `dist/desktop/Flying Pig-1.0.1-arm64-mac.zip`; SHA-256 `fef65229976165d5665782510a049a8ca44dc78a6d5eaafbe2bc0ed8f6159c48`. The app is unsigned because no local Developer ID identity is configured. |
+| Release privacy scan | `zipgrep`/filename scans found no common API-key/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.1 source bundle or desktop zip. |
 
 ## Release Evidence — 2026-05-18
 

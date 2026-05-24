@@ -92,6 +92,9 @@ to the first `sk-local-...` key in `~/.cli-proxy-api/config.yaml`.
 
 For direct providers, set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
 `GOOGLE_API_KEY` in `.env` depending on which `--model` you pick.
+In the desktop dashboard, Advanced → Model also lets users save or clear a
+provider key. The dashboard never displays saved keys; it writes them to the
+user-local env file at `~/.flyingpig/.env`.
 
 ### Manual End-To-End Smoke
 

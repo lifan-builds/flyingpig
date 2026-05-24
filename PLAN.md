@@ -197,6 +197,15 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - Release scans found no common secret/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.0 source bundle or desktop zip.
 - Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (137 passed, 2 deselected); elevated `npm run test:dashboard`; elevated `npm run test:desktop`; `python scripts/build_beta_release.py`; `npm run build:helper`; `npm run desktop:package`.
 
+### 2026-05-24 Release 1.0.1 publishing pass
+- Kept the already-pushed `v1.0.0` tag intact and prepared `1.0.1` for the publishable GitHub Release so the tag, code, and downloadable artifacts match.
+- Added the refreshed light dashboard screenshots and Chinese release note under `docs/releases/v1.0.1-zh.md`; source release bundles now include release notes and screenshot assets.
+- Included the final task-intake and model-settings UI changes: primary flow defaults to automatic agent approach selection, manual approach is under Advanced, and model provider keys can be saved to the user-local env file without exposing saved values.
+- Built source release bundle `dist/flyingpig-beta-1.0.1.zip` with SHA-256 `5f9e2cfc48933892513746ce04fc4e249a03ca8acb20811d8d41cb41a779c60b`.
+- Built packaged helper sidecar `dist/helper/flyingpig-helper` and desktop artifact `dist/desktop/Flying Pig-1.0.1-arm64-mac.zip` with SHA-256 `fef65229976165d5665782510a049a8ca44dc78a6d5eaafbe2bc0ed8f6159c48`; desktop package remains unsigned because no local Developer ID identity is configured.
+- Release scans found no common secret/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.1 source bundle or desktop zip.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (138 passed, 2 deselected); elevated `npm run test:dashboard` (`helper_online=1828ms`, `work_window_ready=2052ms`, `mock_run_done=2199ms`); elevated `npm run test:desktop`; `python scripts/build_beta_release.py`; `npm run build:helper`; `npm run desktop:package`; `git diff --check`.
+
 ## Decisions
 - **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
 - **2026-04-09** Consumer-side positioning — the market gap.

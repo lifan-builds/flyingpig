@@ -1,7 +1,10 @@
+import os
 import re
 from pathlib import Path
 
 from pydantic_settings import BaseSettings
+
+USER_ENV_FILE = Path(os.environ.get("FLYINGPIG_USER_ENV", "~/.flyingpig/.env")).expanduser()
 
 
 def _read_cliproxyapi_api_key(config_path: str) -> str:
@@ -38,7 +41,10 @@ class Settings(BaseSettings):
     browser_viewport_width: int = 1920
     browser_viewport_height: int = 1080
 
-    model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
+    model_config = {
+        "env_file": (".env", str(USER_ENV_FILE)),
+        "env_file_encoding": "utf-8",
+    }
 
     def model_post_init(self, __context: object) -> None:
         if not self.cliproxyapi_api_key:

@@ -1,4 +1,5 @@
 # Context
+<!-- context-harness:schema v2 -->
 
 ## Project
 **Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ helper runtime, Electron desktop shell, helper-served dashboard, browser-use + Playwright for automation, and Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers. Product direction: one user-facing desktop app; the Python helper and dashboard are internal runtime/UI implementation details. The helper owns browser-use execution, dashboard static hosting, run/session protocol, and Controlled Chrome Window launch. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Puppeteer dashboard smoke tests, Electron desktop smoke tests.
@@ -76,6 +77,7 @@
 - **Run Session**: The reconnectable helper-side state model for one active agent run, including status, progress, pending user-attention request, result payload, and snapshots sent to dashboard clients. Avoid: hand-building run-state dictionaries throughout WebSocket code.
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 - **Run Timing Span**: PII-free duration event for helper/runtime phases such as launch, pre-flight, first observation, browser-use steps, model planning, user waits, representative waits, and result capture. Avoid: including raw chat text, URLs with private data, credentials, or account details in timing metadata.
+- **Playbook**: Internal/developer-facing prompt-template selection language. Avoid: making "Playbook" a prominent primary task-intake choice; the default product behavior should be automatic agent selection with manual template choice hidden under Advanced.
 
 ## Relationships
 - The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosting, and reconnectable run state.
@@ -110,6 +112,9 @@
 - The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
 - **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
 - The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.
+
+## Flagged Ambiguities
+- None currently flagged.
 
 ## Learned Patterns
 - **CDP attach must reuse the current tab** — when attaching via CDP, never call `navigate_to(new_tab=True)`; fresh Target.createTarget lands in a new browser context and loses cookies. Use `get_current_page()` and page-level `goto()` if navigation is needed.

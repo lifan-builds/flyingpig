@@ -85,10 +85,10 @@
 
           <label for="briefStarter">Brief starter</label>
           <select id="briefStarter">
-            <option value="custom" data-template="general">Custom brief</option>
-            <option value="retention_offer" data-template="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
-            <option value="cancel_subscription" data-template="general" data-task="Help me cancel this subscription or service. Before confirming any irreversible cancellation, ask me for approval with the exact message.">Cancel subscription</option>
-            <option value="dispute_charge" data-template="dispute_charge" data-task="Help me dispute a fee or charge. Ask for any missing amount, merchant, or date details before sending.">Dispute fee or charge</option>
+            <option value="custom">Custom brief</option>
+            <option value="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
+            <option value="cancel_subscription" data-task="Help me cancel this subscription or service. Before confirming any irreversible cancellation, ask me for approval with the exact message.">Cancel subscription</option>
+            <option value="dispute_charge" data-task="Help me dispute a fee or charge. Ask for any missing amount, merchant, or date details before sending.">Dispute fee or charge</option>
           </select>
 
           <label for="taskText">Problem brief (editable)</label>
@@ -130,16 +130,17 @@
             <button id="launchChrome" class="secondary" type="button">Open Work Window</button>
           </div>
 
-          <label for="template">Playbook</label>
-          <select id="template">
-            <option value="general">General support</option>
-            <option value="negotiate_fee">Negotiate fee</option>
-            <option value="dispute_charge">Dispute charge</option>
-            <option value="retention_offer">Retention offer</option>
-          </select>
-
           <details class="advanced">
             <summary>Advanced</summary>
+            <label for="template">Agent approach</label>
+            <select id="template">
+              <option value="">Automatic (agent decides)</option>
+              <option value="general">General support</option>
+              <option value="negotiate_fee">Negotiate fee</option>
+              <option value="dispute_charge">Dispute charge</option>
+              <option value="retention_offer">Retention offer</option>
+            </select>
+
             <label for="model">Model</label>
             <select id="model">
               <option value="cliproxyapi">Cliproxy API</option>
@@ -147,6 +148,20 @@
               <option value="openai">OpenAI</option>
               <option value="gemini-flash">Gemini Flash</option>
             </select>
+
+            <section class="model-settings" aria-label="Model API key settings">
+              <div class="setting-copy">
+                <strong id="modelKeyTitle">Model API key</strong>
+                <span id="modelKeyStatus">Connect the helper to check credential status.</span>
+              </div>
+              <label for="modelApiKey">API key</label>
+              <input id="modelApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank to keep the saved key">
+              <p id="modelKeyHelp" class="field-note">Keys are stored only in your local Flying Pig env file.</p>
+              <div class="row model-key-actions">
+                <button id="saveModelSettings" class="secondary" type="button">Save Model Settings</button>
+                <button id="clearModelKey" class="danger" type="button">Clear Saved Key</button>
+              </div>
+            </section>
 
             <label for="cdpUrl">Browser endpoint</label>
             <input id="cdpUrl" placeholder="http://127.0.0.1:9222">

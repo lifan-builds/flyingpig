@@ -109,6 +109,52 @@ async def health():
     return {"ok": True}
 
 
+@app.get("/model/settings")
+async def model_settings():
+    return {
+        "ok": True,
+        "default_model": "cliproxyapi",
+        "providers": [
+            {
+                "id": "cliproxyapi",
+                "label": "CLIProxyAPI",
+                "configured": True,
+                "help": "Uses the mock CLIProxyAPI settings.",
+            },
+            {
+                "id": "claude",
+                "label": "Claude",
+                "configured": False,
+                "help": "Used for Claude test runs.",
+            },
+            {
+                "id": "openai",
+                "label": "OpenAI",
+                "configured": False,
+                "help": "Used for OpenAI test runs.",
+            },
+            {
+                "id": "gemini-flash",
+                "label": "Gemini",
+                "configured": False,
+                "help": "Used for Gemini test runs.",
+            },
+        ],
+    }
+
+
+@app.post("/model/settings")
+async def model_settings_update(request: Request):
+    payload = await request.json()
+    provider = payload.get("provider") or "cliproxyapi"
+    response = await model_settings()
+    for item in response["providers"]:
+        if item["id"] == provider:
+            item["configured"] = not payload.get("clear_key")
+    response["default_model"] = payload.get("default_model") or "cliproxyapi"
+    return response
+
+
 @app.post("/browser/launch")
 async def browser_launch(request: Request):
     global mock_browser_connected, mock_work_window_url
