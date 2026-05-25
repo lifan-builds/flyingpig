@@ -48,6 +48,7 @@
 - Run product app: `npm run desktop:dev`
 - Build helper sidecar: `npm run build:helper`
 - Package desktop app: `npm run desktop:package`
+- Publish desktop update artifacts: `npm run desktop:publish`
 - Debug helper only: `flyingpig-helper`
 - Debug CLI run only: `python scripts/start.py --model <model> ...`
 - Test: `pytest tests/`
@@ -77,6 +78,9 @@
 - **Run Session**: The reconnectable helper-side state model for one active agent run, including status, progress, pending user-attention request, result payload, and snapshots sent to dashboard clients. Avoid: hand-building run-state dictionaries throughout WebSocket code.
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 - **Run Timing Span**: PII-free duration event for helper/runtime phases such as launch, pre-flight, first observation, browser-use steps, model planning, user waits, representative waits, and result capture. Avoid: including raw chat text, URLs with private data, credentials, or account details in timing metadata.
+- **Run Scorecard**: PII-free beta outcome payload for a completed run, including final status, site/profile, goal type, human reached, HUCA attempts, checkpoint/user-intervention counts, timing, offer/result presence, unresolved item count, blocked reason, and user-confirmed outcome. Avoid: storing transcript text, private URLs, credentials, cookies, account details, or chat logs in scorecard data.
+- **Desktop Update Feed**: GitHub Release assets plus generated updater metadata such as `latest-mac.yml` consumed by the packaged Electron app. Avoid: presenting auto-update as reliable for normal users until Mac signing/notarization and release asset accessibility are solved.
+- **Update-Capable Baseline**: A signed/notarized desktop release that includes updater code and publishes matching `latest-mac.yml`, zip, and blockmap assets. Avoid: treating `v1.0.1` as update-capable because that release predates the updater assets.
 - **Playbook**: Internal/developer-facing prompt-template selection language. Avoid: making "Playbook" a prominent primary task-intake choice; the default product behavior should be automatic agent selection with manual template choice hidden under Advanced.
 
 ## Relationships
@@ -111,6 +115,9 @@
 - The **Run Session** module owns state snapshots and protocol events for pending user-attention requests; FastAPI/WebSocket code is an adapter over that state.
 - The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
 - **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
+- **Run Scorecards** are emitted with final results and can be marked by the user locally as solved, partial, or failed; beta stats should be derived from scorecards, not raw transcripts.
+- The **Desktop Update Feed** is bundled through Electron update plumbing while helper updates remain app-resource updates; do not add a separate helper self-update path for v1.
+- A macOS **Update-Capable Baseline** must pass signed artifact verification and public GitHub update-asset verification before it is announced as auto-updating.
 - The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.
 
 ## Flagged Ambiguities

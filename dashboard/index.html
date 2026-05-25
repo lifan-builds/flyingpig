@@ -240,6 +240,21 @@
             <p class="eyebrow">Result</p>
             <h2 id="resultSummary">Task finished</h2>
             <dl id="resultDetails"></dl>
+            <section class="outcome-confirmation" aria-label="Confirm run outcome">
+              <div>
+                <strong>Did Flying Pig solve it?</strong>
+                <span id="outcomeStatus">Mark the outcome to improve local beta stats.</span>
+              </div>
+              <div class="outcome-actions">
+                <button id="markSolved" class="secondary" type="button">Solved</button>
+                <button id="markPartial" class="secondary" type="button">Partial</button>
+                <button id="markFailed" class="secondary" type="button">Failed</button>
+              </div>
+            </section>
+            <section class="beta-stats" aria-label="Local beta stats">
+              <p class="eyebrow">Local beta stats</p>
+              <div id="betaStats" class="stat-grid"></div>
+            </section>
           </section>
 
           <section class="panel transcript">

@@ -693,8 +693,38 @@ def test_result_ready_payload_shape_from_daemon(monkeypatch):
     assert result["evidence"]["chat_transcript_lines"] == 2
     assert result["human_reached"] is True
     assert result["offer_result"] == "$10"
+    assert result["scorecard"]["site_profile"] == "amex"
+    assert result["scorecard"]["goal_type"] == "general"
+    assert result["scorecard"]["huca_attempts"] == 0
+    assert result["scorecard"]["user_confirmed_outcome"] is None
     assert result["timing_summary"]["by_name_ms"]["preflight"] >= 0
     assert result["timing_summary"]["by_name_ms"]["agent_construction"] >= 0
+
+
+def test_run_outcome_marks_current_scorecard(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            assert ws.receive_json()["status"] == "ready_to_start"
+            ws.send_json({"type": "start", **run_payload()})
+
+            result = None
+            for _ in range(20):
+                message = ws.receive_json()
+                if message.get("type") == "result_ready":
+                    result = message
+                    break
+
+        assert result is not None
+        response = client.post("/run/outcome", json={"outcome": "solved"})
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["scorecard"]["user_confirmed_outcome"] == "solved"
 
 
 def test_progress_message_prefers_specific_goal_and_filters_step_noise():

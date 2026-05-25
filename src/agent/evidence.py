@@ -221,6 +221,13 @@ def result_ready_payload(result: TaskResult) -> dict:
         unresolved_items = []
     if details.get("next_steps"):
         unresolved_items.append(str(details["next_steps"]))
+    scorecard = run_scorecard_payload(
+        result,
+        status=status,
+        timing_summary=timing_summary,
+        checkpoint_decisions_count=len(checkpoint_decisions),
+        unresolved_items=unresolved_items,
+    )
 
     return {
         "type": "result_ready",
@@ -247,6 +254,7 @@ def result_ready_payload(result: TaskResult) -> dict:
         "time_saved": details.get("time_saved"),
         "checkpoint_decisions": checkpoint_decisions,
         "checkpoint_events_count": len(result.checkpoint_events),
+        "scorecard": scorecard,
     }
 
 
@@ -261,4 +269,63 @@ def timing_summary_payload(spans: list[dict]) -> dict:
         "total_ms": round(sum(totals.values()), 1),
         "span_count": len(spans),
         "by_name_ms": totals,
+    }
+
+
+def run_scorecard_payload(
+    result: TaskResult,
+    *,
+    status: str | None = None,
+    timing_summary: dict | None = None,
+    checkpoint_decisions_count: int | None = None,
+    unresolved_items: list[str] | None = None,
+) -> dict:
+    """Return a PII-free beta outcome scorecard for local product measurement."""
+    details = result.outcome_details or {}
+    status_value = status or str(result.status).split(".")[-1].lower()
+    timing = timing_summary or timing_summary_payload(result.timing_spans)
+    checkpoint_count = (
+        checkpoint_decisions_count
+        if checkpoint_decisions_count is not None
+        else sum(
+            1
+            for event in result.checkpoint_events
+            if event.get("event_type") == "decision_checkpoint_answered"
+        )
+    )
+    question_count = sum(
+        1
+        for event in result.checkpoint_events
+        if event.get("event_type") == "question_answered"
+    )
+    unresolved = unresolved_items if unresolved_items is not None else []
+    blocked_reason = (
+        details.get("blocked_reason")
+        or details.get("failure_reason")
+        or details.get("error")
+        or (
+            "Run failed before a structured reason was captured."
+            if status_value == "failed"
+            else None
+        )
+    )
+
+    return {
+        "schema_version": 1,
+        "goal_type": details.get("goal_type") or details.get("template") or "automatic",
+        "site_profile": details.get("site_profile") or details.get("site"),
+        "final_status": status_value,
+        "human_reached": details.get("human_reached"),
+        "huca_attempts": int(details.get("huca_attempts") or 0),
+        "checkpoint_count": checkpoint_count,
+        "user_intervention_count": checkpoint_count + question_count,
+        "duration_seconds": result.duration_seconds,
+        "timing_total_ms": timing.get("total_ms", 0.0),
+        "offer_result": details.get("amount_saved")
+        or details.get("offer")
+        or details.get("result")
+        or details.get("confirmation_number"),
+        "blocked_reason": blocked_reason,
+        "unresolved_items_count": len(unresolved),
+        "user_confirmed_outcome": details.get("user_confirmed_outcome"),
     }

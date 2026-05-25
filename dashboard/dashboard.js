@@ -36,6 +36,14 @@ const state = {
   runStatus: "ready_to_start",
   modelSettings: null,
   modelSavedLocally: false,
+  lastResult: null,
+};
+
+const betaScorecardsKey = "betaScorecards";
+const outcomeLabels = {
+  solved: "Solved",
+  partial: "Partial",
+  failed: "Failed",
 };
 
 const attentionTitles = {
@@ -830,6 +838,11 @@ function handleHelperMessage(message) {
     $("runMessage").textContent = message.summary || "Task finished.";
     renderResult(message);
     log(message.status || "result", message.summary || "Task finished.");
+  } else if (message.type === "scorecard_updated") {
+    if (state.lastResult) {
+      state.lastResult.scorecard = message.scorecard || state.lastResult.scorecard;
+      renderOutcomeSelection(state.lastResult.scorecard?.user_confirmed_outcome || null);
+    }
   } else if (message.type === "error") {
     state.running = false;
     updateButtons();
@@ -869,13 +882,20 @@ function renderResult(result) {
   if (Array.isArray(result.timing_spans)) {
     renderTimingSpans(result.timing_spans);
   }
+  state.lastResult = {
+    ...result,
+    scorecard: result.scorecard || scorecardFromResult(result),
+  };
   $("resultPanel").classList.remove("hidden");
   $("resultSummary").textContent = result.outcome_summary || result.summary || "Task finished.";
   const details = $("resultDetails");
   details.replaceChildren();
+  const scorecard = state.lastResult.scorecard || {};
   const rows = [
+    ["Scorecard status", scorecard.final_status || result.status || "Unknown"],
     ["Human reached", result.human_reached === null || result.human_reached === undefined ? "Unknown" : (result.human_reached ? "Yes" : "No")],
     ["Offer / result", result.offer_result || "Not captured"],
+    ["HUCA attempts", String(scorecard.huca_attempts ?? 0)],
     ["Transcript", result.evidence?.transcript_path || result.transcript || "Not saved yet"],
     ["Timing", result.timing_summary ? `${formatDuration(result.timing_summary.total_ms)} across ${result.timing_summary.span_count} spans` : "Not captured"],
     ["Approvals", String(result.checkpoint_decisions?.length ?? result.checkpoint_events_count ?? 0)],
@@ -888,6 +908,106 @@ function renderResult(result) {
     dd.textContent = value;
     details.append(dt, dd);
   }
+  renderOutcomeSelection(scorecard.user_confirmed_outcome || null);
+  renderBetaStats();
+}
+
+function scorecardFromResult(result) {
+  return {
+    schema_version: 1,
+    goal_type: "automatic",
+    site_profile: state.selectedSite || state.activeSite || "generic",
+    final_status: result.status || "unknown",
+    human_reached: result.human_reached,
+    huca_attempts: 0,
+    checkpoint_count: result.checkpoint_decisions?.length ?? result.checkpoint_events_count ?? 0,
+    user_intervention_count: result.checkpoint_decisions?.length ?? result.checkpoint_events_count ?? 0,
+    duration_seconds: result.duration || 0,
+    timing_total_ms: result.timing_summary?.total_ms || 0,
+    offer_result: result.offer_result || null,
+    blocked_reason: null,
+    unresolved_items_count: Array.isArray(result.unresolved_items) ? result.unresolved_items.length : 0,
+    user_confirmed_outcome: null,
+  };
+}
+
+function renderOutcomeSelection(outcome) {
+  $("outcomeStatus").textContent = outcome
+    ? `Marked ${outcomeLabels[outcome] || outcome} for local beta stats.`
+    : "Mark the outcome to improve local beta stats.";
+  for (const [buttonId, value] of [
+    ["markSolved", "solved"],
+    ["markPartial", "partial"],
+    ["markFailed", "failed"],
+  ]) {
+    $(buttonId).classList.toggle("selected", outcome === value);
+  }
+}
+
+async function markRunOutcome(outcome) {
+  if (!state.lastResult?.scorecard) return;
+  const scorecard = {
+    ...state.lastResult.scorecard,
+    user_confirmed_outcome: outcome,
+    recorded_at: new Date().toISOString(),
+  };
+  state.lastResult.scorecard = scorecard;
+  renderOutcomeSelection(outcome);
+  await saveLocalScorecard(scorecard);
+  renderBetaStats();
+  try {
+    const response = await fetch(`${state.helperUrl}/run/outcome`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ outcome }),
+    });
+    if (!response.ok) {
+      log("scorecard", "Outcome saved locally; helper did not accept the update.");
+    }
+  } catch {
+    log("scorecard", "Outcome saved locally; helper update unavailable.");
+  }
+}
+
+async function saveLocalScorecard(scorecard) {
+  const saved = await storageGet([betaScorecardsKey]);
+  const previous = Array.isArray(saved[betaScorecardsKey]) ? saved[betaScorecardsKey] : [];
+  const next = [scorecard, ...previous].slice(0, 50);
+  storageSet({ [betaScorecardsKey]: next });
+}
+
+async function renderBetaStats() {
+  const saved = await storageGet([betaScorecardsKey]);
+  const cards = Array.isArray(saved[betaScorecardsKey]) ? saved[betaScorecardsKey] : [];
+  const confirmed = cards.filter((card) => card.user_confirmed_outcome);
+  const solved = confirmed.filter((card) => card.user_confirmed_outcome === "solved").length;
+  const partial = confirmed.filter((card) => card.user_confirmed_outcome === "partial").length;
+  const failed = confirmed.filter((card) => card.user_confirmed_outcome === "failed").length;
+  const humanReached = confirmed.filter((card) => card.human_reached === true).length;
+  const hucaRuns = confirmed.filter((card) => Number(card.huca_attempts || 0) > 0).length;
+  const stats = [
+    ["Marked runs", String(confirmed.length)],
+    ["Solved", ratioText(solved, confirmed.length)],
+    ["Partial", ratioText(partial, confirmed.length)],
+    ["Failed", ratioText(failed, confirmed.length)],
+    ["Human reached", ratioText(humanReached, confirmed.length)],
+    ["HUCA used", ratioText(hucaRuns, confirmed.length)],
+  ];
+  $("betaStats").replaceChildren();
+  for (const [label, value] of stats) {
+    const item = document.createElement("div");
+    const title = document.createElement("span");
+    const metric = document.createElement("strong");
+    title.textContent = label;
+    metric.textContent = value;
+    item.append(title, metric);
+    $("betaStats").append(item);
+  }
+}
+
+function ratioText(count, total) {
+  if (!total) return count ? String(count) : "-";
+  return `${count}/${total}`;
 }
 
 function renderDecisionCheckpoint(checkpoint) {
@@ -1098,6 +1218,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("cancelTask").addEventListener("click", cancelTask);
   $("sendAnswer").addEventListener("click", sendAnswer);
   $("sendCheckpointCustom").addEventListener("click", sendCheckpointCustom);
+  $("markSolved").addEventListener("click", () => markRunOutcome("solved"));
+  $("markPartial").addEventListener("click", () => markRunOutcome("partial"));
+  $("markFailed").addEventListener("click", () => markRunOutcome("failed"));
   $("clearLog").addEventListener("click", () => $("log").replaceChildren());
 
   connectHelper();

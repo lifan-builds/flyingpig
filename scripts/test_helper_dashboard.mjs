@@ -365,6 +365,13 @@ async function main() {
         && document.body.textContent.includes("Timing"),
       { timeout: 10000 },
     );
+    await dashboardPage.click("#markSolved");
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("outcomeStatus")?.textContent.includes("Marked Solved")
+        && document.getElementById("betaStats")?.textContent.includes("Marked runs")
+        && document.getElementById("betaStats")?.textContent.includes("1"),
+      { timeout: 10000 },
+    );
 
     await setValue(dashboardPage, "#taskText", "Mock HUCA smoke.");
     await dashboardPage.click("#hucaTask");

@@ -1,0 +1,74 @@
+name: Desktop Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to verify after publish, for example v1.0.2"
+        required: true
+        default: "v1.0.2"
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: Build signed macOS update
+    runs-on: macos-14
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+      APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+      APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Require signing and notarization secrets
+        run: |
+          test -n "$CSC_LINK"
+          test -n "$CSC_KEY_PASSWORD"
+          test -n "$APPLE_API_KEY_ID"
+          test -n "$APPLE_API_ISSUER"
+          test -n "$APPLE_TEAM_ID"
+          test -n "${{ secrets.APPLE_API_KEY_P8 }}"
+
+      - name: Write App Store Connect API key
+        run: |
+          mkdir -p "$RUNNER_TEMP/apple-private-keys"
+          printf '%s' '${{ secrets.APPLE_API_KEY_P8 }}' > "$RUNNER_TEMP/apple-private-keys/AuthKey_${APPLE_API_KEY_ID}.p8"
+          echo "APPLE_API_KEY=$RUNNER_TEMP/apple-private-keys/AuthKey_${APPLE_API_KEY_ID}.p8" >> "$GITHUB_ENV"
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          python -m pip install -e ".[dev]"
+
+      - name: Verify code before release
+        run: |
+          ruff check src scripts tests
+          pytest tests -q -m "not slow"
+          npm run test:desktop
+
+      - name: Build helper sidecar
+        run: npm run build:helper
+
+      - name: Publish desktop update artifacts
+        run: npm run desktop:publish
+
+      - name: Verify update feed assets
+        run: npm run desktop:verify-update -- --require-signed --github --tag="${RELEASE_TAG}"

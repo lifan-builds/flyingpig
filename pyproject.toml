@@ -1,6 +1,6 @@
 [project]
 name = "flyingpig"
-version = "1.0.1"
+version = "1.0.2"
 description = "Flying Pig AI (客服上树) — AI agent that interacts with customer service on your behalf"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -113,6 +113,10 @@ class RunAnswerRequest(BaseModel):
     payload: dict | None = None
 
 
+class RunOutcomeRequest(BaseModel):
+    outcome: str
+
+
 class ModelSettingsRequest(BaseModel):
     default_model: str | None = None
     provider: str | None = None
@@ -133,6 +137,7 @@ class RunManager:
         self.state = RunStateStore()
         self.current_run_request: dict | None = None
         self.timing_spans: list[dict] = []
+        self.huca_attempts = 0
         self._user_wait_started_at: float | None = None
         self._rep_wait_started_at: float | None = None
 
@@ -207,6 +212,10 @@ class RunManager:
         if not site:
             site = None
         self.timing_spans = []
+        if huca:
+            self.huca_attempts += 1
+        else:
+            self.huca_attempts = 0
         self._user_wait_started_at = None
         self._rep_wait_started_at = None
 
@@ -332,6 +341,17 @@ class RunManager:
                 result.timing_spans,
             )
             self.timing_spans = list(result.timing_spans)
+            result.outcome_details = {
+                **(result.outcome_details or {}),
+                "site": self.current_run_request.get("site") if self.current_run_request else None,
+                "site_profile": self.current_run_request.get("site")
+                if self.current_run_request
+                else None,
+                "template": self.current_run_request.get("template")
+                if self.current_run_request
+                else None,
+                "huca_attempts": self.huca_attempts,
+            }
             payload = result_payload(result)
             await self.broadcast(**payload)
             final_status = (
@@ -477,6 +497,22 @@ class RunManager:
     async def cancel(self) -> None:
         async with self.lock:
             await self._cancel_active_run(status_message="cancelled")
+
+    async def mark_outcome(self, outcome: str) -> dict:
+        allowed = {"solved", "partial", "failed"}
+        if outcome not in allowed:
+            options = ", ".join(sorted(allowed))
+            return {"ok": False, "error": f"outcome must be one of: {options}"}
+        snapshot = self.state.snapshot()
+        result = dict(snapshot.get("result") or {})
+        if not result:
+            return {"ok": False, "error": "no completed result to mark"}
+        scorecard = dict(result.get("scorecard") or {})
+        scorecard["user_confirmed_outcome"] = outcome
+        result["scorecard"] = scorecard
+        await self.set_state(result=result)
+        await self.broadcast(type="scorecard_updated", scorecard=scorecard)
+        return {"ok": True, "scorecard": scorecard}
 
     async def _cancel_active_run(self, *, status_message: str) -> bool:
         if self.agent_task and not self.agent_task.done():
@@ -655,6 +691,10 @@ def create_app() -> FastAPI:
     async def run_answer(request: RunAnswerRequest):
         await run_manager.answer(request.text, payload=request.payload)
         return run_manager.state.snapshot()
+
+    @app.post("/run/outcome")
+    async def run_outcome(request: RunOutcomeRequest):
+        return await run_manager.mark_outcome(request.outcome)
 
     @app.post("/run/cancel")
     async def run_cancel():

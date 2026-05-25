@@ -1,17 +1,25 @@
 import { app, BrowserWindow, Menu, ipcMain, shell } from "electron";
+import updaterPackage from "electron-updater";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { configureAutoUpdates } from "./auto_update.js";
 import { HelperSupervisor } from "./helper_supervisor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { autoUpdater } = updaterPackage;
 
 let mainWindow;
 let helper;
+let updates;
 let quitting = false;
 let latestStatus = {
   state: "starting",
   message: "Starting the Flying Pig helper.",
+};
+let latestUpdateStatus = {
+  state: "idle",
+  message: "Updates have not been checked yet.",
 };
 
 function appPath() {
@@ -28,6 +36,13 @@ function createMenu() {
       label: "Flying Pig",
       submenu: [
         { role: "about" },
+        { type: "separator" },
+        { label: "Check for Updates", click: () => checkForUpdates({ manual: true }) },
+        {
+          label: "Install Update and Relaunch",
+          enabled: Boolean(updates?.downloaded),
+          click: () => installUpdateAndRelaunch(),
+        },
         { type: "separator" },
         { label: "Retry Helper", click: () => retryHelper() },
         { label: "Open Logs Folder", click: () => openLogsFolder() },
@@ -65,6 +80,11 @@ function createMenu() {
 function sendStatus(status) {
   latestStatus = { ...latestStatus, ...status };
   mainWindow?.webContents.send("helper:status", latestStatus);
+}
+
+function sendUpdateStatus(status) {
+  latestUpdateStatus = { ...latestUpdateStatus, ...status };
+  mainWindow?.webContents.send("updates:status", latestUpdateStatus);
 }
 
 async function showStatusScreen(status = {}) {
@@ -124,6 +144,35 @@ async function openLogsFolder() {
   await shell.openPath(path.dirname(logPath));
 }
 
+async function checkForUpdates(options = {}) {
+  return updates?.checkForUpdates(options) || { ok: false, skipped: true };
+}
+
+async function installUpdateAndRelaunch() {
+  if (!updates?.downloaded) {
+    sendUpdateStatus({
+      state: "waiting",
+      message: "No downloaded update is ready to install.",
+    });
+    return false;
+  }
+  quitting = true;
+  await helper?.stop();
+  return updates.installUpdateAndRelaunch();
+}
+
+function configureUpdates() {
+  updates = configureAutoUpdates({
+    app,
+    autoUpdater,
+    onStatus: (status) => {
+      sendUpdateStatus(status);
+      createMenu();
+    },
+    onDownloaded: () => createMenu(),
+  });
+}
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -151,10 +200,15 @@ async function createWindow() {
 ipcMain.handle("helper:retry", retryHelper);
 ipcMain.handle("helper:diagnostics", () => latestStatus);
 ipcMain.handle("helper:openLogs", openLogsFolder);
+ipcMain.handle("updates:check", () => checkForUpdates({ manual: true }));
+ipcMain.handle("updates:status", () => latestUpdateStatus);
+ipcMain.handle("updates:install", installUpdateAndRelaunch);
 
 app.whenReady().then(async () => {
+  configureUpdates();
   createMenu();
   await createWindow();
+  await checkForUpdates();
 });
 
 app.on("activate", async () => {

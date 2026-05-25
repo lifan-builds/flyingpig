@@ -3,17 +3,20 @@
 # Now
 
 ## Current Focus
-Prepared Flying Pig 1.0.1 as the installable Mac desktop release, including the refreshed dashboard UI, automatic agent approach selection, dashboard model settings, Chinese release notes, screenshots, and rebuilt release artifacts.
+Hardened desktop auto-update release operations and prepared `v1.0.2` as the first update-capable baseline.
 
 ## Active Blockers
 - Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
-- macOS desktop artifact is unsigned because no local Developer ID identity is configured.
-- `PRODUCT.md` and `DESIGN.md` are still absent, so the impeccable pass used `CONTEXT.md` and existing UI code as the design source of truth.
+- Local macOS desktop artifacts are unsigned because this machine has no valid Developer ID identity.
+- `PRODUCT.md` is still absent. `DESIGN.md` now exists and uses `CONTEXT.md` plus current UI code as the product/design source of truth.
+- Desktop auto-update plumbing and release verification are present; GitHub repo visibility is public, but a successful user-facing update release still requires Developer ID/App Store Connect secrets in GitHub Actions or a local signing identity.
+- Published `v1.0.1` is not update-capable because it lacks updater code/assets. `v1.0.2` should be the first signed/notarized baseline.
 
 ## Immediate Next Step
-Push the release commit/tag and create the GitHub Release with the rebuilt source bundle and macOS desktop zip.
+Add the required GitHub repository secrets for signing/notarization, run the `Desktop Release` workflow for `v1.0.2`, then verify an installed `v1.0.2` can update to a later test release.
 
 ## Session State
-- Last modified: 2026-05-24
-- Files touched this session: `.env.example`, `AGENTS.md`, `CONTEXT.md`, `NOW.md`, `README.md`, `dashboard/index.html`, `dashboard/dashboard.js`, `dashboard/dashboard.css`, `desktop/status.css`, `docs/beta.md`, `docs/releases/v1.0.1-zh.md`, `docs/release-assets/v1.0.1/*.png`, `package.json`, `package-lock.json`, `pyproject.toml`, `scripts/build_beta_release.py`, `scripts/test_helper_dashboard.mjs`, `src/config.py`, `src/daemon/model_settings.py`, `src/daemon/server.py`, `tests/support/dashboard_daemon.py`, `tests/unit/test_config.py`.
-- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (138 passed, 2 deselected); elevated `npm run test:dashboard` (helper_online=1828ms, work_window_ready=2052ms, mock_run_done=2199ms); elevated `npm run test:desktop`; `python scripts/build_beta_release.py`; `npm run build:helper`; `npm run desktop:package`; `git diff --check`; source and desktop release scans found no common secret/PII patterns or blocked filenames. Artifacts: `dist/flyingpig-beta-1.0.1.zip` SHA-256 `5f9e2cfc48933892513746ce04fc4e249a03ca8acb20811d8d41cb41a779c60b`; `dist/desktop/Flying Pig-1.0.1-arm64-mac.zip` SHA-256 `fef65229976165d5665782510a049a8ca44dc78a6d5eaafbe2bc0ed8f6159c48`.
+- Last modified: 2026-05-25
+- Files touched this session: `CONTEXT.md`, `PLAN.md`, `NOW.md`, `src/agent/evidence.py`, `src/daemon/server.py`, `dashboard/index.html`, `dashboard/dashboard.js`, `dashboard/dashboard.css`, `desktop/auto_update.js`, `desktop/auto_update.test.mjs`, `desktop/main.js`, `desktop/preload.js`, `desktop/electron-builder.json`, `docs/desktop-auto-update.md`, `package.json`, `package-lock.json`, `scripts/test_helper_dashboard.mjs`, `tests/unit/test_daemon_run_session.py`, `tests/unit/test_daemon_server.py`.
+- Additional files touched for update hardening: `.github/workflows/desktop-release.yml`, `desktop/entitlements.mac.plist`, `desktop/entitlements.mac.inherit.plist`, `scripts/verify_desktop_update_release.mjs`, `pyproject.toml`, `scripts/build_beta_release.py`, `src/api/main.py`.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (139 passed, 2 deselected); `node --test desktop/auto_update.test.mjs`; `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:desktop`; elevated `npm run test:dashboard` (`helper_online=2286ms`, `work_window_ready=2509ms`, `mock_run_done=2657ms`); `npm run desktop:package`; `npm run desktop:verify-update`; `npm run desktop:verify-update -- --require-signed` failed as expected because no local Developer ID identity exists; `npm run desktop:verify-update -- --github --tag=v1.0.1` failed as expected because the old release lacks update assets. Packaging emitted `dist/desktop/latest-mac.yml` and `Flying-Pig-1.0.2-arm64-mac.zip`, still unsigned locally.

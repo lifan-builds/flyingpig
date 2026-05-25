@@ -128,3 +128,19 @@ def test_result_ready_payload_is_evidence_linked():
     assert payload["checkpoint_events_count"] == 1
     assert payload["evidence"]["timing_spans_count"] == 1
     assert payload["timing_summary"]["by_name_ms"]["preflight"] == 12.5
+    assert payload["scorecard"] == {
+        "schema_version": 1,
+        "goal_type": "automatic",
+        "site_profile": None,
+        "final_status": "success",
+        "human_reached": True,
+        "huca_attempts": 0,
+        "checkpoint_count": 1,
+        "user_intervention_count": 1,
+        "duration_seconds": 3.5,
+        "timing_total_ms": 12.5,
+        "offer_result": "$25",
+        "blocked_reason": None,
+        "unresolved_items_count": 1,
+        "user_confirmed_outcome": None,
+    }

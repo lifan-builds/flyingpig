@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Flying Pig AI",
     description="客服上树 — AI customer service agent API",
-    version="0.1.0",
+    version="1.0.2",
     lifespan=lifespan,
 )
 
@@ -124,7 +124,7 @@ class TemplateInfo(BaseModel):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(status="ok", version="0.1.0")
+    return HealthResponse(status="ok", version="1.0.2")
 
 
 @app.get("/sites")

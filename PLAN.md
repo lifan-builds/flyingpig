@@ -206,6 +206,23 @@ See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, 
 - Release scans found no common secret/private-key patterns, emails, `.env`, cookies, logs, recordings, databases, or legacy `extension/` and `frontend/` paths in the 1.0.1 source bundle or desktop zip.
 - Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (138 passed, 2 deselected); elevated `npm run test:dashboard` (`helper_online=1828ms`, `work_window_ready=2052ms`, `mock_run_done=2199ms`); elevated `npm run test:desktop`; `python scripts/build_beta_release.py`; `npm run build:helper`; `npm run desktop:package`; `git diff --check`.
 
+### 2026-05-25 Local scorecards and desktop update foundation
+- Added a PII-free Run Scorecard to final result payloads. Scorecards include final status, site/profile, goal type, human reached, HUCA attempts, checkpoint count, user-intervention count, duration/timing, offer/result, blocked reason, unresolved item count, and user-confirmed outcome.
+- The daemon now enriches final results with run metadata and HUCA attempt count, and exposes `/run/outcome` so the current scorecard can be marked solved, partial, or failed.
+- Dashboard result UI now shows scorecard status, HUCA attempts, outcome marking buttons, and local beta stats derived from localStorage scorecards rather than transcripts or chat logs.
+- Added `electron-updater` foundation for GitHub-backed desktop updates: packaged-only checks, menu entries for checking/installing updates, preload IPC hooks, GitHub publish config, hyphenated artifact names, and `docs/desktop-auto-update.md`.
+- Packaging now emits `dist/desktop/latest-mac.yml` and matching `Flying-Pig-1.0.1-arm64-mac.zip` artifacts. The app remains unsigned, so auto-update is not yet production-reliable for normal Mac users.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (139 passed, 2 deselected); `pytest tests/unit/test_daemon_run_session.py tests/unit/test_daemon_server.py -q` (23 passed); `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:dashboard` (`helper_online=2044ms`, `work_window_ready=2283ms`, `mock_run_done=2430ms`); elevated `npm run test:desktop`; `npm run desktop:package`; `git diff --check`.
+
+### 2026-05-25 Auto-update release hardening
+- Confirmed the `lifan-builds/flyingpig` GitHub repository is public, so installed apps can read release assets without embedding a token.
+- Confirmed the published `v1.0.1` release is not an update-capable baseline: it lacks `latest-mac.yml`, lacks the hyphenated updater zip asset name, and predates the updater-enabled app code.
+- Added macOS hardened-runtime signing/notarization config, Electron entitlements, and a GitHub Actions `Desktop Release` workflow that requires Developer ID and App Store Connect secrets before publishing update artifacts.
+- Added `scripts/verify_desktop_update_release.mjs` and `npm run desktop:verify-update` to verify `latest-mac.yml`, zip size, zip sha512, code signing/Gatekeeper when required, public repo visibility, and GitHub release update assets.
+- Bumped active release version to `1.0.2` across Node/Python package metadata, source bundle default, and legacy API health version. `v1.0.2` should be the first signed update-capable baseline.
+- Local package verification produced `dist/desktop/latest-mac.yml` and `Flying-Pig-1.0.2-arm64-mac.zip`; unsigned local builds pass metadata verification but fail `--require-signed`, as intended on this machine with no Developer ID identity.
+- Verification: `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (139 passed, 2 deselected); `node --test desktop/auto_update.test.mjs`; `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:desktop`; elevated `npm run test:dashboard` (`helper_online=2286ms`, `work_window_ready=2509ms`, `mock_run_done=2657ms`); `npm run desktop:package`; `npm run desktop:verify-update`; `npm run desktop:verify-update -- --require-signed` failed as expected due to missing local Developer ID identity; `npm run desktop:verify-update -- --github --tag=v1.0.1` failed as expected because the old release lacks updater assets.
+
 ## Decisions
 - **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
 - **2026-04-09** Consumer-side positioning — the market gap.

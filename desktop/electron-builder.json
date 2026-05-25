@@ -1,9 +1,18 @@
 {
   "appId": "ai.flyingpig.desktop",
   "productName": "Flying Pig",
+  "artifactName": "Flying-Pig-${version}-${arch}-${os}.${ext}",
   "directories": {
     "output": "dist/desktop"
   },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "lifan-builds",
+      "repo": "flyingpig",
+      "releaseType": "release"
+    }
+  ],
   "files": [
     "desktop/**/*",
     "package.json"
@@ -28,6 +37,12 @@
   "mac": {
     "category": "public.app-category.productivity",
     "icon": "desktop/assets/app-icon.png",
+    "hardenedRuntime": true,
+    "gatekeeperAssess": false,
+    "entitlements": "desktop/entitlements.mac.plist",
+    "entitlementsInherit": "desktop/entitlements.mac.inherit.plist",
+    "binaries": ["Contents/Resources/helper/flyingpig-helper"],
+    "notarize": true,
     "target": ["zip"]
   },
   "win": {

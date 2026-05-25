@@ -1,6 +1,6 @@
 {
   "name": "flyingpig",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Flying Pig desktop shell for supervised customer-service automation",
   "author": "Flying Pig",
   "private": true,
@@ -9,6 +9,8 @@
   "scripts": {
     "desktop:dev": "electron desktop/main.js",
     "desktop:package": "electron-builder --config desktop/electron-builder.json",
+    "desktop:publish": "electron-builder --config desktop/electron-builder.json --publish always",
+    "desktop:verify-update": "node scripts/verify_desktop_update_release.mjs",
     "build:helper": "pyinstaller desktop/pyinstaller/flyingpig-helper.spec --distpath dist/helper --workpath build/pyinstaller --noconfirm",
     "test:dashboard": "node scripts/test_dashboard_protocol.mjs && node scripts/test_helper_dashboard.mjs",
     "test:desktop": "node --test desktop/*.test.mjs && node scripts/test_desktop_shell.mjs"
@@ -17,5 +19,8 @@
     "electron": "^35.0.0",
     "electron-builder": "^25.1.8",
     "puppeteer": "^24.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
   }
 }
