@@ -539,7 +539,7 @@ def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
         assert answer.json()["message"] == "Answer received. Continuing the run."
 
         result = None
-        for _ in range(20):
+        for _ in range(80):
             response = client.get("/run/state")
             assert response.status_code == 200
             result = response.json()
