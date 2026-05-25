@@ -14,7 +14,7 @@ Switched the macOS release strategy to a no-pay unsigned beta path: packaged app
 - Current Mac still has no local `Developer ID Application` identity, and the GitHub repo lacks signing/notarization secrets. This is acceptable for the no-pay unsigned beta path.
 
 ## Immediate Next Step
-Commit and push the unsigned beta update path, then run the `Desktop Release` workflow for `v1.0.2` or push the `v1.0.2` tag. Verify the GitHub Release exposes the zip, blockmap, and `latest-mac.yml`, then install `v1.0.2` and confirm a later release is detected through the manual download prompt.
+Install the published unsigned `v1.0.2` beta from GitHub Releases, then confirm a later release is detected through the manual download prompt.
 
 ## Session State
 - Last modified: 2026-05-25
@@ -28,3 +28,4 @@ Commit and push the unsigned beta update path, then run the `Desktop Release` wo
 - Signing setup verification: `node --check scripts/check_macos_signing_setup.mjs`; `npm run desktop:check-signing` failed as expected because no local Developer ID identity or local signing env vars exist; elevated `npm run desktop:check-signing -- --github` confirmed the GitHub repository currently lacks `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_API_KEY_P8`, `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`, and `APPLE_TEAM_ID`.
 - No-pay beta update verification: `node --check desktop/auto_update.js`; `node --check desktop/main.js`; `node --test desktop/auto_update.test.mjs` (4 passed); elevated `npm run test:desktop` (8 passed plus shell smoke); `npm run desktop:package` succeeded and Electron Builder reported `skipped macOS code signing reason=identity explicitly is set to null`; `npm run desktop:verify-update` passed while warning that codesign failed because `--require-signed` was not set.
 - GitHub Actions release attempt `26382941970` failed in `Verify code before release` because CI installed from `pyproject.toml` and `aiosqlite` was missing. Attempt `26383021474` got past dependency install but failed a timing-sensitive REST checkpoint test. After fixes, local release-gate checks pass: `ruff check src scripts tests`; `pytest tests/unit/test_daemon_server.py::test_rest_run_endpoints_answer_pending_decision_checkpoint -q`; `pytest tests -q -m "not slow"` (139 passed, 2 deselected); elevated `npm run test:desktop`.
+- GitHub Actions release attempt `26383115586` succeeded for `v1.0.2`. Published release: `https://github.com/lifan-builds/flyingpig/releases/tag/v1.0.2` with `Flying-Pig-1.0.2-arm64-mac.zip`, `.zip.blockmap`, and `latest-mac.yml`. Elevated `npm run desktop:verify-update -- --github --tag=v1.0.2` passed, warning only that the local package is unsigned because `--require-signed` was not set.
