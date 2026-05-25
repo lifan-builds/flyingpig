@@ -53,6 +53,84 @@ The GitHub Actions desktop release workflow requires these repository secrets:
 
 Do not commit any of these values or embed them in the app.
 
+## Developer ID Setup
+
+Flying Pig needs a **Developer ID Application** certificate because releases are
+distributed outside the Mac App Store. Apple issues Developer ID certificates only
+through a paid Apple Developer Program or Apple Developer Enterprise Program team,
+and the Account Holder role is required to create the certificate. Apple allows up
+to five Developer ID Application certificates per account.
+
+1. Generate a Certificate Signing Request on the Mac that will own the private key:
+
+   - Open **Keychain Access** in `/Applications/Utilities`.
+   - Choose **Keychain Access -> Certificate Assistant -> Request a Certificate
+     from a Certificate Authority**.
+   - Enter the Apple Developer account email and a clear common name, for example
+     `Flying Pig Developer ID`.
+   - Leave CA Email Address empty, choose **Saved to disk**, and save the
+     `.certSigningRequest` file.
+
+2. Create the certificate in Apple Developer:
+
+   - Open [Certificates, Identifiers & Profiles](https://developer.apple.com/account/resources/certificates/list).
+   - Click **Certificates**, then the add button.
+   - Under Software, choose **Developer ID -> Developer ID Application**.
+   - Upload the `.certSigningRequest`, continue, then download the `.cer`.
+   - Double-click the downloaded `.cer` so it appears in Keychain Access under
+     **My Certificates** with its private key.
+
+3. Confirm the local identity exists:
+
+   ```bash
+   security find-identity -v -p codesigning
+   npm run desktop:check-signing
+   ```
+
+   The identity must look like `Developer ID Application: <name> (<TEAM_ID>)`.
+
+4. Export the certificate for GitHub Actions:
+
+   - In Keychain Access, select the **Developer ID Application** certificate under
+     **My Certificates** and expand it to confirm the private key is present.
+   - Export the certificate plus private key as a password-protected `.p12`.
+   - Convert it to base64 without printing the result into shell history:
+
+     ```bash
+     base64 -i path/to/FlyingPigDeveloperID.p12 | pbcopy
+     gh secret set MAC_CSC_LINK --repo lifan-builds/flyingpig
+     gh secret set MAC_CSC_KEY_PASSWORD --repo lifan-builds/flyingpig
+     ```
+
+   Paste the copied base64 value when `gh secret set MAC_CSC_LINK` prompts, and
+   enter the `.p12` export password for `MAC_CSC_KEY_PASSWORD`.
+
+5. Create the App Store Connect API key for notarization:
+
+   - In [App Store Connect](https://appstoreconnect.apple.com/access/integrations/api),
+     open **Users and Access -> Integrations -> App Store Connect API**.
+   - Use a **Team Key**. Apple documents that individual keys cannot use
+     `notaryTool`.
+   - Generate an API key, download the `.p8` once, and record its Key ID and Issuer
+     ID.
+   - Add these repository secrets:
+
+     ```bash
+     gh secret set APPLE_API_KEY_P8 --repo lifan-builds/flyingpig < path/to/AuthKey_KEYID.p8
+     gh secret set APPLE_API_KEY_ID --repo lifan-builds/flyingpig
+     gh secret set APPLE_API_ISSUER --repo lifan-builds/flyingpig
+     gh secret set APPLE_TEAM_ID --repo lifan-builds/flyingpig
+     ```
+
+6. Verify GitHub secret names are present:
+
+   ```bash
+   npm run desktop:check-signing -- --github
+   ```
+
+   This checks only whether the expected secret names exist; it does not print or
+   validate secret values.
+
 ## Verification Gates
 
 - `npm run desktop:verify-update` confirms `latest-mac.yml` points to an existing
@@ -62,6 +140,9 @@ Do not commit any of these values or embed them in the app.
 - `npm run desktop:verify-update -- --github --tag=vX.Y.Z` checks that the public
   GitHub Release has the zip, blockmap, and `latest-mac.yml` assets needed by
   installed apps.
+- `npm run desktop:check-signing` checks whether this Mac has a local Developer ID
+  Application identity and the local release environment variables. Add `-- --github`
+  to check that required GitHub repository secret names exist.
 - The workflow runs the verifier with both `--require-signed` and `--github`, so a
   release cannot pass if update assets are missing or unsigned.
 
