@@ -3,7 +3,7 @@
 # Now
 
 ## Current Focus
-Switched the macOS release strategy to a no-pay unsigned beta path: packaged apps check GitHub Releases and open the latest release page for manual download/replacement instead of attempting in-place auto-update.
+Assessing broader-audience beta readiness after the no-pay unsigned Mac release path, with emphasis on reducing first-run configuration friction, explaining the supervised workflow, and improving first-success measurement.
 
 ## Active Blockers
 - Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
@@ -14,7 +14,7 @@ Switched the macOS release strategy to a no-pay unsigned beta path: packaged app
 - Current Mac still has no local `Developer ID Application` identity, and the GitHub repo lacks signing/notarization secrets. This is acceptable for the no-pay unsigned beta path.
 
 ## Immediate Next Step
-Install the published unsigned `v1.0.2` beta from GitHub Releases, then confirm a later release is detected through the manual download prompt.
+Prioritize a first-run setup/onboarding pass: make model/API-key setup obvious outside Advanced, add a short in-app how-to path for the supervised work-window flow, and define the first-run success signals before wider Reddit/forum promotion.
 
 ## Session State
 - Last modified: 2026-05-25

@@ -1,0 +1,315 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-24T00:00:00-07:00",
+  "title": "Design System: Flying Pig",
+  "extensions": {
+    "colorMeta": {
+      "warm-paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "oklch(96.5% 0.014 78)",
+        "tonalRamp": [
+          "oklch(18% 0.014 78)",
+          "oklch(28% 0.014 78)",
+          "oklch(40% 0.014 78)",
+          "oklch(52% 0.014 78)",
+          "oklch(64% 0.014 78)",
+          "oklch(76% 0.014 78)",
+          "oklch(88% 0.014 78)",
+          "oklch(96.5% 0.014 78)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(98.5% 0.009 82)",
+        "tonalRamp": [
+          "oklch(18% 0.009 82)",
+          "oklch(30% 0.009 82)",
+          "oklch(42% 0.009 82)",
+          "oklch(54% 0.009 82)",
+          "oklch(66% 0.009 82)",
+          "oklch(78% 0.009 82)",
+          "oklch(90% 0.009 82)",
+          "oklch(98.5% 0.009 82)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(25% 0.034 74)",
+        "tonalRamp": [
+          "oklch(15% 0.034 74)",
+          "oklch(25% 0.034 74)",
+          "oklch(36% 0.034 74)",
+          "oklch(48% 0.034 74)",
+          "oklch(60% 0.034 74)",
+          "oklch(72% 0.034 74)",
+          "oklch(84% 0.034 74)",
+          "oklch(95% 0.034 74)"
+        ]
+      },
+      "action-green": {
+        "role": "primary",
+        "displayName": "Action Green",
+        "canonical": "oklch(52% 0.13 157)",
+        "tonalRamp": [
+          "oklch(16% 0.13 157)",
+          "oklch(26% 0.13 157)",
+          "oklch(38% 0.13 157)",
+          "oklch(52% 0.13 157)",
+          "oklch(64% 0.13 157)",
+          "oklch(76% 0.10 157)",
+          "oklch(88% 0.07 157)",
+          "oklch(95% 0.04 157)"
+        ]
+      },
+      "work-blue": {
+        "role": "secondary",
+        "displayName": "Work Blue",
+        "canonical": "oklch(53% 0.11 246)",
+        "tonalRamp": [
+          "oklch(16% 0.11 246)",
+          "oklch(28% 0.11 246)",
+          "oklch(40% 0.11 246)",
+          "oklch(53% 0.11 246)",
+          "oklch(65% 0.10 246)",
+          "oklch(77% 0.08 246)",
+          "oklch(89% 0.055 246)",
+          "oklch(95% 0.035 246)"
+        ]
+      },
+      "patience-amber": {
+        "role": "tertiary",
+        "displayName": "Patience Amber",
+        "canonical": "oklch(64% 0.12 76)",
+        "tonalRamp": [
+          "oklch(18% 0.12 76)",
+          "oklch(30% 0.12 76)",
+          "oklch(42% 0.12 76)",
+          "oklch(54% 0.12 76)",
+          "oklch(64% 0.12 76)",
+          "oklch(76% 0.095 76)",
+          "oklch(88% 0.07 76)",
+          "oklch(95% 0.04 76)"
+        ]
+      },
+      "danger-red": {
+        "role": "tertiary",
+        "displayName": "Danger Red",
+        "canonical": "oklch(55% 0.16 28)",
+        "tonalRamp": [
+          "oklch(16% 0.16 28)",
+          "oklch(28% 0.16 28)",
+          "oklch(40% 0.16 28)",
+          "oklch(55% 0.16 28)",
+          "oklch(66% 0.13 28)",
+          "oklch(78% 0.10 28)",
+          "oklch(89% 0.07 28)",
+          "oklch(95% 0.04 28)"
+        ]
+      },
+      "cockpit-ink": {
+        "role": "neutral",
+        "displayName": "Cockpit Ink",
+        "canonical": "oklch(24% 0.04 155)",
+        "tonalRamp": [
+          "oklch(14% 0.04 155)",
+          "oklch(24% 0.04 155)",
+          "oklch(36% 0.04 155)",
+          "oklch(48% 0.04 155)",
+          "oklch(60% 0.04 155)",
+          "oklch(72% 0.04 155)",
+          "oklch(84% 0.04 155)",
+          "oklch(95% 0.04 155)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Electron startup screen title only."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Dashboard app title and top-level run status."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Panel titles and compact form headings."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Form copy, run messages, explanations, and list bodies."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, eyebrows, metric labels, and readiness labels."
+      }
+    },
+    "shadows": [
+      {
+        "name": "panel-soft",
+        "value": "0 8px 24px oklch(26% 0.03 74 / 0.08)",
+        "purpose": "Default panel, card, app icon, and hover elevation."
+      },
+      {
+        "name": "panel-strong",
+        "value": "0 18px 48px oklch(26% 0.03 74 / 0.11)",
+        "purpose": "Hero/status band and Electron startup card."
+      },
+      {
+        "name": "icon-soft",
+        "value": "0 10px 24px oklch(26% 0.03 74 / 0.14)",
+        "purpose": "Large app icon on the Electron startup screen."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-out",
+        "value": "160ms cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "Default easing for button hover, border, shadow, and transform state feedback."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "wide-dashboard",
+        "value": "1100px"
+      },
+      {
+        "name": "single-column",
+        "value": "920px"
+      },
+      {
+        "name": "compact",
+        "value": "620px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary action for Start, setup, save, and user-answer send actions.",
+      "html": "<button class=\"ds-btn-primary\">Start</button>",
+      "css": ".ds-btn-primary { align-items: center; background: oklch(52% 0.13 157); border: 1px solid transparent; border-radius: 7px; color: oklch(96% 0.018 122); cursor: pointer; display: inline-flex; font: 780 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; justify-content: center; min-height: 40px; padding: 9px 14px; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-primary:hover { background: oklch(42% 0.12 157); box-shadow: 0 8px 24px oklch(26% 0.03 74 / 0.08); transform: translateY(-1px); } .ds-btn-primary:focus-visible { box-shadow: 0 0 0 3px oklch(52% 0.13 157 / 0.22); outline: none; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral action for reconnect, refresh, and work-window launch.",
+      "html": "<button class=\"ds-btn-secondary\">Open Work Window</button>",
+      "css": ".ds-btn-secondary { align-items: center; background: oklch(94.5% 0.014 82); border: 1px solid oklch(72% 0.034 82); border-radius: 7px; color: oklch(25% 0.034 74); cursor: pointer; display: inline-flex; font: 780 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; justify-content: center; min-height: 40px; padding: 9px 14px; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-secondary:hover { background: oklch(90.5% 0.019 78); box-shadow: 0 8px 24px oklch(26% 0.03 74 / 0.08); transform: translateY(-1px); } .ds-btn-secondary:focus-visible { box-shadow: 0 0 0 3px oklch(52% 0.13 157 / 0.22); outline: none; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-danger",
+      "description": "Destructive action for canceling a run or clearing a saved key.",
+      "html": "<button class=\"ds-btn-danger\">Cancel</button>",
+      "css": ".ds-btn-danger { align-items: center; background: oklch(93% 0.05 28); border: 1px solid oklch(78% 0.075 28); border-radius: 7px; color: oklch(55% 0.16 28); cursor: pointer; display: inline-flex; font: 780 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; justify-content: center; min-height: 40px; padding: 9px 14px; transition: background-color 160ms cubic-bezier(0.22, 1, 0.36, 1), transform 160ms cubic-bezier(0.22, 1, 0.36, 1); } .ds-btn-danger:hover { background: oklch(89% 0.065 28); transform: translateY(-1px); } .ds-btn-danger:focus-visible { box-shadow: 0 0 0 3px oklch(55% 0.16 28 / 0.18); outline: none; }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Standard text, password, select, and textarea visual treatment.",
+      "html": "<label class=\"ds-label\" for=\"ds-input\">Problem brief</label><input id=\"ds-input\" class=\"ds-input\" placeholder=\"Describe the customer-service task\">",
+      "css": ".ds-label { color: oklch(50% 0.026 82); display: block; font: 780 11px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: 0; margin-bottom: 6px; text-transform: uppercase; } .ds-input { background: oklch(99% 0.006 82); border: 1px solid oklch(72% 0.034 82); border-radius: 7px; color: oklch(25% 0.034 74); font: 400 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; min-height: 40px; padding: 10px 11px; width: 100%; } .ds-input::placeholder { color: oklch(64% 0.026 82); } .ds-input:focus { border-color: oklch(52% 0.13 157); box-shadow: 0 0 0 3px oklch(52% 0.13 157 / 0.15); outline: none; }"
+    },
+    {
+      "name": "Panel",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "Default work container for task intake, timing, result, and transcript surfaces.",
+      "html": "<section class=\"ds-panel\"><p class=\"ds-eyebrow\">Task brief</p><h2>What customer-service problem do you want handled?</h2><p>Tell Flying Pig what to do, then supervise the visible work window.</p></section>",
+      "css": ".ds-panel { background: oklch(98.5% 0.009 82); border: 1px solid oklch(84% 0.024 82); border-radius: 8px; box-shadow: 0 8px 24px oklch(26% 0.03 74 / 0.08); color: oklch(31% 0.03 74); display: grid; gap: 8px; padding: 16px; } .ds-panel h2 { color: oklch(25% 0.034 74); font: 760 16px/1.25 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; } .ds-panel p { font: 400 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; } .ds-eyebrow { color: oklch(50% 0.026 82); font: 780 11px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; text-transform: uppercase; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill-ready",
+      "description": "Compact helper, browser, and readiness status marker.",
+      "html": "<span class=\"ds-pill\">Helper Online</span>",
+      "css": ".ds-pill { align-items: center; background: oklch(92% 0.05 157); border: 1px solid oklch(76% 0.07 157); border-radius: 999px; color: oklch(42% 0.12 157); display: inline-flex; font: 760 12px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; min-height: 28px; padding: 5px 10px; white-space: nowrap; }"
+    },
+    {
+      "name": "Cockpit Status Band",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "Dark run-state band for the current status and next instruction.",
+      "html": "<section class=\"ds-cockpit\"><div><span>Choose a website</span><strong>Ready</strong></div><p>Tell Flying Pig the customer-service problem, then supervise it in the visible work window.</p></section>",
+      "css": ".ds-cockpit { align-items: center; background: linear-gradient(135deg, oklch(24% 0.04 155), oklch(29% 0.035 204)); border: 1px solid oklch(38% 0.04 170); border-radius: 8px; box-shadow: 0 18px 48px oklch(26% 0.03 74 / 0.11); color: oklch(96% 0.018 122); display: flex; gap: 20px; justify-content: space-between; padding: 18px 20px; } .ds-cockpit span { color: oklch(78% 0.038 142); display: block; font: 780 11px/1.2 Inter, ui-sans-serif, system-ui, sans-serif; text-transform: uppercase; } .ds-cockpit strong { color: oklch(96% 0.018 122); display: block; font: 780 22px/1.14 Inter, ui-sans-serif, system-ui, sans-serif; margin-top: 4px; } .ds-cockpit p { color: oklch(88% 0.024 135); font: 400 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; max-width: 42rem; text-align: right; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calm Operations Desk",
+    "overview": "Flying Pig is a supervised product cockpit, not a marketing surface. The visual system should feel like a clean desk beside a live browser window: warm paper, precise controls, clear run state, and no visual drama competing with the customer-service conversation.\n\nThe default scene is a user watching the Flying Pig desktop app and a Controlled Chrome Window side by side during a live support chat. The interface is light because the user may be reading, approving, and typing for several minutes in normal room light. The warm neutral palette avoids generic blue-gray SaaS and keeps status color meaningful.\n\nThe system rejects raw localhost/debug aesthetics, decorative AI dashboards, glassmorphism, dark neon control rooms, and large button grids that make the user feel they are choosing a mode instead of editing the task brief. The app should look trustworthy to someone familiar with Linear, Stripe, Notion, and native macOS utility windows.",
+    "keyCharacteristics": [
+      "Warm operational surfaces with restrained state color.",
+      "Dense but calm form layouts for repeated supervised work.",
+      "One cockpit, one source of truth: the desktop dashboard owns user attention.",
+      "Standard controls, predictable grids, and explicit disabled states.",
+      "Motion only for state feedback, never decoration."
+    ],
+    "rules": [
+      {
+        "name": "The Scarcity Rule",
+        "body": "Green is for action, readiness, selection, and focus. If a screen starts to look green, the accent has failed.",
+        "section": "colors"
+      },
+      {
+        "name": "The State Means State Rule",
+        "body": "Blue means work context, amber means patience or checkpoint, red means blocked or destructive. Do not use semantic colors as decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The Warm Utility Rule",
+        "body": "Neutral surfaces stay warm and paper-like. Do not drift into slate, charcoal, or cold blue-gray control-room palettes.",
+        "section": "colors"
+      },
+      {
+        "name": "The Utility Type Rule",
+        "body": "Use one sans family for the product UI. Do not introduce display fonts, decorative type, or fluid type scales.",
+        "section": "typography"
+      },
+      {
+        "name": "The Label Discipline Rule",
+        "body": "Uppercase labels are for scaffolding and metadata only. Do not write body copy in uppercase.",
+        "section": "typography"
+      },
+      {
+        "name": "The Border First Rule",
+        "body": "Use borders and tonal surfaces before shadows. Shadows support hierarchy; they do not create drama.",
+        "section": "elevation"
+      },
+      {
+        "name": "The No Glass Rule",
+        "body": "Blur, frosted glass, transparent panels, and decorative glow effects are prohibited.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the dashboard as the Single Cockpit: the Flying Pig control UI appears in the desktop app, while the Controlled Chrome Window is only the work area.",
+      "Do make the editable problem brief the source of truth. Starters and automatic agent approach support the textarea; they do not replace it.",
+      "Do expose Work Window Offline with an immediate Open Work Window action beside the status when the helper is online.",
+      "Do use Action Green only for primary actions, ready states, selection, and focus.",
+      "Do preserve explicit disabled, hover, focus, active, danger, warning, and loading states on every interactive control.",
+      "Do use inline progressive disclosure for Advanced settings and model keys.",
+      "Do keep user-attention moments, Decision Checkpoints, and irreversible actions visually distinct with amber or blue state treatment.",
+      "Do verify mobile breakpoints for no horizontal overflow at 390px wide."
+    ],
+    "donts": [
+      "Don't show a second Flying Pig control surface in the Controlled Chrome Window.",
+      "Don't present `flyingpig-helper`, raw localhost URLs, old React frontend, Chrome extension, or CLI runs as equivalent user paths.",
+      "Don't use large task-template button grids that imply the starter choice is final while the problem brief remains editable.",
+      "Don't surface raw WebSocket or localhost failures as the main user experience; show setup, reconnect, and small diagnostics.",
+      "Don't use side-stripe borders, gradient text, glassmorphism, decorative orbs, dark neon AI dashboards, or hero-metric templates.",
+      "Don't use modals for ordinary setup, model settings, or task configuration. Exhaust inline and progressive alternatives first.",
+      "Don't use semantic colors as decoration. Blue, amber, red, and green must carry state.",
+      "Don't make one-off panels or buttons with unique shapes. Component vocabulary must stay consistent across dashboard and Electron startup screens."
+    ]
+  }
+}
