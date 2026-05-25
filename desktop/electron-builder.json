@@ -39,10 +39,11 @@
     "icon": "desktop/assets/app-icon.png",
     "hardenedRuntime": true,
     "gatekeeperAssess": false,
+    "identity": null,
     "entitlements": "desktop/entitlements.mac.plist",
     "entitlementsInherit": "desktop/entitlements.mac.inherit.plist",
     "binaries": ["Contents/Resources/helper/flyingpig-helper"],
-    "notarize": true,
+    "notarize": false,
     "target": ["zip"]
   },
   "win": {

@@ -31,6 +31,7 @@ function iconPath() {
 }
 
 function createMenu() {
+  const manualUpdateMode = updates?.mode === "download";
   const template = [
     {
       label: "Flying Pig",
@@ -39,9 +40,9 @@ function createMenu() {
         { type: "separator" },
         { label: "Check for Updates", click: () => checkForUpdates({ manual: true }) },
         {
-          label: "Install Update and Relaunch",
-          enabled: Boolean(updates?.downloaded),
-          click: () => installUpdateAndRelaunch(),
+          label: manualUpdateMode ? "Download Latest Version" : "Install Update and Relaunch",
+          enabled: manualUpdateMode || Boolean(updates?.downloaded),
+          click: () => (manualUpdateMode ? openUpdateDownloadPage() : installUpdateAndRelaunch()),
         },
         { type: "separator" },
         { label: "Retry Helper", click: () => retryHelper() },
@@ -161,10 +162,16 @@ async function installUpdateAndRelaunch() {
   return updates.installUpdateAndRelaunch();
 }
 
+async function openUpdateDownloadPage() {
+  return updates?.openDownloadPage() || false;
+}
+
 function configureUpdates() {
   updates = configureAutoUpdates({
     app,
     autoUpdater,
+    shell,
+    mode: process.env.FLYINGPIG_AUTO_INSTALL_UPDATES === "1" ? "install" : "download",
     onStatus: (status) => {
       sendUpdateStatus(status);
       createMenu();
@@ -202,7 +209,9 @@ ipcMain.handle("helper:diagnostics", () => latestStatus);
 ipcMain.handle("helper:openLogs", openLogsFolder);
 ipcMain.handle("updates:check", () => checkForUpdates({ manual: true }));
 ipcMain.handle("updates:status", () => latestUpdateStatus);
-ipcMain.handle("updates:install", installUpdateAndRelaunch);
+ipcMain.handle("updates:install", () =>
+  updates?.mode === "download" ? openUpdateDownloadPage() : installUpdateAndRelaunch(),
+);
 
 app.whenReady().then(async () => {
   configureUpdates();

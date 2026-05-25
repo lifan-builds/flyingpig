@@ -1,8 +1,13 @@
-# Desktop Auto-Update Path
+# Desktop Beta Update Path
 
-Flying Pig uses `electron-updater` with `electron-builder` GitHub publishing metadata as
-the desktop auto-update path. The GitHub repository is public, so installed apps can
-read release assets without an embedded token.
+Flying Pig currently uses a no-paid-Apple-account beta update path on macOS. The
+packaged app checks the public `lifan-builds/flyingpig` GitHub Releases feed and,
+when a newer release exists, opens the latest release page so the user can download
+and replace the app manually.
+
+This is intentionally **not** full in-place auto-update on macOS. Unsigned apps can
+be packaged and distributed for beta users, but reliable self-installing updates
+require Developer ID signing and notarization.
 
 ## Release Flow
 
@@ -12,36 +17,40 @@ read release assets without an embedded token.
    npm run build:helper
    ```
 
-2. Build and publish the desktop release artifacts from a signed macOS release
-   environment:
+2. Build and publish the desktop release artifacts from GitHub Actions:
 
    ```bash
    npm run desktop:publish
    ```
 
-3. Publish against the `lifan-builds/flyingpig` GitHub Releases feed. The updater
-   expects the release assets and generated metadata, including `latest-mac.yml`,
-   to be attached to the GitHub Release for the matching app version.
+3. Publish against the `lifan-builds/flyingpig` GitHub Releases feed. The beta
+   updater reads the latest GitHub Release and sends users to the release page.
+   `latest-mac.yml` is still generated and verified so the signed auto-update path
+   can be restored later without changing release shape.
 
 4. Verify the local package and published update assets:
 
    ```bash
-   npm run desktop:verify-update -- --require-signed --github --tag=vX.Y.Z
+   npm run desktop:verify-update -- --github --tag=vX.Y.Z
    ```
 
 ## Product Behavior
 
-- Packaged desktop builds check for updates after app startup.
+- Packaged desktop builds check the GitHub latest release after app startup.
 - Users can run **Flying Pig -> Check for Updates** from the macOS menu.
-- Downloaded updates enable **Flying Pig -> Install Update and Relaunch**.
+- Users can run **Flying Pig -> Download Latest Version** to open the latest
+  GitHub Release in their browser.
+- Users manually replace the installed app after downloading a newer beta.
 - Development runs skip update checks; updater behavior is only active in packaged
   desktop builds.
 - Helper updates ship inside the desktop app resources, so updating the app updates
   the packaged helper sidecar too.
 
-## Required Release Secrets
+## Optional Signed Release Secrets
 
-The GitHub Actions desktop release workflow requires these repository secrets:
+The current unsigned beta release workflow does **not** require paid Apple signing
+secrets. If we later move to reliable in-place macOS auto-update, the GitHub
+Actions desktop release workflow will need these repository secrets:
 
 - `MAC_CSC_LINK`: Developer ID Application certificate as a `.p12` link or base64
   value supported by `electron-builder`.
@@ -53,13 +62,14 @@ The GitHub Actions desktop release workflow requires these repository secrets:
 
 Do not commit any of these values or embed them in the app.
 
-## Developer ID Setup
+## Future Developer ID Setup
 
-Flying Pig needs a **Developer ID Application** certificate because releases are
-distributed outside the Mac App Store. Apple issues Developer ID certificates only
-through a paid Apple Developer Program or Apple Developer Enterprise Program team,
-and the Account Holder role is required to create the certificate. Apple allows up
-to five Developer ID Application certificates per account.
+Flying Pig needs a **Developer ID Application** certificate only when we decide to
+ship reliable signed/notarized in-place updates. Apple issues Developer ID
+certificates only through a paid Apple Developer Program or Apple Developer
+Enterprise Program team, and the Account Holder role is required to create the
+certificate. Apple allows up to five Developer ID Application certificates per
+account.
 
 1. Generate a Certificate Signing Request on the Mac that will own the private key:
 
@@ -139,21 +149,21 @@ to five Developer ID Application certificates per account.
   code-signing and Gatekeeper assessment to pass.
 - `npm run desktop:verify-update -- --github --tag=vX.Y.Z` checks that the public
   GitHub Release has the zip, blockmap, and `latest-mac.yml` assets needed by
-  installed apps.
+  future signed update feeds.
 - `npm run desktop:check-signing` checks whether this Mac has a local Developer ID
   Application identity and the local release environment variables. Add `-- --github`
   to check that required GitHub repository secret names exist.
-- The workflow runs the verifier with both `--require-signed` and `--github`, so a
-  release cannot pass if update assets are missing or unsigned.
+- The unsigned beta workflow runs the verifier with `--github`, so a release cannot
+  pass if public update assets are missing. It intentionally does not require code
+  signing.
 
 ## Current Notes
 
 - The previously published `v1.0.1` release does not include `latest-mac.yml`, so
   it is not an update-capable baseline.
-- The first update-capable baseline should be a new signed release, expected to be
-  `v1.0.2` unless another version is chosen.
-- The local development machine currently has no valid Developer ID identity; use
-  the GitHub Actions release workflow after secrets are configured, or install the
-  certificate locally before publishing.
+- The first no-pay beta update-checking baseline should be `v1.0.2` unless another
+  version is chosen.
+- The local development machine currently has no valid Developer ID identity. That
+  is acceptable for the unsigned beta path.
 - Keep the release scan gate: artifacts must not include PII, API keys, credentials,
   tokens, cookies, logs, recordings, databases, or user-specific account data.

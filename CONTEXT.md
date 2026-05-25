@@ -79,8 +79,8 @@
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 - **Run Timing Span**: PII-free duration event for helper/runtime phases such as launch, pre-flight, first observation, browser-use steps, model planning, user waits, representative waits, and result capture. Avoid: including raw chat text, URLs with private data, credentials, or account details in timing metadata.
 - **Run Scorecard**: PII-free beta outcome payload for a completed run, including final status, site/profile, goal type, human reached, HUCA attempts, checkpoint/user-intervention counts, timing, offer/result presence, unresolved item count, blocked reason, and user-confirmed outcome. Avoid: storing transcript text, private URLs, credentials, cookies, account details, or chat logs in scorecard data.
-- **Desktop Update Feed**: GitHub Release assets plus generated updater metadata such as `latest-mac.yml` consumed by the packaged Electron app. Avoid: presenting auto-update as reliable for normal users until Mac signing/notarization and release asset accessibility are solved.
-- **Update-Capable Baseline**: A signed/notarized desktop release that includes updater code and publishes matching `latest-mac.yml`, zip, and blockmap assets. Avoid: treating `v1.0.1` as update-capable because that release predates the updater assets.
+- **Desktop Beta Update Feed**: Public GitHub Releases consumed by the packaged Electron app to detect newer versions and open the latest release page for manual replacement. Avoid: presenting unsigned beta updates as in-place auto-update.
+- **Update-Checking Baseline**: An unsigned beta desktop release that includes GitHub latest-release checking and publishes matching release assets. Avoid: treating `v1.0.1` as update-checking capable because that release predates the updater code/assets.
 - **Playbook**: Internal/developer-facing prompt-template selection language. Avoid: making "Playbook" a prominent primary task-intake choice; the default product behavior should be automatic agent selection with manual template choice hidden under Advanced.
 
 ## Relationships
@@ -116,8 +116,8 @@
 - The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
 - **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
 - **Run Scorecards** are emitted with final results and can be marked by the user locally as solved, partial, or failed; beta stats should be derived from scorecards, not raw transcripts.
-- The **Desktop Update Feed** is bundled through Electron update plumbing while helper updates remain app-resource updates; do not add a separate helper self-update path for v1.
-- A macOS **Update-Capable Baseline** must pass signed artifact verification and public GitHub update-asset verification before it is announced as auto-updating.
+- The **Desktop Beta Update Feed** is bundled through Electron update plumbing while helper updates remain app-resource updates; do not add a separate helper self-update path for v1.
+- A macOS **Update-Checking Baseline** may be unsigned for the no-pay beta path, but it must present updates as manual GitHub release downloads/replacements rather than in-place auto-update.
 - The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.
 
 ## Flagged Ambiguities
