@@ -34,6 +34,12 @@ Fully automate customer service chat through the user's real Chrome profile with
 ## Findings
 See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, Playwright vs Puppeteer, FTC/legal landscape, and industry predictions (Gartner/Forrester/CNBC 2026).
 
+### 2026-05-25 Public beta first-run readiness
+- Broader-audience beta readiness should optimize for the first 10 minutes: install/open, model setup, work-window launch, chat-surface preparation, task brief, and supervised start.
+- Model/API-key setup was already implemented but lived under Advanced, which made it too easy for new users to miss. It should be part of the primary first-run surface while low-level endpoints and manual agent approach remain Advanced.
+- Start readiness should treat an unconfigured selected model as a blocker before a live run starts. This avoids sending new users into a model failure after they already prepared the work window.
+- First-success measurement should stay local and PII-free: coarse activation signals such as model configured, work window opened, chat surface selected, first run started, checkpoint answered, human reached, and outcome marked are acceptable; raw chat text, private URLs, credentials, cookies, and account details are not.
+
 ### 2026-05-05 Amex live-flow handoff
 - User-facing live task is the Amex Oura Ring wellness-credit request for Morgan Stanley Platinum ending 81004; the script must run in the foreground so CLI `ask_user` prompts can read stdin.
 - The exact previous live failure was `AttributeError: 'Page' object has no attribute 'url'` in `ChatNavigator.wait_for_login()`; fixed by using browser-use wrapper methods: `await page.get_url()` and `await page.goto(...)`.
@@ -350,3 +356,31 @@ Run `ruff check src scripts tests`, focused daemon/session tests, and the dashbo
 
 ## Archive
 (Empty — initial migration.)
+
+### 2026-06-26 Oversized NOW.md Snapshot
+```markdown
+<!-- context-harness:schema v2 -->
+
+# Now
+
+## Current Focus
+Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explains the supervised work-window path, Start blocks unconfigured selected models, and local PII-free activation signals track onboarding milestones.
+
+## Active Blockers
+- Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
+- Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.
+- Desktop beta update checking and release verification are present; GitHub repo visibility is public. The app must describe updates as manual GitHub release downloads/replacements, not automatic in-place updates.
+- Published `v1.0.1` is not update-checking capable because it lacks updater code/assets. `v1.0.2` is the first unsigned beta update-checking baseline.
+- Current Mac still has no local `Developer ID Application` identity, and the GitHub repo lacks signing/notarization secrets. This is acceptable for the no-pay unsigned beta path.
+
+## Immediate Next Step
+Review the first-run readiness diff, then decide whether to cut/publish the next unsigned beta release so public testers get the onboarding improvements.
+
+## Session State
+- Last modified: 2026-05-25
+- Files touched this session: `AGENTS.md`, `CONTEXT.md`, `PLAN.md`, `NOW.md`, `README.md`, `dashboard/index.html`, `dashboard/dashboard.js`, `dashboard/dashboard.css`, `docs/beta.md`, `docs/public-beta-quickstart.md`, `scripts/test_helper_dashboard.mjs`.
+- Dashboard changes: promoted model/API-key setup out of Advanced into a first-run panel; added a model readiness item; added a guided path to first supervised run; added more brief starters; blocked Start when the selected model is unconfigured; persisted local PII-free activation signals for model configured, work window opened, chat surface selected, task brief written, first run started, checkpoint answered, human reached, and outcome marked.
+- Docs/context changes: README now leads with packaged Mac beta install and unsigned/manual-update expectations; added `docs/public-beta-quickstart.md`; updated `docs/beta.md` public install flow and pre-beta gates; captured **First-run Activation Signals** in `CONTEXT.md`; refreshed `AGENTS.md` context index.
+- Verification: `node scripts/context-index.js update`; `node --check dashboard/dashboard.js`; `node --check scripts/test_helper_dashboard.mjs`; `node scripts/test_dashboard_protocol.mjs`; elevated `npm run test:dashboard` (`helper_online=2089ms`, `work_window_ready=2323ms`, `mock_run_done=2474ms`); elevated `npm run test:desktop`; `ruff check src scripts tests`; `pytest tests -q -m "not slow"` (139 passed, 2 deselected); `git diff --check`.
+- UI sanity check: inspected the dashboard in the in-app browser against the mock helper at `127.0.0.1:8766`; first viewport showed no horizontal overflow at 1280px, model setup was outside Advanced, model readiness was configured, and quickstart items reflected current readiness.
+```

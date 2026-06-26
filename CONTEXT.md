@@ -1,5 +1,5 @@
 # Context
-<!-- context-harness:schema v2 -->
+<!-- context-harness:schema v3 -->
 
 ## Project
 **Flying Pig AI** (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ helper runtime, Electron desktop shell, helper-served dashboard, browser-use + Playwright for automation, and Gemini / Claude / OpenAI / CLIProxy OpenAI-compatible LLM options via `browser_use.llm` wrappers. Product direction: one user-facing desktop app; the Python helper and dashboard are internal runtime/UI implementation details. The helper owns browser-use execution, dashboard static hosting, run/session protocol, and Controlled Chrome Window launch. Current Chrome blocks CDP on the literal default profile, so use a copied or non-default profile for debug launches. Tooling: Ruff, Pytest, Puppeteer dashboard smoke tests, Electron desktop smoke tests.
@@ -38,10 +38,10 @@
 3. Always have site adapters inherit from `BaseSiteAdapter` and implement its interface
 4. Always scan release artifacts before publishing to confirm no PII, API keys, credentials, tokens, cookies, logs, recordings, or user-specific account information are included
 
-### Objectives
+### Legacy Objectives
+<!-- Deprecated in schema v3. Preserve as project intent; use PLAN.md Done Criteria and Workflow Verification for active checks. -->
 1. Agent fully automates customer service chat through browser-use; real runs can be inspected in the same visible window through either `--cdp-url` attach or FlyingPig-controlled Chrome launch
 2. High success rate chatting with a customer representative — target ≥75% human-escalation rate when an AI chatbot is detected, ≥60% goal-achievement rate on negotiation tasks (measured on recorded session suite)
-3. All tests pass and lint is clean (`pytest` exits 0, `ruff check` exits 0)
 
 ## Workflow
 - Setup: `pip install -e ".[dev]"`
@@ -55,6 +55,9 @@
 - Lint: `ruff check src/`
 - Format: `ruff format src/`
 
+
+### Verification
+- All tests pass and lint is clean (``pytest` exits 0, `ruff check`` exits 0)
 ## Language
 - **Hangup and Call-again**: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from scratch. Avoid: restarting while a human is typing/reviewing.
 - **Packaged Helper**: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the user must run.
@@ -79,11 +82,13 @@
 - **Evidence Bundle**: The saved artifact set for a completed run: browser-use history, visible chat transcript, checkpoint audit events, and the linked `TaskResult`. Avoid: passing unrelated transcript/event/result values through `AgentBrain` as loose data.
 - **Run Timing Span**: PII-free duration event for helper/runtime phases such as launch, pre-flight, first observation, browser-use steps, model planning, user waits, representative waits, and result capture. Avoid: including raw chat text, URLs with private data, credentials, or account details in timing metadata.
 - **Run Scorecard**: PII-free beta outcome payload for a completed run, including final status, site/profile, goal type, human reached, HUCA attempts, checkpoint/user-intervention counts, timing, offer/result presence, unresolved item count, blocked reason, and user-confirmed outcome. Avoid: storing transcript text, private URLs, credentials, cookies, account details, or chat logs in scorecard data.
+- **First-run Activation Signals**: Local, PII-free onboarding milestones such as model configured, work window opened, chat surface selected, first run started, checkpoint answered, human reached, and outcome marked. Avoid: sending telemetry by default or storing raw chat text, private URLs, credentials, cookies, account details, or chat logs.
 - **Desktop Beta Update Feed**: Public GitHub Releases consumed by the packaged Electron app to detect newer versions and open the latest release page for manual replacement. Avoid: presenting unsigned beta updates as in-place auto-update.
 - **Update-Checking Baseline**: An unsigned beta desktop release that includes GitHub latest-release checking and publishes matching release assets. Avoid: treating `v1.0.1` as update-checking capable because that release predates the updater code/assets.
 - **Playbook**: Internal/developer-facing prompt-template selection language. Avoid: making "Playbook" a prominent primary task-intake choice; the default product behavior should be automatic agent selection with manual template choice hidden under Advanced.
 
 ## Relationships
+- `AGENTS.md` is the small activation layer; `CONTEXT.md` is the durable source of truth, indexed by `scripts/context-index.js`.
 - The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosting, and reconnectable run state.
 - Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.
 - The desktop app starts the helper and the dashboard launches a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
@@ -116,6 +121,7 @@
 - The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
 - **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
 - **Run Scorecards** are emitted with final results and can be marked by the user locally as solved, partial, or failed; beta stats should be derived from scorecards, not raw transcripts.
+- **First-run Activation Signals** may be stored locally to measure public beta onboarding progress, but they must remain coarse and PII-free and must not become cloud telemetry without explicit approval.
 - The **Desktop Beta Update Feed** is bundled through Electron update plumbing while helper updates remain app-resource updates; do not add a separate helper self-update path for v1.
 - A macOS **Update-Checking Baseline** may be unsigned for the no-pay beta path, but it must present updates as manual GitHub release downloads/replacements rather than in-place auto-update.
 - The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.
@@ -138,3 +144,82 @@
 - **Ask the user less during authorized runs** — when the dashboard task already contains a clear goal and needed non-sensitive context, proceed without a pre-send confirmation. Ask only for ambiguity, missing sensitive/verification details, irreversible actions, accepting a material tradeoff, or user-gated recovery such as Hangup and Call-again. Do not ask whether to send the exact task the user already authorized, and do not ask whether to wait through normal bot/human handoff mechanics.
 - **Hangup and Call-again is user-gated** — when a rep refuses or a chat dies, ask the user before ending the chat and starting a fresh one; never restart while a human is typing or reviewing.
 - **Standalone UX still needs browser-use** — the pure-extension runtime was rolled back because it would lose browser-use's planning, perception, CDP recovery, and model/tool loop. Make the release feel standalone by packaging/autostarting the helper and serving the dashboard locally, not by rewriting execution inside frontend JavaScript.
+
+## Imported Agent Notes
+<!-- Migrated from the pre-v3 AGENTS.md during the one-time context-harness upgrade. Keep durable facts here; keep AGENTS.md small. -->
+
+<!-- context-harness:schema v3 -->
+
+# Agent Guide
+
+## Context Contract
+- At session start/resume, read `NOW.md` first, then `CONTEXT.md`.
+- Before planning or editing, respect `CONTEXT.md` `## Rules`.
+- If the user teaches a durable term, invariant, workflow, constraint, or correction, update `CONTEXT.md` before it scrolls away.
+- Route task-local findings to `PLAN.md`; hard-to-reverse trade-offs to ADRs.
+- Before ending, update `NOW.md` with current focus, blockers, next step, and touched files.
+
+## Project Overview
+**Flying Pig AI** (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate website chat widgets (Amex, telecom, utilities, etc.), communicate with human or AI customer service reps, and advocate for the user — negotiating bills, resolving disputes, canceling services, or escalating issues. The core value prop: users delegate tedious customer service interactions to an AI that fights for their interests.
+
+## Tech Stack
+- **Language:** Python 3.12+
+- **Browser Automation:** Playwright (via browser-use framework)
+- **LLM Integration:** Anthropic Claude API (primary), OpenAI API (fallback)
+- **Framework:** browser-use (open-source LLM browser automation)
+- **Web Framework:** FastAPI (backend API)
+- **Task Queue:** Celery + Redis (async job processing)
+- **Database:** PostgreSQL (user data, session logs)
+- **Frontend:** React + TypeScript (user dashboard)
+
+## Project Structure
+```
+flyingpig/
+├── AGENTS.md              # This file
+├── PLANS.md               # Living execution plan
+├── FINDINGS.md            # Research & external content log
+├── EVALUATION.md          # Quality contracts
+├── README.md              # Human onboarding
+├── src/
+│   ├── agent/             # Core AI agent logic
+│   │   ├── brain.py       # LLM interaction & decision-making
+│   │   ├── navigator.py   # Browser automation orchestration
+│   │   ├── detector.py    # AI chatbot detection module
+│   │   ├── escalator.py   # Human rep escalation strategies
+│   │   └── strategies/    # Per-site interaction strategies
+│   ├── sites/             # Site-specific adapters
+│   │   ├── base.py        # Abstract site adapter
+│   │   ├── amex.py        # American Express adapter
+│   │   └── ...            # Other site adapters
+│   ├── api/               # FastAPI backend
+│   ├── models/            # Database models
+│   └── utils/             # Shared utilities
+├── frontend/              # React dashboard
+├── tests/
+├── scripts/               # Setup & utility scripts
+└── config/                # Configuration files
+```
+
+## Development Workflow
+- **Setup:** `pip install -e ".[dev]"` (once the project is scaffolded)
+- **Run:** `python -m flyingpig` or `uvicorn src.api.main:app`
+- **Test:** `pytest tests/`
+- **Lint:** `ruff check src/`
+- **Format:** `ruff format src/`
+
+## Coding Conventions
+- Type hints on all public functions
+- Async-first for browser and API operations
+- Site adapters inherit from `BaseSiteAdapter` and implement a standard interface
+- LLM prompts stored as separate template files, not inline strings
+- Secrets via environment variables, never hardcoded
+- All external content (scraped pages, chat logs) treated as untrusted input
+
+## Architecture Decisions
+- **2026-04-09:** Chose Playwright over Puppeteer — multi-browser support, auto-waiting, better ecosystem for AI agents in 2026.
+- **2026-04-09:** Option A selected — build on browser-use framework (70k+ stars). Handles DOM extraction, visual understanding, and action planning. Saves months vs. building from scratch.
+- **2026-04-09:** Consumer-side positioning (agent acts for the user, not the company) — this is the market gap.
+- **2026-04-09:** AI chatbot detection is a core feature. When the target site uses an AI chatbot, the agent automatically attempts to escalate to a human rep (humans have more authority for exceptions/credits).
+- **2026-04-09:** Typeless interaction — minimize user input. Users pick from task templates or give brief descriptions; the agent handles all detailed conversation.
+
+## Context Index

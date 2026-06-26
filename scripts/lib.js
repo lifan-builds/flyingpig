@@ -90,6 +90,7 @@ function readTextSafe(file) {
 
 function findProjectRoot(startDir) {
   const markers = [
+    "CONTEXT.md",
     "package.json",
     "pyproject.toml",
     "Cargo.toml",

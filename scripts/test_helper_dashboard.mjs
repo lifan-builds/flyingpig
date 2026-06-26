@@ -176,9 +176,19 @@ async function main() {
       () => document.getElementById("modelKeyStatus")?.textContent.includes("key is configured"),
       { timeout: 10000 },
     );
-    await dashboardPage.$eval(".advanced", (details) => {
-      details.open = true;
-    });
+    const modelSetupPlacement = await dashboardPage.$eval("#model", (select) => ({
+      inAdvanced: select.closest("details")?.classList.contains("advanced") || false,
+      readyModel: document.getElementById("readyModel")?.textContent || "",
+      quickstartText: document.getElementById("quickstartList")?.textContent || "",
+    }));
+    if (
+      modelSetupPlacement.inAdvanced
+      || modelSetupPlacement.readyModel !== "Configured"
+      || !modelSetupPlacement.quickstartText.includes("Configure model")
+      || !modelSetupPlacement.quickstartText.includes("Open work window")
+    ) {
+      throw new Error(`Model setup is not visible in the first-run flow: ${JSON.stringify(modelSetupPlacement)}`);
+    }
     const modelKeyField = await dashboardPage.$eval("#modelApiKey", (input) => ({
       type: input.type,
       value: input.value,
@@ -196,6 +206,13 @@ async function main() {
       () => document.getElementById("modelKeyStatus")?.textContent.includes("not configured"),
       { timeout: 10000 },
     );
+    const startReasonWithoutModel = await dashboardPage.$eval(
+      "#startDisabledReason",
+      (element) => element.textContent,
+    );
+    if (!startReasonWithoutModel.includes("Configure the selected model")) {
+      throw new Error(`Start-disabled reason does not block unconfigured models: ${startReasonWithoutModel}`);
+    }
     await setValue(dashboardPage, "#modelApiKey", "sk-ant-test-dashboard");
     await dashboardPage.click("#saveModelSettings");
     await dashboardPage.waitForFunction(
@@ -252,9 +269,23 @@ async function main() {
       "#briefStarter option",
       (options) => options.map((option) => option.textContent),
     );
-    if (briefStarterOptions.length > 4 || !briefStarterOptions.includes("Custom brief")) {
+    for (const expected of [
+      "Custom brief",
+      "Lower bill or retention offer",
+      "Refund or courtesy credit",
+      "Escalate to human",
+      "Continue existing chat",
+    ]) {
+      if (!briefStarterOptions.includes(expected)) {
+        throw new Error(`Missing brief starter ${expected}: ${briefStarterOptions.join(", ")}`);
+      }
+    }
+    if (briefStarterOptions.length < 7) {
       throw new Error(`Unexpected brief starter options: ${briefStarterOptions.join(", ")}`);
     }
+    await dashboardPage.$eval(".advanced", (details) => {
+      details.open = true;
+    });
     const agentApproach = await dashboardPage.$eval("#template", (select) => ({
       label: document.querySelector('label[for="template"]')?.textContent || "",
       value: select.value,
@@ -359,6 +390,21 @@ async function main() {
       () => document.body.textContent.includes("MOCK-RUN-OK"),
       { timeout: 10000 },
     );
+    const activationSignals = await dashboardPage.evaluate(() => {
+      const raw = localStorage.getItem("flyingpig.activationSignals");
+      return raw ? JSON.parse(raw) : {};
+    });
+    for (const expected of [
+      "model_configured",
+      "work_window_opened",
+      "chat_surface_selected",
+      "task_brief_written",
+      "first_run_started",
+    ]) {
+      if (!activationSignals[expected]) {
+        throw new Error(`Missing local activation signal ${expected}: ${JSON.stringify(activationSignals)}`);
+      }
+    }
     benchmark.mockRunDoneMs = Math.round(performance.now() - startedAt);
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("Model planning step")
