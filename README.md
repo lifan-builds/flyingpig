@@ -35,13 +35,33 @@ authorized.
 
 ## Getting Started
 
-### Prerequisites
+### Public Mac Beta
+
+1. Download the latest `Flying-Pig-*-arm64-mac.zip` from
+   [GitHub Releases](https://github.com/lifan-builds/flyingpig/releases).
+2. Unzip it and open `Flying Pig.app`.
+3. If macOS blocks the unsigned beta, approve it from **System Settings ->
+   Privacy & Security**, then open the app again.
+4. In the app, choose a model provider and save an API key. Keys are written
+   only to your local `~/.flyingpig/.env` file and are never displayed back.
+5. Click **Open Work Window**, log in or handle MFA there, and navigate to the
+   support page or chat you want Flying Pig to handle.
+6. Pick a brief starter or write the customer-service goal yourself, then press
+   **Start**. Keep the desktop app open for checkpoints and approvals.
+
+The current no-pay Mac beta is unsigned. The app checks GitHub Releases for
+newer versions and opens the release page when an update is available, but users
+manually download and replace the app. This is not in-place auto-update.
+
+See `docs/public-beta-quickstart.md` for the short user guide.
+
+### Development Prerequisites
 - Python 3.12+
 - Node.js 20+ (for the desktop shell)
 - Google Chrome
 - A local CLIProxyAPI setup, or a provider API key
 
-### Installation
+### Development Installation
 
 ```bash
 git clone https://github.com/lifan-builds/flyingpig.git
@@ -50,7 +70,7 @@ pip install -e ".[dev]"
 playwright install
 ```
 
-### Configuration
+### Development Configuration
 
 Copy the example environment file and fill in your API keys:
 
@@ -91,9 +111,9 @@ It reads `CLIPROXYAPI_API_KEY` from `.env` if set, otherwise it falls back
 to the first `sk-local-...` key in `~/.cli-proxy-api/config.yaml`.
 
 For direct providers, set `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or
-`GOOGLE_API_KEY` in `.env` depending on which `--model` you pick.
-In the desktop dashboard, Advanced → Model also lets users save or clear a
-provider key. The dashboard never displays saved keys; it writes them to the
+`GOOGLE_API_KEY` in `.env` depending on which model you pick. The desktop
+dashboard also lets users save or clear a provider key from the first-run model
+setup panel. The dashboard never displays saved keys; it writes them to the
 user-local env file at `~/.flyingpig/.env`.
 
 ### Manual End-To-End Smoke
@@ -106,7 +126,7 @@ user-local env file at `~/.flyingpig/.env`.
 customer-service tab. The dashboard remains the cockpit; the work window
 runs without extensions.
 
-4. Choose a playbook, edit the task, and start. The dashboard streams
+4. Choose a brief starter or edit the task directly, then start. The dashboard streams
 browser-use progress and forwards mid-run questions.
 
 For supervised live runs, use the desktop app instead of a background

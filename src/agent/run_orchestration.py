@@ -22,6 +22,8 @@ class AgentRunPlan:
     model: str | None
     fallback_model: str | None
     permission_mode: str
+    browser_backend: str = "browser_use"
+    mcp_page: dict | None = None
 
     def agent_kwargs(self) -> dict:
         """Return the AgentBrain construction kwargs for this run."""
@@ -34,6 +36,8 @@ class AgentRunPlan:
             "cdp_url": self.cdp_url,
             "target_url": self.target_url,
             "navigate_on_attach": self.navigate_on_attach,
+            "browser_backend": self.browser_backend,
+            "mcp_page": self.mcp_page,
         }
 
     def execute_kwargs(self) -> dict:
@@ -67,6 +71,8 @@ def build_agent_run_plan(
         model=msg.get("model"),
         fallback_model=msg.get("fallback_model"),
         permission_mode=msg.get("permission_mode") or "supervised_browser",
+        browser_backend=msg.get("browser_backend") or "browser_use",
+        mcp_page=msg.get("mcp_page") or None,
     )
 
 

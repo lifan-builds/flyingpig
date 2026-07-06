@@ -1,0 +1,39 @@
+# Relationships
+
+- `AGENTS.md` is the small activation layer; `CONTEXT.md` is the durable source of truth, indexed by `scripts/context-index.js`.
+- The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosting, and reconnectable run state.
+- Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.
+- The desktop app starts the helper and the dashboard launches a **Controlled Chrome Window** for v1 customer-service runs. The UX should present this as a purposeful Flying Pig work window, not as an accidental duplicate browser.
+- When the dashboard shows **Work Window Offline** while the helper is online, it should expose an immediate Open Work Window action beside that status instead of forcing users to scroll to browser controls.
+- Task intake should make the editable problem brief the source of truth. Use a small starter selector for common chores; avoid large button grids that imply the user is making a final choice while the textarea remains editable.
+- The **Native Desktop Shell** is the product entry point for v1: Electron owns startup, helper process supervision, window creation, retry/failure UX, and desktop packaging while the Python helper remains the runtime owner.
+- When the helper is offline or not installed, the dashboard should show a setup state with a primary "Set up Flying Pig" path, a reconnect option, and small diagnostics; avoid surfacing raw localhost/WebSocket failures as the main UX.
+- First-run beta should prefer a **Dedicated Work Profile** instead of blocking the user by asking them to quit normal Chrome so Flying Pig can copy the default profile. A smoother explicit profile-import path can be added later.
+- The **Dedicated Work Profile** persists login state across Flying Pig runs by default; users should have an explicit reset path when they want to clear the work profile.
+- The **Controlled Chrome Window** should not present a second Flying Pig control surface. The desktop app is the single cockpit; the controlled window is only the work area browser-use operates.
+- Disable extensions in the **Controlled Chrome Window** for v1 to avoid duplicate controls and reduce page-interference risk while browser-use operates customer-service pages.
+- V1 supervision should use a side-by-side layout: the Flying Pig desktop app as the cockpit, and the Controlled Chrome Window as the work area. The launch flow should position or guide users toward keeping both visible.
+- If side-by-side placement fails or the screen is too small, keep the same Single Cockpit model and degrade to notification-led supervision.
+- A **User-Prepared Chat Surface** is verified by one **Chat Surface Check** before the agent sends any customer-service message.
+- Most known sites use a **Support Profile** through the shared adapter; bespoke adapters are reserved for unusual mechanics or recovery policies.
+- **Support Profile** authoring and prompt-context rendering belong in the profile module; adapters should consume rendered profile context rather than hand-building profile prose.
+- The **Pre-flight Safety Gate** is a helper/backend module and must remain consistent across REST, WebSocket, and dashboard starts.
+- The **Agent Run Plan** is the seam between daemon transport and `AgentBrain`; transport code should not know browser-use construction details beyond passing a prepared plan.
+- A **Decision Checkpoint** is distinct from missing-information collection: `ask_user` can gather facts, while Decision Checkpoints present explicit options and consequences for user choice.
+- The model loop owns when to raise a **Decision Checkpoint**; the helper and dashboard render and deliver checkpoints but do not maintain a separate deterministic checkpoint-detection rule engine.
+- A v1 **Decision Checkpoint** carries a checkpoint type, a short summary, explicit options, one recommended option, and the exact customer-service message for each option that sends one.
+- The **Dashboard Control Plane** owns notification delivery for user-blocking moments: normal progress does not notify, while every Decision Checkpoint or other user-attention request should alert the user through the configured in-dashboard, sound, or OS notification channels.
+- Decision Checkpoint options are generated live by the model but constrained by a schema. For irreversible actions, the UI must show the exact outbound message before the user approves it.
+- Decision Checkpoint answers include both the selected option id and the exact selected outbound message so the model can continue with context and the session has an audit trail of what the user approved.
+- A Decision Checkpoint may include one model-authored neutral holding message and delay. If the user has not answered by then, the helper may send that exact holding message once to keep a live chat open, but it must not improvise or confirm irreversible actions.
+- Decision Checkpoints must remain reconnect-safe: if the dashboard disconnects or reloads while a checkpoint is pending, the next dashboard connection restores the structured options rather than degrading the decision to plain free text.
+- **Active Human Work** should use a real patience window and warm acknowledgements; do not send repeated "just checking" nudges while a representative is visibly working.
+- Final result reporting must be based on the freshest visible chat text; if a representative says they need a moment for confirmation/reference details, `report_outcome` should wait or re-inspect before claiming none were provided.
+- The **Run Session** module owns state snapshots and protocol events for pending user-attention requests; FastAPI/WebSocket code is an adapter over that state.
+- The **Evidence Bundle** module owns how chat transcripts, checkpoint audit events, saved session files, and extracted results stay linked for auditability.
+- **Run Timing Spans** flow through the helper protocol and final result payload so the dashboard can explain speed without duplicating runtime logic or exposing PII.
+- **Run Scorecards** are emitted with final results and can be marked by the user locally as solved, partial, or failed; beta stats should be derived from scorecards, not raw transcripts.
+- **First-run Activation Signals** may be stored locally to measure public beta onboarding progress, but they must remain coarse and PII-free and must not become cloud telemetry without explicit approval.
+- The **Desktop Beta Update Feed** is bundled through Electron update plumbing while helper updates remain app-resource updates; do not add a separate helper self-update path for v1.
+- A macOS **Update-Checking Baseline** may be unsigned for the no-pay beta path, but it must present updates as manual GitHub release downloads/replacements rather than in-place auto-update.
+- The old Chrome extension and React frontend are archived under `docs/legacy/` for reference only; do not add new product work there.

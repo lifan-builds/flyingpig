@@ -183,6 +183,97 @@ async def browser_launch(request: Request):
     }
 
 
+@app.post("/browser/attach")
+async def browser_attach(request: Request):
+    global mock_browser_connected, mock_work_window_url
+
+    payload = await request.json()
+    cdp_url = payload.get("cdp_url") or "http://127.0.0.1:9335"
+    if "9335" not in cdp_url:
+        return {"ok": False, "error": f"mock Chrome unavailable at {cdp_url}", "cdp_url": cdp_url}
+    mock_browser_connected = True
+    return {
+        "ok": True,
+        "cdp_url": cdp_url if cdp_url.startswith("http") else f"http://{cdp_url}",
+        "current_url": mock_work_window_url,
+        "current_title": "Mock existing Chrome",
+        "message": "MOCK-EXISTING-CHROME-READY",
+    }
+
+
+@app.post("/browser/mcp/connect")
+async def browser_mcp_connect():
+    return {
+        "ok": True,
+        "connected": True,
+        "pages": [
+            {
+                "index": 0,
+                "id": "mock-cpa-tab",
+                "title": "Mock CPA Management Center",
+                "url": mock_work_window_url,
+                "cdp_url": "http://127.0.0.1:9335",
+            },
+            {
+                "index": 1,
+                "id": "mock-sensitive-tab",
+                "title": "Mock Private Dashboard",
+                "url": "https://example.com/private",
+                "cdp_url": None,
+            },
+        ],
+        "message": "MOCK-MCP-CONNECTED",
+    }
+
+
+@app.get("/browser/mcp/pages")
+async def browser_mcp_pages():
+    return await browser_mcp_connect()
+
+
+@app.post("/browser/mcp/select")
+async def browser_mcp_select(request: Request):
+    global mock_browser_connected, mock_work_window_url
+
+    payload = await request.json()
+    if payload.get("page_index") != 0:
+        mock_browser_connected = True
+        return {
+            "ok": True,
+            "connected": True,
+            "browser_ready": True,
+            "browser_backend": "mcp",
+            "current_url": "https://example.com/private",
+            "current_title": "Mock inspect-only tab",
+            "page": {
+                "index": payload.get("page_index"),
+                "title": "Mock inspect-only tab",
+                "url": "https://example.com/private",
+                "snapshot_available": True,
+            },
+            "message": "MOCK-MCP-NATIVE-READY",
+        }
+    mock_browser_connected = True
+    return {
+        "ok": True,
+        "connected": True,
+        "browser_ready": True,
+        "browser_backend": "mcp",
+        "cdp_url": "http://127.0.0.1:9335",
+        "current_url": mock_work_window_url,
+        "current_title": "Mock CPA Management Center",
+        "page": {
+            "index": 0,
+            "id": "mock-cpa-tab",
+            "title": "Mock CPA Management Center",
+            "url": mock_work_window_url,
+            "cdp_url": "http://127.0.0.1:9335",
+            "snapshot_available": True,
+        },
+        "message": "MOCK-MCP-TAB-READY",
+    }
+
+
 @app.get("/browser/status")
 async def browser_status():
     return {

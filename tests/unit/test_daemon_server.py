@@ -381,29 +381,209 @@ def test_browser_launch_endpoint_defaults_to_generic_blank_page(monkeypatch):
 
 def test_browser_status_endpoint_reports_debugger_state(monkeypatch):
     reset_run_manager()
-    monkeypatch.setattr(daemon_server, "debugger_is_ready", lambda port: port == 9222)
+    monkeypatch.setattr(
+        daemon_server,
+        "debugger_is_ready",
+        lambda *args, **kwargs: kwargs.get("cdp_url") == "http://localhost:9222",
+    )
     monkeypatch.setattr(
         daemon_server,
         "debugger_page_info",
-        lambda port: {"url": "https://support.example/chat", "title": "Support"}
-        if port == 9222
+        lambda *args, **kwargs: {"url": "https://support.example/chat", "title": "Support"}
+        if kwargs.get("cdp_url") == "http://localhost:9222"
         else None,
     )
     app = daemon_server.create_app()
 
     with TestClient(app) as client:
-        connected = client.get("/browser/status?cdp_url=http://127.0.0.1:9222")
+        connected = client.get("/browser/status?cdp_url=http://localhost:9222")
         disconnected = client.get("/browser/status?cdp_url=http://127.0.0.1:9333")
 
     assert connected.status_code == 200
     assert connected.json()["connected"] is True
-    assert connected.json()["cdp_url"] == "http://127.0.0.1:9222"
+    assert connected.json()["cdp_url"] == "http://localhost:9222"
     assert connected.json()["current_url"] == "https://support.example/chat"
     assert connected.json()["current_title"] == "Support"
     assert disconnected.json()["connected"] is False
 
 
-def test_daemon_broadcasts_and_answers_decision_checkpoint(monkeypatch):
+def test_browser_attach_endpoint_preserves_existing_chrome_endpoint(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(
+        daemon_server,
+        "debugger_is_ready",
+        lambda *args, **kwargs: kwargs.get("cdp_url") == "http://localhost:9335",
+    )
+    monkeypatch.setattr(
+        daemon_server,
+        "debugger_page_info",
+        lambda *args, **kwargs: {"url": "https://example.com/support", "title": "Support"},
+    )
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/browser/attach",
+            json={"cdp_url": "localhost:9335"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["cdp_url"] == "http://localhost:9335"
+    assert response.json()["current_url"] == "https://example.com/support"
+
+
+def test_browser_attach_endpoint_reports_setup_help_when_unreachable(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "debugger_is_ready", lambda *args, **kwargs: False)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/browser/attach",
+            json={"cdp_url": "http://[::1]:9222"},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert response.json()["cdp_url"] == "http://[::1]:9222"
+    assert "remote-debugging-port" in response.json()["error"]
+
+
+class FakeMcpClient:
+    pages = [
+        {
+            "index": 0,
+            "id": "target-0",
+            "title": "CPA Management Center",
+            "url": "https://cpa.example/dashboard",
+            "cdp_url": "http://localhost:9335",
+        }
+    ]
+
+    def connect(self):
+        return self.list_pages()
+
+    def list_pages(self):
+        return list(self.pages)
+
+    def select_page(self, page):
+        return {"page": page, "snapshot_text": "button Submit"}
+
+
+def test_browser_mcp_connect_returns_existing_chrome_pages(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "chrome_mcp_session", FakeMcpClient)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/browser/mcp/connect")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert response.json()["connected"] is True
+    assert response.json()["pages"][0]["title"] == "CPA Management Center"
+
+
+def test_browser_mcp_select_returns_cdp_handoff(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "chrome_mcp_session", FakeMcpClient)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/browser/mcp/select",
+            json={"page_index": 0},
+        )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["browser_ready"] is True
+    assert payload["cdp_url"] == "http://localhost:9335"
+    assert payload["current_url"] == "https://cpa.example/dashboard"
+
+
+def test_browser_mcp_connect_reports_remote_debugging_help(monkeypatch):
+    reset_run_manager()
+
+    class FailingMcpClient:
+        def connect(self):
+            raise daemon_server.ChromeDevtoolsMcpError(
+                "Could not connect to Chrome. Could not find DevToolsActivePort"
+            )
+
+    monkeypatch.setattr(daemon_server, "chrome_mcp_session", FailingMcpClient)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/browser/mcp/connect")
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is False
+    assert "chrome://inspect/#remote-debugging" in response.json()["message"]
+
+
+def test_browser_mcp_select_claims_mcp_readiness_without_cdp(monkeypatch):
+    reset_run_manager()
+
+    class InspectOnlyMcpClient(FakeMcpClient):
+        pages = [
+            {
+                "index": 0,
+                "id": "target-0",
+                "title": "Existing tab",
+                "url": "https://example.com/support",
+                "cdp_url": None,
+            }
+        ]
+
+    monkeypatch.setattr(daemon_server, "chrome_mcp_session", InspectOnlyMcpClient)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/browser/mcp/select", json={"page_index": 0})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["browser_ready"] is True
+    assert payload["browser_backend"] == "mcp"
+    assert payload["cdp_url"] is None
+    assert "MCP control" in payload["message"]
+
+
+def test_run_start_accepts_mcp_backend_without_cdp(monkeypatch):
+    reset_run_manager()
+    captured = {}
+
+    class FakeMcpAgentBrain(FakeAgentBrain):
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+            super().__init__(**kwargs)
+
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeMcpAgentBrain)
+    app = daemon_server.create_app()
+
+    payload = run_payload(
+        cdp_url=None,
+        browser_backend="mcp",
+        mcp_page={"index": 1, "url": "https://example.com/support"},
+        target_url="https://example.com/support",
+        url="https://example.com/support",
+        site="generic",
+    )
+
+    with TestClient(app) as client:
+        response = client.post("/run/start", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["running"] is True
+    assert captured["browser_backend"] == "mcp"
+    assert captured["mcp_page"] == {"index": 1, "url": "https://example.com/support"}
+    assert captured["cdp_url"] is None
+
+
     reset_run_manager()
     monkeypatch.setattr(daemon_server, "AgentBrain", FakeCheckpointAgentBrain)
     app = daemon_server.create_app()

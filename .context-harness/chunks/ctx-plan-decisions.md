@@ -1,0 +1,22 @@
+# Decisions
+
+- **2026-04-09** Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.
+- **2026-04-09** Consumer-side positioning — the market gap.
+- **2026-04-09** Core feature: AI-chatbot detection + automatic human escalation.
+- **2026-04-09** Typeless UX — templates and brief prompts only.
+- **2026-04-09** Manual login flow — no credential storage.
+- **2026-04-09** Prompts live as `.txt` templates in `prompts/<site>/`.
+- **2026-05-04** Use `BrowserSession.from_system_chrome()` as the default path instead of a Chrome extension; simpler architecture, real profile access, with the explicit tradeoff that Chrome must be closed before launch.
+- **2026-05-06** Prefer inspected CDP Chrome for live Amex runs requiring human observation. Use a persistent copied profile for Chrome CDP compatibility; do not attempt literal default-profile remote debugging.
+- **2026-05-07** Keep browser-use in a packaged local helper/native host and use the Chrome side panel as the supervised UX. Do not replace browser-use with pure extension JavaScript just to make the product feel standalone.
+- **2026-05-15** Extension-first v1 may open a separate Flying Pig Controlled Chrome Window for the actual customer-service run. The product should frame it as a purposeful work window launched from the side panel, not as the user manually starting another browser.
+- **2026-05-15** Follow the Single Cockpit Rule for v1: the extension side panel in normal Chrome is the only control surface, and the Controlled Chrome Window should run with extensions disabled.
+- **2026-05-15** V1 supervision layout should be side-by-side: the normal Chrome side panel is the cockpit, and the Controlled Chrome Window is the work area.
+- **2026-05-15** Small-screen fallback keeps the Single Cockpit model and relies on user-attention notifications plus bring-forward controls instead of adding a second in-work-window UI.
+- **2026-05-15** Use Hybrid Helper Startup: keep the existing login/background helper service for beta stabilization, then add Native Messaging so the extension can start the helper on demand.
+- **2026-05-15** Helper-offline side-panel state should lead with setup/reconnect actions and keep localhost/WebSocket diagnostics secondary.
+- **2026-05-15** First-run beta should fall back to a Dedicated Work Profile instead of asking the user to quit normal Chrome to create a copied default profile.
+- **2026-05-17** Use the Chrome extension dashboard tab as the v1 cockpit. The side panel is too cramped and makes "current tab" ambiguous once a separate Controlled Chrome Window exists.
+- **2026-05-19** Use the helper-served localhost dashboard as the v1 cockpit and retire the unpacked Chrome extension from the normal beta path. The helper remains the browser-use/CDP/LLM owner; frontend JavaScript is only the control plane.
+- **2026-05-19** Helper lifecycle is CLI-owned for v1: run `flyingpig-helper`, use the opened dashboard, and press Ctrl+C when done. Do not add dashboard-side process shutdown controls.
+- **2026-05-20** Use Electron as the v1 Native Desktop Shell. Electron owns app startup, helper supervision, retry/failure UX, and packaging; Python remains the owner of browser-use, CDP policy, LLM calls, run state, dashboard hosting, and evidence/session behavior. See `docs/adr/0004-electron-native-desktop-shell.md`.

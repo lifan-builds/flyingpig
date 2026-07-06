@@ -6,10 +6,21 @@ from src.agent.browser_runtime import (
     chrome_user_data_dir,
     find_debugger_target_id,
     launch_cdp_chrome,
+    normalize_cdp_url,
     open_dashboard_tab,
     prepare_debugger_page,
     supported_chrome_profile_modes,
 )
+
+
+def debugger_not_ready(*args, **kwargs):
+    return False
+
+
+def test_normalize_cdp_url_preserves_loopback_host():
+    assert normalize_cdp_url("localhost:9222") == "http://localhost:9222"
+    assert normalize_cdp_url("http://[::1]:9222/json/version") == "http://[::1]:9222"
+    assert normalize_cdp_url("http://127.0.0.1") == "http://127.0.0.1:9222"
 
 
 def test_chrome_user_data_dir_uses_custom_dir():
@@ -30,7 +41,7 @@ def test_chrome_user_data_dir_uses_existing_profile(monkeypatch, tmp_path):
 
 def test_launch_cdp_chrome_reuses_ready_debugger(monkeypatch):
     prepared = {}
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: True)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda **kwargs: True)
     monkeypatch.setattr(
         "src.agent.browser_runtime.prepare_debugger_page",
         lambda **kwargs: prepared.update(kwargs),
@@ -41,7 +52,10 @@ def test_launch_cdp_chrome_reuses_ready_debugger(monkeypatch):
     )
 
     assert cdp_url == "http://127.0.0.1:9333"
-    assert prepared == {"port": 9333, "target_url": "https://example.com/support"}
+    assert prepared == {
+        "cdp_url": "http://127.0.0.1:9333",
+        "target_url": "https://example.com/support",
+    }
 
 
 def test_chrome_launch_config_defaults_to_dedicated_work_profile():
@@ -61,9 +75,9 @@ def test_chrome_profile_modes_are_domain_values():
 def test_launch_cdp_chrome_can_launch_dedicated_while_regular_chrome_runs(monkeypatch):
     launched = {}
 
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: False)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", debugger_not_ready)
     monkeypatch.setattr("src.agent.browser_runtime.regular_chrome_is_running", lambda: True)
-    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda port: None)
+    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda *args, **kwargs: None)
     monkeypatch.setattr("pathlib.Path.mkdir", lambda self, parents=False, exist_ok=False: None)
 
     class FakePopen:
@@ -86,7 +100,7 @@ def test_prepare_debugger_page_opens_target_and_closes_stale_pages(monkeypatch):
     calls = []
     monkeypatch.setattr(
         "src.agent.browser_runtime.debugger_targets",
-        lambda port: [
+        lambda *args, **kwargs: [
             {"id": "old-oura", "type": "page", "url": "https://support.ouraring.com"},
             {"id": "old-uber", "type": "page", "url": "https://ubereats.com"},
             {"id": "worker", "type": "service_worker", "url": "chrome-extension://abc/sw.js"},
@@ -108,18 +122,18 @@ def test_prepare_debugger_page_opens_target_and_closes_stale_pages(monkeypatch):
     prepare_debugger_page(port=9222, target_url="https://example.com/chat")
 
     assert calls == [
-        ("open", {"port": 9222, "url": "https://example.com/chat"}),
-        ("activate", {"port": 9222, "target_id": "new-target"}),
-        ("close", {"port": 9222, "target_id": "old-oura"}),
-        ("close", {"port": 9222, "target_id": "old-uber"}),
+        ("open", {"cdp_url": "http://127.0.0.1:9222", "url": "https://example.com/chat"}),
+        ("activate", {"cdp_url": "http://127.0.0.1:9222", "target_id": "new-target"}),
+        ("close", {"cdp_url": "http://127.0.0.1:9222", "target_id": "old-oura"}),
+        ("close", {"cdp_url": "http://127.0.0.1:9222", "target_id": "old-uber"}),
     ]
 
 
 def test_launch_cdp_chrome_opens_dashboard_tab(monkeypatch, tmp_path):
     calls = []
 
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: False)
-    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda port: None)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", debugger_not_ready)
+    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda *args, **kwargs: None)
     monkeypatch.setattr("src.agent.browser_runtime.ensure_default_profile_copy", lambda path: None)
     monkeypatch.setattr("pathlib.Path.mkdir", lambda self, parents=False, exist_ok=False: None)
     monkeypatch.setattr(
@@ -144,7 +158,7 @@ def test_launch_cdp_chrome_opens_dashboard_tab(monkeypatch, tmp_path):
 
     assert calls == [
         {
-            "port": 9777,
+            "cdp_url": "http://127.0.0.1:9777",
             "dashboard_url": "http://127.0.0.1:8000",
             "target_url": "https://example.com/chat",
         }
@@ -152,7 +166,7 @@ def test_launch_cdp_chrome_opens_dashboard_tab(monkeypatch, tmp_path):
 
 
 def test_launch_cdp_chrome_refuses_literal_existing_profile(monkeypatch):
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: False)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", debugger_not_ready)
 
     try:
         launch_cdp_chrome(ChromeLaunchConfig(chrome_profile="existing"))
@@ -168,8 +182,8 @@ def test_launch_cdp_chrome_uses_custom_existing_profile(
 ):
     launched = {}
 
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: False)
-    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda port: None)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", debugger_not_ready)
+    monkeypatch.setattr("src.agent.browser_runtime.wait_for_debugger", lambda *args, **kwargs: None)
     custom_profile = tmp_path / "Chrome"
 
     class FakePopen:
@@ -195,7 +209,7 @@ def test_launch_cdp_chrome_refuses_first_default_copy_when_regular_chrome_runs(
     monkeypatch,
     tmp_path,
 ):
-    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", lambda port: False)
+    monkeypatch.setattr("src.agent.browser_runtime.debugger_is_ready", debugger_not_ready)
     monkeypatch.setattr("src.agent.browser_runtime.regular_chrome_is_running", lambda: True)
     default_profile = tmp_path / "Chrome"
     default_profile.mkdir()

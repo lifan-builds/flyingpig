@@ -9,14 +9,26 @@
 
 ## Install Flow
 
-1. Install the Python package in editable/dev mode for the first beta cohort:
+For public Mac beta users, use the packaged desktop app:
+
+1. Download the latest `Flying-Pig-*-arm64-mac.zip` from
+   `https://github.com/lifan-builds/flyingpig/releases`.
+2. Unzip it and open `Flying Pig.app`.
+3. If macOS blocks the unsigned beta, approve it from **System Settings ->
+   Privacy & Security** and open the app again.
+4. In the first-run model setup panel, choose a provider and save an API key.
+5. Click **Open Work Window**.
+6. In the Flying Pig work window, prepare the Amex customer-service tab.
+7. Confirm the task and supervise the run.
+
+For development builds, install the Python package in editable/dev mode:
 
    ```bash
    pip install -e ".[dev]"
    playwright install
    ```
 
-2. Start the desktop app:
+Then start the desktop app:
 
    ```bash
    npm install
@@ -25,11 +37,6 @@
 
    The desktop app starts the helper automatically, waits for `/health`, and
    loads the dashboard.
-
-3. Use the dashboard in the Flying Pig app.
-4. Click **Open Work Window**.
-5. In the FlyingPig work window, prepare the Amex customer-service tab.
-6. Confirm the task and supervise the run.
 
 For supervised live sessions, start the run from the desktop app. Live chats
 often require Decision Checkpoints, verification prompts, or settlement choices;
@@ -91,6 +98,8 @@ account data.
 - Helper-offline state in the dashboard clearly offers setup and reconnect paths.
 - Open Work Window from the dashboard returns a CDP endpoint and opens the Amex page in an extension-free controlled window.
 - Start is disabled when the helper is online but controlled Chrome is not connected.
+- Start is disabled when the selected model is not configured.
+- The first-run dashboard path exposes model setup, work-window launch, chat-surface preparation, editable task brief, and local PII-free activation signals.
 - Relaunching the work window against an already-running CDP endpoint resets the task page and closes stale page targets.
 
 ## Release Evidence — 2026-05-24

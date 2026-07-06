@@ -42,6 +42,10 @@
           <strong id="readyHelper">Offline</strong>
         </div>
         <div class="readiness-item" data-ready="false">
+          <span>Model</span>
+          <strong id="readyModel">Check key</strong>
+        </div>
+        <div class="readiness-item" data-ready="false">
           <span>Work Window</span>
           <strong id="readyWorkWindow">Open it</strong>
         </div>
@@ -76,6 +80,51 @@
         <code id="setupDiagnostic">localhost:8765 unavailable</code>
       </section>
 
+      <section class="first-run-panel" aria-label="First run setup">
+        <section class="panel model-setup">
+          <div class="section-heading">
+            <p class="eyebrow">First run</p>
+            <h2>Model setup</h2>
+          </div>
+          <div class="model-grid">
+            <div>
+              <label for="model">Model</label>
+              <select id="model">
+                <option value="cliproxyapi">CLIProxyAPI</option>
+                <option value="claude">Claude</option>
+                <option value="openai">OpenAI</option>
+                <option value="gemini-flash">Gemini Flash</option>
+              </select>
+            </div>
+            <div class="setting-copy">
+              <strong id="modelKeyTitle">Model API key</strong>
+              <span id="modelKeyStatus">Connect the helper to check credential status.</span>
+            </div>
+          </div>
+          <label for="modelApiKey">API key</label>
+          <input id="modelApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank to keep the saved key">
+          <p id="modelKeyHelp" class="field-note">Keys are stored only in your local Flying Pig env file.</p>
+          <div class="row model-key-actions">
+            <button id="saveModelSettings" class="secondary" type="button">Save Model Settings</button>
+            <button id="clearModelKey" class="danger" type="button">Clear Saved Key</button>
+          </div>
+        </section>
+
+        <section class="panel quickstart-panel">
+          <div class="section-heading">
+            <p class="eyebrow">First task</p>
+            <h2>Path to a supervised run</h2>
+          </div>
+          <ol class="quickstart-list" id="quickstartList">
+            <li data-step="model"><strong>Configure model</strong><span>Save a provider key or use local CLIProxyAPI.</span></li>
+            <li data-step="work_window"><strong>Open work window</strong><span>Use the separate browser window for login and support chat.</span></li>
+            <li data-step="chat_surface"><strong>Prepare chat</strong><span>Navigate to the support page and expose the chat surface.</span></li>
+            <li data-step="task_brief"><strong>Describe the goal</strong><span>Keep the problem brief editable and specific.</span></li>
+            <li data-step="start"><strong>Start supervised run</strong><span>Approve checkpoints from this cockpit when asked.</span></li>
+          </ol>
+        </section>
+      </section>
+
       <section class="dashboard-grid">
         <section class="panel task-panel">
           <div class="section-heading">
@@ -89,6 +138,9 @@
             <option value="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
             <option value="cancel_subscription" data-task="Help me cancel this subscription or service. Before confirming any irreversible cancellation, ask me for approval with the exact message.">Cancel subscription</option>
             <option value="dispute_charge" data-task="Help me dispute a fee or charge. Ask for any missing amount, merchant, or date details before sending.">Dispute fee or charge</option>
+            <option value="refund_credit" data-task="Help me request a refund, statement credit, or courtesy credit. Ask for any missing amount, date, or order details before sending.">Refund or courtesy credit</option>
+            <option value="escalate_human" data-task="Help me reach a human representative and explain the issue clearly. If the chatbot cannot resolve it, escalate politely.">Escalate to human</option>
+            <option value="continue_chat" data-task="Continue this existing support chat from the visible conversation. Treat prior messages as context and ask me before irreversible actions.">Continue existing chat</option>
           </select>
 
           <label for="taskText">Problem brief (editable)</label>
@@ -127,8 +179,19 @@
 
           <div class="row">
             <button id="refreshTab" class="secondary" type="button">Refresh Work Window</button>
+            <button id="autoConnectChrome" class="secondary" type="button">Auto-Connect Existing Chrome</button>
+            <button id="attachChrome" class="secondary" type="button">Connect Existing Chrome</button>
             <button id="launchChrome" class="secondary" type="button">Open Work Window</button>
           </div>
+
+          <section id="mcpTabPanel" class="mcp-tab-panel hidden" aria-label="Existing Chrome tabs">
+            <div class="section-heading">
+              <p class="eyebrow">Existing Chrome</p>
+              <h2 id="mcpStatus">Chrome MCP not connected</h2>
+            </div>
+            <p id="mcpMessage" class="field-note">Auto-connect lists real logged-in Chrome tabs. Select only the tab Flying Pig may supervise.</p>
+            <div id="mcpPages" class="mcp-pages"></div>
+          </section>
 
           <details class="advanced">
             <summary>Advanced</summary>
@@ -140,28 +203,6 @@
               <option value="dispute_charge">Dispute charge</option>
               <option value="retention_offer">Retention offer</option>
             </select>
-
-            <label for="model">Model</label>
-            <select id="model">
-              <option value="cliproxyapi">Cliproxy API</option>
-              <option value="claude">Claude</option>
-              <option value="openai">OpenAI</option>
-              <option value="gemini-flash">Gemini Flash</option>
-            </select>
-
-            <section class="model-settings" aria-label="Model API key settings">
-              <div class="setting-copy">
-                <strong id="modelKeyTitle">Model API key</strong>
-                <span id="modelKeyStatus">Connect the helper to check credential status.</span>
-              </div>
-              <label for="modelApiKey">API key</label>
-              <input id="modelApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank to keep the saved key">
-              <p id="modelKeyHelp" class="field-note">Keys are stored only in your local Flying Pig env file.</p>
-              <div class="row model-key-actions">
-                <button id="saveModelSettings" class="secondary" type="button">Save Model Settings</button>
-                <button id="clearModelKey" class="danger" type="button">Clear Saved Key</button>
-              </div>
-            </section>
 
             <label for="cdpUrl">Browser endpoint</label>
             <input id="cdpUrl" placeholder="http://127.0.0.1:9222">

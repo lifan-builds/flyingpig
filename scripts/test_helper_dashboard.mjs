@@ -265,6 +265,13 @@ async function main() {
     if (!statusLaunchVisible) {
       throw new Error("Dashboard does not expose an enabled status-level work window button.");
     }
+    const attachChromeVisible = await dashboardPage.$eval(
+      "#attachChrome",
+      (button) => button.textContent.includes("Connect Existing Chrome") && !button.disabled,
+    );
+    if (!attachChromeVisible) {
+      throw new Error("Dashboard does not expose an enabled existing-Chrome connection button.");
+    }
     const briefStarterOptions = await dashboardPage.$$eval(
       "#briefStarter option",
       (options) => options.map((option) => option.textContent),
@@ -380,6 +387,38 @@ async function main() {
     }
 
     await setValue(dashboardPage, "#cdpUrl", cdpUrlForDashboard);
+    await dashboardPage.click("#attachChrome");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-EXISTING-CHROME-READY"),
+      { timeout: 10000 },
+    );
+    const attachedEndpoint = await dashboardPage.$eval("#cdpUrl", (input) => input.value);
+    if (attachedEndpoint !== cdpUrlForDashboard) {
+      throw new Error(`Existing-Chrome attach did not preserve endpoint: ${attachedEndpoint}`);
+    }
+
+    await dashboardPage.click("#autoConnectChrome");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-MCP-CONNECTED"),
+      { timeout: 10000 },
+    );
+    const mcpPages = await dashboardPage.$$(".mcp-page");
+    if (mcpPages.length < 2) {
+      throw new Error(`Expected at least two mock MCP pages, got ${mcpPages.length}`);
+    }
+    await mcpPages[1].click();
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-MCP-NATIVE-READY"),
+      { timeout: 10000 },
+    );
+    const mcpTabReady = await dashboardPage.$eval(
+      "#browserStatus",
+      (element) => element.textContent === "Work Window Connected",
+    );
+    if (!mcpTabReady) {
+      throw new Error("MCP-selected Chrome tab did not mark the work window connected.");
+    }
+
     await setValue(
       dashboardPage,
       "#taskText",

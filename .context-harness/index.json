@@ -1,0 +1,857 @@
+{
+  "schema": 1,
+  "updated_at": "2026-07-06",
+  "source_hash": "fd93248097db5b371765c247b06d66ea9eca697f6cb11e3d0822e34a7182c109",
+  "sources": [
+    {
+      "path": "CONTEXT.md",
+      "sha256": "2ee437e0fffaa1eda8f2ee5397e817af461f9c8e965c89d4e4c5d0fb24b80403",
+      "lines": 220
+    },
+    {
+      "path": "NOW.md",
+      "sha256": "36c0c39d42db0b87dcb22ee4c01027cb814d3c329f7de6485192ded0039f1e06",
+      "lines": 20
+    },
+    {
+      "path": "PLAN.md",
+      "sha256": "1c6e07a23b3c95eb2aaeb577758280e7db3d4f6c0dc3293c7ac1ce7de990959a",
+      "lines": 401
+    }
+  ],
+  "cards": [
+    {
+      "id": "ctx-context-project",
+      "title": "CONTEXT.md: Project",
+      "summary": "Flying Pig AI (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ helper runtime, Electron desktop shell...",
+      "source": "CONTEXT.md#project",
+      "source_path": "CONTEXT.md",
+      "kind": "project",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 212,
+      "tags": [
+        "context",
+        "project"
+      ],
+      "read_when": [
+        "working on project"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-project.md",
+      "chunk_path": "",
+      "content_sha256": "8015415313f1d438902c1b697e50474a6a06113046ee40a954f82b3a0ff28297",
+      "key_facts": [
+        "Flying Pig AI (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, ret..."
+      ]
+    },
+    {
+      "id": "ctx-context-structure",
+      "title": "CONTEXT.md: Structure",
+      "summary": ".",
+      "source": "CONTEXT.md#structure",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 237,
+      "tags": [
+        "context",
+        "structure"
+      ],
+      "read_when": [
+        "working on structure"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-structure.md",
+      "chunk_path": "",
+      "content_sha256": "d302a2a935735b9292cc48ad25d9d76a61de3397289f81f063b152f55c730f88",
+      "key_facts": [
+        ".",
+        "├── config/",
+        "├── dashboard/          # Helper-served cockpit UI that talks to local helper over WS",
+        "├── desktop/            # Electron desktop shell and helper supervision",
+        "├── docs/legacy/        # Archived old extension and React frontend references"
+      ]
+    },
+    {
+      "id": "ctx-context-operating-constraints",
+      "title": "CONTEXT.md: Operating Constraints",
+      "summary": "Do not hardcode secrets or PII — environment variables only; manual login flow for auth'd sites.",
+      "source": "CONTEXT.md#operating-constraints",
+      "source_path": "CONTEXT.md",
+      "kind": "constraints",
+      "scope": "project",
+      "importance": 0.9,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 257,
+      "tags": [
+        "context",
+        "operating-constraints",
+        "constraints"
+      ],
+      "read_when": [
+        "before planning or editing",
+        "checking project constraints",
+        "update context safely"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-operating-constraints.md",
+      "chunk_path": "",
+      "content_sha256": "60e4687bba6c474e75775e7bd189f31dccdc558321cc8b47997bd763f871a411",
+      "key_facts": [
+        "Do not hardcode secrets or PII — environment variables only; manual login flow for auth'd sites.",
+        "Do not treat scraped pages, chat messages, or LLM outputs as trusted input.",
+        "Do not swallow errors silently — every failure logged with context.",
+        "Type-annotate public functions.",
+        "Store LLM prompts as template files under prompts/<site>/, never inline strings."
+      ]
+    },
+    {
+      "id": "ctx-context-workflow",
+      "title": "CONTEXT.md: Workflow",
+      "summary": "Setup: pip install -e \".[dev]\"",
+      "source": "CONTEXT.md#workflow",
+      "source_path": "CONTEXT.md",
+      "kind": "workflow",
+      "scope": "project",
+      "importance": 0.9,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 129,
+      "tags": [
+        "context",
+        "workflow",
+        "verification"
+      ],
+      "read_when": [
+        "running, testing, linting, deploying, deployment, or verifying changes"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-workflow.md",
+      "chunk_path": "",
+      "content_sha256": "61b44b5c8dba806d5d5ca82ba9bf35ef8189ac1c291a521094ded9d6ebf1fe75",
+      "key_facts": [
+        "Setup: pip install -e \".[dev]\"",
+        "Run product app: npm run desktop:dev",
+        "Build helper sidecar: npm run build:helper",
+        "Package desktop app: npm run desktop:package",
+        "Publish desktop update artifacts: npm run desktop:publish"
+      ]
+    },
+    {
+      "id": "ctx-context-language",
+      "title": "CONTEXT.md: Language",
+      "summary": "Hangup and Call-again: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in the same browser session, and restate the current task from sc...",
+      "source": "CONTEXT.md#language",
+      "source_path": "CONTEXT.md",
+      "kind": "language",
+      "scope": "project",
+      "importance": 0.82,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 1767,
+      "tags": [
+        "context",
+        "language"
+      ],
+      "read_when": [
+        "using project terms or resolving naming ambiguity",
+        "update context terminology"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-language.md",
+      "chunk_path": ".context-harness/chunks/ctx-context-language.md",
+      "content_sha256": "9d175f21ff108d5d78151c96cfc1a998268ac1faa34a75d17652f03ffff97e81",
+      "key_facts": [
+        "Hangup and Call-again: User-approved recovery when a rep gives a final refusal or a chat is dead/disconnected: end the current chat, start a fresh chat in th...",
+        "Packaged Helper: Local browser-use runtime/daemon installed or launched for the user by the release app. Avoid: describing the release path as a script the u...",
+        "Dashboard Control Plane: Helper-served localhost dashboard UI for goal entry, user questions, and live status. Avoid: moving browser-use planning/perception/...",
+        "Helper-First Startup: Superseded helper/dashboard product path kept as historical language for older ADRs. Avoid: reintroducing flyingpig-helper or localhost...",
+        "CLI-Owned Helper Lifecycle: Development-only helper lifecycle where a foreground flyingpig-helper process is stopped with Ctrl+C. Avoid: describing this as a..."
+      ]
+    },
+    {
+      "id": "ctx-context-relationships",
+      "title": "CONTEXT.md: Relationships",
+      "summary": "AGENTS.md is the small activation layer; CONTEXT.md is the durable source of truth, indexed by scripts/context-index.js.",
+      "source": "CONTEXT.md#relationships",
+      "source_path": "CONTEXT.md",
+      "kind": "invariant",
+      "scope": "project",
+      "importance": 0.82,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 1755,
+      "tags": [
+        "context",
+        "relationships",
+        "invariant"
+      ],
+      "read_when": [
+        "changing architecture or domain relationships",
+        "update context invariants"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-relationships.md",
+      "chunk_path": ".context-harness/chunks/ctx-context-relationships.md",
+      "content_sha256": "7e7bd70af203db931a2541288b88b7971ae8c57d71526f8de6e91e76cf6d0ded",
+      "key_facts": [
+        "AGENTS.md is the small activation layer; CONTEXT.md is the durable source of truth, indexed by scripts/context-index.js.",
+        "The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls, static dashboard hosti...",
+        "Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.",
+        "The desktop app starts the helper and the dashboard launches a Controlled Chrome Window for v1 customer-service runs. The UX should present this as a purpose...",
+        "When the dashboard shows Work Window Offline while the helper is online, it should expose an immediate Open Work Window action beside that status instead of..."
+      ]
+    },
+    {
+      "id": "ctx-context-flagged-ambiguities",
+      "title": "CONTEXT.md: Flagged Ambiguities",
+      "summary": "None currently flagged.",
+      "source": "CONTEXT.md#flagged-ambiguities",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 7,
+      "tags": [
+        "context",
+        "flagged-ambiguities"
+      ],
+      "read_when": [
+        "working on flagged ambiguities"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-flagged-ambiguities.md",
+      "chunk_path": "",
+      "content_sha256": "09ce7e933044205b27c9e4322778e2e2257d023bddc6e4ffc95c4ffb967ad9b8",
+      "key_facts": [
+        "None currently flagged."
+      ]
+    },
+    {
+      "id": "ctx-context-learned-patterns",
+      "title": "CONTEXT.md: Learned Patterns",
+      "summary": "CDP attach must reuse the current tab — when attaching via CDP, never call navigateto(newtab=True); fresh Target.createTarget lands in a new browser context and loses cookies. Use getcurrentpage() and page-level goto(...",
+      "source": "CONTEXT.md#learned-patterns",
+      "source_path": "CONTEXT.md",
+      "kind": "lesson",
+      "scope": "project",
+      "importance": 0.78,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 1147,
+      "tags": [
+        "context",
+        "learned-patterns",
+        "lesson"
+      ],
+      "read_when": [
+        "avoiding repeated mistakes or applying prior corrections",
+        "update context with durable lessons"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-learned-patterns.md",
+      "chunk_path": ".context-harness/chunks/ctx-context-learned-patterns.md",
+      "content_sha256": "ed41958563a037c5bfc946c8c87e6a9bb58bc9c69c129f21e82668d505633b04",
+      "key_facts": [
+        "CDP attach must reuse the current tab — when attaching via CDP, never call navigateto(newtab=True); fresh Target.createTarget lands in a new browser context...",
+        "Dashboard task URL follows the work window after CDP connects — the dashboard tab itself is never the task target. Once the work window is connected, Refresh...",
+        "Work-window relaunch resets stale CDP pages — when reusing an already-running CDP endpoint, a Launch Work Window request must create/activate the requested t...",
+        "CDP host/port conflicts can split loopback — if normal Chrome already owns 127.0.0.1:9222, Flying Pig Chrome may bind only [::1]:9222 and print DevTools list...",
+        "Chrome DevTools MCP can drive existing Chrome through a minimal native backend — chrome-devtools-mcp --autoConnect can list/select/snapshot the user's existi..."
+      ]
+    },
+    {
+      "id": "ctx-context-imported-agent-notes",
+      "title": "CONTEXT.md: Imported Agent Notes",
+      "summary": "Context for Imported Agent Notes.",
+      "source": "CONTEXT.md#imported-agent-notes",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 47,
+      "tags": [
+        "context",
+        "imported-agent-notes"
+      ],
+      "read_when": [
+        "working on imported agent notes"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-imported-agent-notes.md",
+      "chunk_path": "",
+      "content_sha256": "4bb9c44d13244f4cbd7e1cfab01b2f182d416078fb47bf8fad359437215c3e61",
+      "key_facts": []
+    },
+    {
+      "id": "ctx-context-context-contract",
+      "title": "CONTEXT.md: Context Contract",
+      "summary": "At session start/resume, read NOW.md first, then CONTEXT.md.",
+      "source": "CONTEXT.md#context-contract",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 108,
+      "tags": [
+        "context",
+        "context-contract"
+      ],
+      "read_when": [
+        "working on context contract"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-context-contract.md",
+      "chunk_path": "",
+      "content_sha256": "890fefc1317037f8946ae03828de43c2f3b038c2cd344e1306145986961d0623",
+      "key_facts": [
+        "At session start/resume, read NOW.md first, then CONTEXT.md.",
+        "Before planning or editing, respect CONTEXT.md ## Rules.",
+        "If the user teaches a durable term, invariant, workflow, constraint, or correction, update CONTEXT.md before it scrolls away.",
+        "Route task-local findings to PLAN.md; hard-to-reverse trade-offs to ADRs.",
+        "Before ending, update NOW.md with current focus, blockers, next step, and touched files."
+      ]
+    },
+    {
+      "id": "ctx-context-project-overview",
+      "title": "CONTEXT.md: Project Overview",
+      "summary": "Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate website chat widgets (Amex, telecom, utilities, etc.), communicat...",
+      "source": "CONTEXT.md#project-overview",
+      "source_path": "CONTEXT.md",
+      "kind": "project",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 122,
+      "tags": [
+        "context",
+        "project-overview",
+        "project"
+      ],
+      "read_when": [
+        "working on project overview"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-project-overview.md",
+      "chunk_path": "",
+      "content_sha256": "806f8936558e7841ed2fa7d8e7e117c228174323342ba703b710f8c288300ad2",
+      "key_facts": [
+        "Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate websi..."
+      ]
+    },
+    {
+      "id": "ctx-context-tech-stack",
+      "title": "CONTEXT.md: Tech Stack",
+      "summary": "Language: Python 3.12+",
+      "source": "CONTEXT.md#tech-stack",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 110,
+      "tags": [
+        "context",
+        "tech-stack"
+      ],
+      "read_when": [
+        "working on tech stack"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-tech-stack.md",
+      "chunk_path": "",
+      "content_sha256": "b379e28f441d06b65438b593cc8a6d515473094f6ecb633ad985ee907353a232",
+      "key_facts": [
+        "Language: Python 3.12+",
+        "Browser Automation: Playwright (via browser-use framework)",
+        "LLM Integration: Anthropic Claude API (primary), OpenAI API (fallback)",
+        "Framework: browser-use (open-source LLM browser automation)",
+        "Web Framework: FastAPI (backend API)"
+      ]
+    },
+    {
+      "id": "ctx-context-project-structure",
+      "title": "CONTEXT.md: Project Structure",
+      "summary": "flyingpig/",
+      "source": "CONTEXT.md#project-structure",
+      "source_path": "CONTEXT.md",
+      "kind": "project",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 281,
+      "tags": [
+        "context",
+        "project-structure",
+        "project"
+      ],
+      "read_when": [
+        "working on project structure"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-project-structure.md",
+      "chunk_path": "",
+      "content_sha256": "9880ecf52bdb6ed8abff02caf878365e033020bdbf7e56bb7cacf3409eb032c5",
+      "key_facts": [
+        "flyingpig/",
+        "├── AGENTS.md              # This file",
+        "├── PLANS.md               # Living execution plan",
+        "├── FINDINGS.md            # Research & external content log",
+        "├── EVALUATION.md          # Quality contracts"
+      ]
+    },
+    {
+      "id": "ctx-context-development-workflow",
+      "title": "CONTEXT.md: Development Workflow",
+      "summary": "Setup: pip install -e \".[dev]\" (once the project is scaffolded)",
+      "source": "CONTEXT.md#development-workflow",
+      "source_path": "CONTEXT.md",
+      "kind": "workflow",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 57,
+      "tags": [
+        "context",
+        "development-workflow",
+        "workflow"
+      ],
+      "read_when": [
+        "working on development workflow"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-development-workflow.md",
+      "chunk_path": "",
+      "content_sha256": "bc7b46e700146c1984ba719298d3edf2b5a6d50c1c017fcb53c0d1c7f316a064",
+      "key_facts": [
+        "Setup: pip install -e \".[dev]\" (once the project is scaffolded)",
+        "Run: python -m flyingpig or uvicorn src.api.main:app",
+        "Test: pytest tests/",
+        "Lint: ruff check src/",
+        "Format: ruff format src/"
+      ]
+    },
+    {
+      "id": "ctx-context-coding-conventions",
+      "title": "CONTEXT.md: Coding Conventions",
+      "summary": "Type hints on all public functions",
+      "source": "CONTEXT.md#coding-conventions",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 91,
+      "tags": [
+        "context",
+        "coding-conventions"
+      ],
+      "read_when": [
+        "working on coding conventions"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-coding-conventions.md",
+      "chunk_path": "",
+      "content_sha256": "4544c847253e43a5da86103f1ccd675c0a58e80f34d93dd820f3928a0d79c572",
+      "key_facts": [
+        "Type hints on all public functions",
+        "Async-first for browser and API operations",
+        "Site adapters inherit from BaseSiteAdapter and implement a standard interface",
+        "LLM prompts stored as separate template files, not inline strings",
+        "Secrets via environment variables, never hardcoded"
+      ]
+    },
+    {
+      "id": "ctx-context-architecture-decisions",
+      "title": "CONTEXT.md: Architecture Decisions",
+      "summary": "2026-04-09: Chose Playwright over Puppeteer — multi-browser support, auto-waiting, better ecosystem for AI agents in 2026.",
+      "source": "CONTEXT.md#architecture-decisions",
+      "source_path": "CONTEXT.md",
+      "kind": "context",
+      "scope": "project",
+      "importance": 0.65,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 203,
+      "tags": [
+        "context",
+        "architecture-decisions"
+      ],
+      "read_when": [
+        "working on architecture decisions"
+      ],
+      "card_path": ".context-harness/cards/ctx-context-architecture-decisions.md",
+      "chunk_path": "",
+      "content_sha256": "a23567fdcb8b6c89f6577fad8c1794595482c39845a1092dcf3de2dd5f04f512",
+      "key_facts": [
+        "2026-04-09: Chose Playwright over Puppeteer — multi-browser support, auto-waiting, better ecosystem for AI agents in 2026.",
+        "2026-04-09: Option A selected — build on browser-use framework (70k+ stars). Handles DOM extraction, visual understanding, and action planning. Saves months...",
+        "2026-04-09: Consumer-side positioning (agent acts for the user, not the company) — this is the market gap.",
+        "2026-04-09: AI chatbot detection is a core feature. When the target site uses an AI chatbot, the agent automatically attempts to escalate to a human rep (hum...",
+        "2026-04-09: Typeless interaction — minimize user input. Users pick from task templates or give brief descriptions; the agent handles all detailed conversation."
+      ]
+    },
+    {
+      "id": "ctx-now-now",
+      "title": "NOW.md: Now",
+      "summary": "Implemented and minimally live-smoked Flying Pig's Claude-Code-style Auto-Connect Existing Chrome path through a helper-owned Chrome DevTools MCP bridge. The helper starts npx -y chrome-devtools-mcp@latest --autoConne...",
+      "source": "NOW.md#now",
+      "source_path": "NOW.md",
+      "kind": "resume",
+      "scope": "task",
+      "importance": 0.95,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 638,
+      "tags": [
+        "now",
+        "resume"
+      ],
+      "read_when": [
+        "resuming the current session",
+        "choosing the immediate next step",
+        "update context after current work"
+      ],
+      "card_path": ".context-harness/cards/ctx-now-now.md",
+      "chunk_path": "",
+      "content_sha256": "36c0c39d42db0b87dcb22ee4c01027cb814d3c329f7de6485192ded0039f1e06",
+      "key_facts": [
+        "Implemented and minimally live-smoked Flying Pig's Claude-Code-style Auto-Connect Existing Chrome path through a helper-owned Chrome DevTools MCP bridge. The...",
+        "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
+        "Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.",
+        "Desktop beta update checking and release verification are present; GitHub repo visibility is public. The app must describe updates as manual GitHub release d...",
+        "Published v1.0.1 is not update-checking capable because that release predates updater code/assets. v1.0.2 is the first unsigned beta update-checking baseline."
+      ]
+    },
+    {
+      "id": "ctx-plan-goal",
+      "title": "PLAN.md: Goal",
+      "summary": "Fully automate customer service chat through the user's real Chrome profile with a high rate of successfully reaching and negotiating with a human representative.",
+      "source": "PLAN.md#goal",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 41,
+      "tags": [
+        "plan",
+        "goal"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-goal.md",
+      "chunk_path": "",
+      "content_sha256": "eef4ee088605dc6ee0a8251a1e3940631c5214bca1bb0a2ba6b9398526a8bad9",
+      "key_facts": [
+        "Fully automate customer service chat through the user's real Chrome profile with a high rate of successfully reaching and negotiating with a human representa..."
+      ]
+    },
+    {
+      "id": "ctx-plan-progress",
+      "title": "PLAN.md: Progress",
+      "summary": "[x] Research, architecture decision (Option A: browser-use), scaffold (2026-04-09)",
+      "source": "PLAN.md#progress",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 1294,
+      "tags": [
+        "plan",
+        "progress"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-progress.md",
+      "chunk_path": ".context-harness/chunks/ctx-plan-progress.md",
+      "content_sha256": "d508d05d77732dc76a61b36e6d75baf35128403ac89e174c2c808904b2f6ee8b",
+      "key_facts": [
+        "[x] Research, architecture decision (Option A: browser-use), scaffold (2026-04-09)",
+        "[x] Core agent loop, AI detection, escalation, Amex adapter (2026-04-09)",
+        "[x] React dashboard, session recording, auth, e2e test, MVP deploy (2026-04-10)",
+        "[x] Attach to user's existing browser window via CDP instead of spawning a new profile (2026-04-16) — --cdp-url wired through demoamex.py → AgentBrain → Chat...",
+        "[x] Switch CDP attach to \"bring your own tab\" — agent uses the user's currently focused tab, never navigates or opens a new tab; fixes lost-cookie problem wh..."
+      ]
+    },
+    {
+      "id": "ctx-plan-findings",
+      "title": "PLAN.md: Findings",
+      "summary": "See archived FINDINGS.md (if retained) for research on DoNotPay, browser-use, Playwright vs Puppeteer, FTC/legal landscape, and industry predictions (Gartner/Forrester/CNBC 2026).",
+      "source": "PLAN.md#findings",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 9896,
+      "tags": [
+        "plan",
+        "findings",
+        "2026-07-05-installed-work-window-cdp-conflict",
+        "2026-07-05-chrome-devtools-mcp-auto-connect",
+        "2026-05-25-public-beta-first-run-readiness",
+        "2026-05-05-amex-live-flow-handoff",
+        "2026-05-06-mock-amex-system-chrome-run",
+        "2026-05-06-live-amex-oura-cdp-run",
+        "2026-05-06-live-amex-oura-task-handoff",
+        "2026-05-06-live-amex-oura-71009-run",
+        "2026-05-06-live-run-observations-and-improvements",
+        "2026-05-06-architecture-deepening",
+        "2026-05-12-oura-supervised-run-and-pacing-findings",
+        "2026-05-15-extension-first-beta-release-evidence",
+        "2026-05-19-helper-first-dashboard-and-external-chat-surface-smoke",
+        "2026-05-20-dashboard-huca-restart-control",
+        "2026-05-21-pine-informed-protocol-hardening",
+        "2026-05-21-architecture-deepening-follow-up",
+        "2026-05-21-desktop-first-product-path-cleanup",
+        "2026-05-23-run-readiness-and-speed-dashboard",
+        "2026-05-24-release-1-0-0-preparation",
+        "2026-05-24-release-1-0-1-publishing-pass",
+        "2026-05-25-local-scorecards-and-desktop-update-foundation",
+        "2026-05-25-auto-update-release-hardening"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-findings.md",
+      "chunk_path": ".context-harness/chunks/ctx-plan-findings.md",
+      "content_sha256": "a1ddf158320e2f217163a61c7abf073361e83b441ca01fa80c38fcee04415d4f",
+      "key_facts": [
+        "See archived FINDINGS.md (if retained) for research on DoNotPay, browser-use, Playwright vs Puppeteer, FTC/legal landscape, and industry predictions (Gartner...",
+        "The running desktop app is the packaged local build at dist/desktop/mac-arm64/Flying Pig.app; no /Applications/Flying Pig.app install was found in this session.",
+        "The helper is healthy on 127.0.0.1:8765, but Open Work Window fails because normal Chrome owns IPv4 127.0.0.1:9222 and returns 404 for /json/version, while t...",
+        "The helper/dashboard status path collapses any cdpurl to http://127.0.0.1:<port> and therefore reports Work Window Offline even when http://localhost:9222/js...",
+        "Direct Chrome debugging is viable: launching Chrome with a separate profile and --remote-debugging-address=127.0.0.1 --remote-debugging-port=9335 produced a..."
+      ]
+    },
+    {
+      "id": "ctx-plan-decisions",
+      "title": "PLAN.md: Decisions",
+      "summary": "2026-04-09 Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.",
+      "source": "PLAN.md#decisions",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 833,
+      "tags": [
+        "plan",
+        "decisions"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-decisions.md",
+      "chunk_path": ".context-harness/chunks/ctx-plan-decisions.md",
+      "content_sha256": "335205e670505d8d74ab2dd2c7d42409a80960b0579c0920a5e8f024c2c70e3e",
+      "key_facts": [
+        "2026-04-09 Option A — build on browser-use (70k★) vs. custom Playwright or hybrid.",
+        "2026-04-09 Consumer-side positioning — the market gap.",
+        "2026-04-09 Core feature: AI-chatbot detection + automatic human escalation.",
+        "2026-04-09 Typeless UX — templates and brief prompts only.",
+        "2026-04-09 Manual login flow — no credential storage."
+      ]
+    },
+    {
+      "id": "ctx-plan-long-running-coding-agent-task-pine-informed-product-protocol-hardening",
+      "title": "PLAN.md: Long-Running Coding Agent Task: Pine-Informed Product/Protocol Hardening",
+      "summary": "Use this prompt to deploy a coding agent:",
+      "source": "PLAN.md#long-running-coding-agent-task-pine-informed-product-protocol-hardening",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 1938,
+      "tags": [
+        "plan",
+        "long-running-coding-agent-task-pine-informed-product-protocol-hardening"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-long-running-coding-agent-task-pine-informed-product-protocol-hardening.md",
+      "chunk_path": ".context-harness/chunks/ctx-plan-long-running-coding-agent-task-pine-informed-product-protocol-hardening.md",
+      "content_sha256": "e11889971fc8d7f86cc8af5b524f53d9ba3e4c7dde8c029f5b7bc301c9b72aee",
+      "key_facts": [
+        "Use this prompt to deploy a coding agent:",
+        "You are working in /Users/lfan/Project/flyingpig. Read NOW.md first, then CONTEXT.md, then PLAN.md and FINDINGS.md. Respect CONTEXT.md Rules. Do not revert u...",
+        "Goal:",
+        "Improve Flying Pig using Pine AI / 19pine.ai learnings while preserving Flying Pig's narrower supervised browser-first customer-service wedge. This is not a...",
+        "Context:"
+      ]
+    },
+    {
+      "id": "ctx-plan-archive",
+      "title": "PLAN.md: Archive",
+      "summary": "(Empty — initial migration.)",
+      "source": "PLAN.md#archive",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 31,
+      "tags": [
+        "plan",
+        "archive",
+        "2026-06-26-oversized-now-md-snapshot"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-archive.md",
+      "chunk_path": "",
+      "content_sha256": "eccd323c48ed99a53a1de4df3b34fed877d1eeddee81561d52b3a284253c7c8e",
+      "key_facts": [
+        "(Empty — initial migration.)"
+      ]
+    },
+    {
+      "id": "ctx-plan-current-focus",
+      "title": "PLAN.md: Current Focus",
+      "summary": "Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explains the supervised work-window path, Start blocks unconfigure...",
+      "source": "PLAN.md#current-focus",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 76,
+      "tags": [
+        "plan",
+        "current-focus"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-current-focus.md",
+      "chunk_path": "",
+      "content_sha256": "4ffbe116336ee57a974971ad457bd21f367da3d39c8260cadb91933479ec3fa8",
+      "key_facts": [
+        "Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explai..."
+      ]
+    },
+    {
+      "id": "ctx-plan-active-blockers",
+      "title": "PLAN.md: Active Blockers",
+      "summary": "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
+      "source": "PLAN.md#active-blockers",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 186,
+      "tags": [
+        "plan",
+        "active-blockers"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-active-blockers.md",
+      "chunk_path": "",
+      "content_sha256": "39cf864499973e29132d4c8e3a0f236ccde778dcd71dbd8d03fc0960fd87bbbe",
+      "key_facts": [
+        "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
+        "Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.",
+        "Desktop beta update checking and release verification are present; GitHub repo visibility is public. The app must describe updates as manual GitHub release d...",
+        "Published v1.0.1 is not update-checking capable because it lacks updater code/assets. v1.0.2 is the first unsigned beta update-checking baseline.",
+        "Current Mac still has no local Developer ID Application identity, and the GitHub repo lacks signing/notarization secrets. This is acceptable for the no-pay u..."
+      ]
+    },
+    {
+      "id": "ctx-plan-immediate-next-step",
+      "title": "PLAN.md: Immediate Next Step",
+      "summary": "Review the first-run readiness diff, then decide whether to cut/publish the next unsigned beta release so public testers get the onboarding improvements.",
+      "source": "PLAN.md#immediate-next-step",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 39,
+      "tags": [
+        "plan",
+        "immediate-next-step"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-immediate-next-step.md",
+      "chunk_path": "",
+      "content_sha256": "fb565799cbad548f8c738882f15ea99849e572fbd67237aec232b15f4a4b4747",
+      "key_facts": [
+        "Review the first-run readiness diff, then decide whether to cut/publish the next unsigned beta release so public testers get the onboarding improvements."
+      ]
+    },
+    {
+      "id": "ctx-plan-session-state",
+      "title": "PLAN.md: Session State",
+      "summary": "Last modified: 2026-05-25",
+      "source": "PLAN.md#session-state",
+      "source_path": "PLAN.md",
+      "kind": "plan",
+      "scope": "task",
+      "importance": 0.85,
+      "confidence": "confirmed",
+      "recency": "2026-07-06",
+      "tokens_est": 445,
+      "tags": [
+        "plan",
+        "session-state"
+      ],
+      "read_when": [
+        "continuing the active task",
+        "checking done criteria or decisions",
+        "update context with task-local progress"
+      ],
+      "card_path": ".context-harness/cards/ctx-plan-session-state.md",
+      "chunk_path": "",
+      "content_sha256": "06e2d36f3613a6c06c0bed26ac523e0e938ab4f2433503ef84f2f6a21286e162",
+      "key_facts": [
+        "Last modified: 2026-05-25",
+        "Files touched this session: AGENTS.md, CONTEXT.md, PLAN.md, NOW.md, README.md, dashboard/index.html, dashboard/dashboard.js, dashboard/dashboard.css, docs/be...",
+        "Dashboard changes: promoted model/API-key setup out of Advanced into a first-run panel; added a model readiness item; added a guided path to first supervised...",
+        "Docs/context changes: README now leads with packaged Mac beta install and unsigned/manual-update expectations; added docs/public-beta-quickstart.md; updated...",
+        "Verification: node scripts/context-index.js update; node --check dashboard/dashboard.js; node --check scripts/testhelperdashboard.mjs; node scripts/testdashb..."
+      ]
+    }
+  ]
+}

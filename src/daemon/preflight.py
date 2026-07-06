@@ -16,6 +16,7 @@ class PreflightResult:
 
 
 SUPPORTED_PERMISSION_MODES = {"supervised_browser"}
+SUPPORTED_BROWSER_BACKENDS = {"browser_use", "mcp"}
 SUPPORTED_LOGIN_EXPECTATIONS = {
     "manual_visible_browser",
     "already_logged_in",
@@ -52,6 +53,8 @@ def preflight_check(msg: dict, *, site: str | None) -> PreflightResult:
     failures: list[dict] = []
     task = str(msg.get("task") or "").strip()
     task_lower = task.lower()
+    browser_backend = msg.get("browser_backend") or "browser_use"
+    mcp_page = msg.get("mcp_page") if isinstance(msg.get("mcp_page"), dict) else None
 
     if not site or site not in list_sites():
         failures.append(
@@ -91,6 +94,13 @@ def preflight_check(msg: dict, *, site: str | None) -> PreflightResult:
                 "message": "Permission mode must be supervised_browser.",
             }
         )
+    if browser_backend not in SUPPORTED_BROWSER_BACKENDS:
+        failures.append(
+            {
+                "code": "unsupported_browser_backend",
+                "message": "Browser backend must be browser_use or mcp.",
+            }
+        )
     if msg.get("evidence_capture") is not True:
         failures.append(
             {
@@ -98,11 +108,19 @@ def preflight_check(msg: dict, *, site: str | None) -> PreflightResult:
                 "message": "Evidence capture must be enabled for an auditable run.",
             }
         )
-    if not msg.get("cdp_url"):
+    mcp_page_ready = bool(
+        browser_backend == "mcp"
+        and mcp_page
+        and (mcp_page.get("id") is not None or mcp_page.get("index") is not None)
+    )
+    if not msg.get("cdp_url") and not mcp_page_ready:
         failures.append(
             {
                 "code": "missing_work_window",
-                "message": "Launch and connect the Controlled Chrome work window first.",
+                "message": (
+                    "Launch and connect the Controlled Chrome work window, or select "
+                    "an Auto-Connected Chrome tab first."
+                ),
             }
         )
     if not (msg.get("target_url") or msg.get("url")):

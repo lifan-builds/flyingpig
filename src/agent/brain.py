@@ -12,6 +12,7 @@ from src.agent.detector import ChatbotDetector
 from src.agent.escalator import EscalationManager
 from src.agent.evidence import EvidenceRecorder
 from src.agent.llm_runtime import create_llm
+from src.agent.mcp_executor import McpBrowserExecutor
 from src.agent.navigator import ChatNavigator
 from src.agent.result import TaskResult, TaskStatus
 from src.agent.user_input import UserInputHandler, build_tools
@@ -37,6 +38,8 @@ class AgentBrain:
         target_url: str | None = None,
         browser_mode: str = "controlled",
         navigate_on_attach: bool = False,
+        browser_backend: str = "browser_use",
+        mcp_page: dict | None = None,
         use_vision: bool = True,
         llm_timeout: int = 180,
         fallback_model: str | None = None,
@@ -47,6 +50,8 @@ class AgentBrain:
         self.target_url = target_url
         self.browser_mode = browser_mode
         self.navigate_on_attach = navigate_on_attach
+        self.browser_backend = browser_backend
+        self.mcp_page = mcp_page
         self.use_vision = use_vision
         self.llm_timeout = llm_timeout
         self.fallback_model = fallback_model or settings.default_fallback_llm or None
@@ -195,6 +200,26 @@ class AgentBrain:
                     },
                 )
 
+            if self.browser_backend == "mcp":
+                mcp_started_at = perf_counter()
+                executor = McpBrowserExecutor()
+                result = await executor.run(
+                    task_prompt=agent_task,
+                    llm=self.llm,
+                    page=self.mcp_page or {},
+                    input_handler=self.input_handler,
+                    max_steps=max_steps,
+                    save_dir=save_dir,
+                )
+                self._step_log = list(executor.step_log)
+                self._record_timing_span(
+                    "mcp_browser_attach",
+                    "Chrome MCP browser control",
+                    duration_ms=(perf_counter() - mcp_started_at) * 1000,
+                )
+                result.timing_spans = self.timing_spans
+                return result
+
             browser_started_at = perf_counter()
             browser_session = await navigator.open_chat()
             self._record_timing_span(
@@ -313,13 +338,14 @@ class AgentBrain:
             detection_instructions=self.detector.get_instructions(),
             template_id=template_id,
         )
-        if not self.cdp_url:
+        if not self.cdp_url and self.browser_backend != "mcp":
             return self._with_runtime_policy(agent_task)
+        mode_label = "Chrome DevTools MCP" if self.browser_backend == "mcp" else "CDP"
         return (
             "## Attached-Browser Mode\n"
-            "You are operating inside a Chrome tab that was attached "
-            "over CDP. Do NOT open new tabs. If you need to reach the "
-            "site's chat page, reuse the current tab only.\n\n"
+            f"You are operating inside a Chrome tab that was attached over {mode_label}. "
+            "Do NOT open new tabs. If you need to reach the site's chat page, reuse "
+            "the current tab only.\n\n"
             "**First-step rule:** If the page appears empty or "
             "partially loaded (low element count, SPA skeleton, "
             "loading spinners), use the `wait` action — do NOT "

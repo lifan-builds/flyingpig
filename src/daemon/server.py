@@ -46,7 +46,14 @@ from src.agent.browser_runtime import (
     debugger_is_ready,
     debugger_page_info,
     launch_cdp_chrome,
+    normalize_cdp_url,
+    prepare_debugger_page,
     supported_chrome_profile_modes,
+)
+from src.agent.chrome_devtools_mcp import (
+    ChromeDevtoolsMcpError,
+    get_default_mcp_session,
+    summarize_mcp_error,
 )
 from src.agent.run_orchestration import build_agent_run_plan
 from src.daemon.model_settings import model_settings_payload, save_model_settings
@@ -89,6 +96,18 @@ class BrowserStatusRequest(BaseModel):
     cdp_url: str = "http://127.0.0.1:9222"
 
 
+class BrowserAttachRequest(BaseModel):
+    cdp_url: str = "http://127.0.0.1:9222"
+    initial_url: str | None = None
+    prepare_page: bool = False
+
+
+class BrowserMcpSelectRequest(BaseModel):
+    page_index: int | None = None
+    page_id: str | None = None
+    url: str | None = None
+
+
 class RunStartRequest(BaseModel):
     site: str | None = "generic"
     url: str = ""
@@ -96,6 +115,8 @@ class RunStartRequest(BaseModel):
     task: str
     cdp_url: str | None = None
     target_url: str | None = None
+    browser_backend: str = "browser_use"
+    mcp_page: dict | None = None
     model: str | None = None
     fallback_model: str | None = None
     max_steps: int = 80
@@ -600,6 +621,103 @@ class RunManager:
 run_manager = RunManager()
 
 
+def chrome_mcp_session():
+    """Return the helper-owned Chrome DevTools MCP session."""
+    return get_default_mcp_session()
+
+
+def browser_mcp_connect_payload() -> dict:
+    """Connect to Chrome DevTools MCP and list existing Chrome pages."""
+    try:
+        pages = chrome_mcp_session().connect()
+    except (ChromeDevtoolsMcpError, OSError) as exc:
+        return {
+            "ok": False,
+            "connected": False,
+            "pages": [],
+            "message": summarize_mcp_error(exc),
+        }
+
+    return {
+        "ok": True,
+        "connected": True,
+        "pages": pages,
+        "message": (
+            "Chrome DevTools MCP connected. Select the existing Chrome tab "
+            "Flying Pig may supervise."
+        ),
+    }
+
+
+def browser_mcp_select_payload(request: BrowserMcpSelectRequest) -> dict:
+    """Select and snapshot a user-authorized existing Chrome page through MCP."""
+    try:
+        session = chrome_mcp_session()
+        pages = session.list_pages()
+        page = _select_mcp_page(
+            pages,
+            page_index=request.page_index,
+            page_id=request.page_id,
+            url=request.url,
+        )
+        if page is None:
+            return {
+                "ok": False,
+                "connected": True,
+                "message": (
+                    "Selected Chrome tab was not found. Refresh the tab list "
+                    "and try again."
+                ),
+                "pages": pages,
+            }
+        snapshot = session.select_page(page)
+    except (ChromeDevtoolsMcpError, OSError) as exc:
+        return {
+            "ok": False,
+            "connected": False,
+            "message": summarize_mcp_error(exc),
+        }
+
+    selected_page = {
+        **page,
+        "snapshot_available": bool(snapshot.get("snapshot_text") or snapshot.get("snapshot")),
+    }
+    cdp_url = page.get("cdp_url")
+    return {
+        "ok": True,
+        "connected": True,
+        "page": selected_page,
+        "cdp_url": cdp_url,
+        "current_url": page.get("url") or "",
+        "current_title": page.get("title") or "",
+        "browser_backend": "mcp",
+        "browser_ready": True,
+        "message": "Existing Chrome tab selected and ready for MCP control.",
+    }
+
+
+def _select_mcp_page(
+    pages: list[dict],
+    *,
+    page_index: int | None = None,
+    page_id: str | None = None,
+    url: str | None = None,
+) -> dict | None:
+    if page_id:
+        for page in pages:
+            if str(page.get("id") or "") == page_id:
+                return page
+    if url:
+        for page in pages:
+            if page.get("url") == url:
+                return page
+    if page_index is not None:
+        for page in pages:
+            if page.get("index") == page_index:
+                return page
+    return pages[0] if pages else None
+
+
 class Session:
     """One WebSocket connection = one dashboard client."""
 
@@ -760,6 +878,52 @@ def create_app() -> FastAPI:
             "timing_span": launch_span,
         }
 
+    @app.post("/browser/attach")
+    async def browser_attach(request: BrowserAttachRequest):
+        try:
+            cdp_url = normalize_cdp_url(request.cdp_url)
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
+
+        if not debugger_is_ready(cdp_url=cdp_url):
+            return {
+                "ok": False,
+                "error": (
+                    f"Could not connect to Chrome at {cdp_url}. Start Chrome with "
+                    "--remote-debugging-port=<port>, then enter that endpoint here. "
+                    "If using Chrome DevTools MCP auto-connect, open "
+                    "chrome://inspect/#remote-debugging and allow remote debugging."
+                ),
+                "cdp_url": cdp_url,
+            }
+
+        if request.prepare_page:
+            prepare_debugger_page(
+                cdp_url=cdp_url,
+                target_url=request.initial_url or "about:blank",
+            )
+
+        status = browser_status_payload(cdp_url)
+        return {
+            "ok": True,
+            "cdp_url": cdp_url,
+            "current_url": status.get("current_url") or request.initial_url or "",
+            "current_title": status.get("current_title") or "",
+            "message": "Existing Chrome connected. Prepare the visible tab, then start the task.",
+        }
+
+    @app.post("/browser/mcp/connect")
+    async def browser_mcp_connect():
+        return await asyncio.to_thread(browser_mcp_connect_payload)
+
+    @app.get("/browser/mcp/pages")
+    async def browser_mcp_pages():
+        return await asyncio.to_thread(browser_mcp_connect_payload)
+
+    @app.post("/browser/mcp/select")
+    async def browser_mcp_select(request: BrowserMcpSelectRequest):
+        return await asyncio.to_thread(browser_mcp_select_payload, request)
+
     @app.websocket("/ws")
     async def ws_endpoint(ws: WebSocket):
         await ws.accept()
@@ -775,11 +939,8 @@ def create_app() -> FastAPI:
 
 
 def browser_status_payload(cdp_url: str) -> dict:
-    from urllib.parse import urlparse
-
     try:
-        parsed = urlparse(cdp_url)
-        port = parsed.port or 9222
+        normalized_url = normalize_cdp_url(cdp_url)
     except ValueError:
         return {
             "ok": False,
@@ -787,12 +948,13 @@ def browser_status_payload(cdp_url: str) -> dict:
             "cdp_url": cdp_url,
             "message": "Browser endpoint is invalid.",
         }
-    connected = debugger_is_ready(port)
-    page_info = debugger_page_info(port) if connected else None
+
+    connected = debugger_is_ready(cdp_url=normalized_url)
+    page_info = debugger_page_info(cdp_url=normalized_url) if connected else None
     return {
         "ok": True,
         "connected": connected,
-        "cdp_url": f"http://127.0.0.1:{port}",
+        "cdp_url": normalized_url,
         "current_url": page_info.get("url") if page_info else None,
         "current_title": page_info.get("title") if page_info else None,
         "message": "Controlled Chrome is connected."

@@ -37,9 +37,16 @@ const state = {
   modelSettings: null,
   modelSavedLocally: false,
   lastResult: null,
+  activationSignals: {},
+  browserBackend: "browser_use",
+  mcpConnected: false,
+  mcpPages: [],
+  selectedMcpPage: null,
+  mcpReady: false,
 };
 
 const betaScorecardsKey = "betaScorecards";
+const activationSignalsKey = "activationSignals";
 const outcomeLabels = {
   solved: "Solved",
   partial: "Partial",
@@ -95,6 +102,18 @@ function storageSet(values) {
 
 function dashboardUrl(path) {
   return new URL(path, window.location.href).toString();
+}
+
+function browserEndpoint() {
+  return $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
+}
+
+function browserEndpointPort() {
+  try {
+    return Number(new URL(browserEndpoint()).port || "9222");
+  } catch {
+    return 9222;
+  }
 }
 
 function log(kind, text) {
@@ -189,6 +208,7 @@ function setConnection(connected) {
 
 function setBrowserConnection(connected, label) {
   state.browserConnected = connected;
+  if (!connected && state.browserBackend !== "mcp") state.mcpReady = false;
   $("browserStatus").textContent = label || (connected ? "Work Window Connected" : "Work Window Offline");
   $("browserStatus").className = `pill ${connected ? "connected" : "disconnected"}`;
   $("currentUrlLabel").textContent = connected ? "Work Window URL" : "Launch URL";
@@ -249,6 +269,8 @@ function updateButtons() {
   $("hucaTask").disabled = !state.connected || !state.browserConnected || !hasTask;
   $("cancelTask").disabled = !state.connected || !state.running;
   $("launchChrome").disabled = !canLaunchBrowser;
+  $("attachChrome").disabled = !canLaunchBrowser;
+  $("autoConnectChrome").disabled = !canLaunchBrowser;
   $("refreshTab").disabled = !state.connected || !state.browserConnected;
   $("statusLaunchChrome").classList.toggle("hidden", !state.connected || state.browserConnected);
   $("statusLaunchChrome").disabled = !canLaunchBrowser;
@@ -259,8 +281,9 @@ function updateButtons() {
 
 function startDisabledReason({ hasTask } = { hasTask: Boolean($("taskText").value.trim()) }) {
   if (!state.connected) return "Reconnect the Flying Pig helper before starting.";
+  if (!modelReady()) return "Configure the selected model before starting.";
   if (state.browserLaunching) return "Wait for the work window to finish opening.";
-  if (!state.browserConnected) return "Open the work window before starting.";
+  if (!state.browserConnected) return "Open the work window or select an Auto-Connected Chrome tab before starting.";
   if (!state.activeUrl) return "Prepare a visible support page or chat surface in the work window.";
   if (!hasTask) return "Add a problem brief before starting.";
   if (state.running) return "A run is already active.";
@@ -281,6 +304,7 @@ function updateReadiness() {
     state.runStatus,
   );
   readinessItem("readyHelper", state.connected ? "true" : "false", state.connected ? "Online" : "Offline");
+  readinessItem("readyModel", modelReady() ? "true" : "false", modelReadinessText());
   readinessItem(
     "readyWorkWindow",
     state.browserConnected ? "true" : "false",
@@ -298,6 +322,7 @@ function updateReadiness() {
     state.preflightFailures.length ? "false" : "true",
     state.preflightFailures.length ? `${state.preflightFailures.length} blocked` : "Ready",
   );
+  updateQuickstart();
 }
 
 function updateSetupDiagnostic() {
@@ -322,6 +347,17 @@ function selectedProviderSettings() {
   };
 }
 
+function modelReady() {
+  if (!state.connected || !state.modelSettings) return false;
+  return Boolean(selectedProviderSettings().configured);
+}
+
+function modelReadinessText() {
+  if (!state.connected) return "Check key";
+  if (!state.modelSettings) return "Checking";
+  return modelReady() ? "Configured" : "Add key";
+}
+
 function modelLabel(model) {
   const option = $("model")?.querySelector(`option[value="${CSS.escape(model || "")}"]`);
   return option?.textContent || model || "Model";
@@ -341,6 +377,10 @@ function updateModelSettingsView() {
   }
   $("modelKeyHelp").textContent = provider.help
     || "Keys are stored only in your local Flying Pig env file.";
+  if (provider.configured) {
+    recordActivationSignal("model_configured");
+  }
+  updateReadiness();
 }
 
 async function loadModelSettings() {
@@ -391,6 +431,9 @@ async function saveModelSettings({ clearKey = false } = {}) {
     $("modelApiKey").value = "";
     state.modelSettings = payload;
     updateModelSettingsView();
+    if (!clearKey && selectedProviderSettings().configured) {
+      recordActivationSignal("model_configured");
+    }
     log("settings", clearKey ? "Cleared saved model key." : "Saved model settings.");
   } catch (error) {
     $("modelKeyStatus").textContent = error.message || "Could not save model settings.";
@@ -440,8 +483,50 @@ function setTaskUrl(url, { workWindow = false } = {}) {
   if (state.connected && state.activeUrl && state.activeUrl !== previousUrl) {
     state.socket?.send(JSON.stringify({ type: "resolve", url: state.activeUrl }));
   }
+  if (state.activeUrl) {
+    recordActivationSignal("chat_surface_selected");
+  }
   updateReadiness();
   updateButtons();
+}
+
+function quickstartReady(step) {
+  const hasTask = Boolean($("taskText")?.value.trim());
+  if (step === "model") return modelReady();
+  if (step === "work_window") return state.browserConnected;
+  if (step === "chat_surface") return Boolean(state.activeUrl);
+  if (step === "task_brief") return hasTask;
+  if (step === "start") return state.running || Boolean(state.activationSignals.first_run_started);
+  return false;
+}
+
+function updateQuickstart() {
+  const list = $("quickstartList");
+  if (!list) return;
+  for (const item of list.querySelectorAll("[data-step]")) {
+    item.dataset.ready = quickstartReady(item.dataset.step) ? "true" : "false";
+  }
+}
+
+async function loadActivationSignals() {
+  const saved = await storageGet([activationSignalsKey]);
+  state.activationSignals = saved[activationSignalsKey] && typeof saved[activationSignalsKey] === "object"
+    ? saved[activationSignalsKey]
+    : {};
+  updateQuickstart();
+}
+
+function recordActivationSignal(name) {
+  if (!name || state.activationSignals[name]) {
+    updateQuickstart();
+    return;
+  }
+  state.activationSignals = {
+    ...state.activationSignals,
+    [name]: new Date().toISOString(),
+  };
+  storageSet({ [activationSignalsKey]: state.activationSignals });
+  updateQuickstart();
 }
 
 function applyBrowserPayload(payload) {
@@ -561,6 +646,8 @@ async function workWindowPlacement() {
 
 async function launchChrome() {
   if (!state.connected || state.running || state.browserLaunching) return;
+  state.browserBackend = "browser_use";
+  state.mcpReady = false;
   state.browserLaunching = true;
   updateButtons();
   $("agentStatus").textContent = "launching";
@@ -578,7 +665,7 @@ async function launchChrome() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         site,
-        cdp_port: 9222,
+        cdp_port: browserEndpointPort(),
         chrome_profile: chromeProfile,
         initial_url: initialUrl,
         ...placement,
@@ -593,6 +680,7 @@ async function launchChrome() {
     setBrowserConnection(true, "Work Window Connected");
     applyBrowserPayload({ ...payload, connected: true });
     addTimingSpan(payload.timing_span);
+    recordActivationSignal("work_window_opened");
     $("agentStatus").textContent = "ready";
     $("runMessage").textContent = payload.message || "Work window is ready.";
     log("browser", payload.message || "Work window is ready.");
@@ -600,6 +688,160 @@ async function launchChrome() {
     $("agentStatus").textContent = "error";
     $("runMessage").textContent = error.message || "Browser launch failed.";
     log("error", error.message || "Browser launch failed.");
+  } finally {
+    state.browserLaunching = false;
+    updateButtons();
+  }
+}
+
+async function attachChrome() {
+  if (!state.connected || state.running || state.browserLaunching) return;
+  state.browserBackend = "browser_use";
+  state.mcpReady = false;
+  state.browserLaunching = true;
+  updateButtons();
+  $("agentStatus").textContent = "connecting";
+  $("runMessage").textContent = "Connecting to existing Chrome.";
+  log("browser", "Existing Chrome connection requested.");
+
+  try {
+    const cdpUrl = browserEndpoint();
+    const response = await fetch(`${state.helperUrl}/browser/attach`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cdp_url: cdpUrl }),
+    });
+    const payload = await response.json();
+    if (!payload.ok) {
+      throw new Error(payload.error || "Existing Chrome connection failed.");
+    }
+    $("cdpUrl").value = payload.cdp_url || cdpUrl;
+    storageSet({ cdpUrl: $("cdpUrl").value });
+    setBrowserConnection(true, "Work Window Connected");
+    applyBrowserPayload({ ...payload, connected: true });
+    recordActivationSignal("work_window_opened");
+    $("agentStatus").textContent = "ready";
+    $("runMessage").textContent = payload.message || "Existing Chrome is connected.";
+    log("browser", payload.message || "Existing Chrome is connected.");
+  } catch (error) {
+    $("agentStatus").textContent = "error";
+    $("runMessage").textContent = error.message || "Existing Chrome connection failed.";
+    log("error", error.message || "Existing Chrome connection failed.");
+  } finally {
+    state.browserLaunching = false;
+    updateButtons();
+  }
+}
+
+function renderMcpPages(pages) {
+  state.mcpPages = Array.isArray(pages) ? pages : [];
+  const panel = $("mcpTabPanel");
+  const list = $("mcpPages");
+  panel.classList.remove("hidden");
+  list.replaceChildren();
+
+  if (!state.mcpPages.length) {
+    const empty = document.createElement("p");
+    empty.className = "field-note";
+    empty.textContent = "No existing Chrome tabs were returned. Open chrome://inspect/#remote-debugging and allow remote debugging, then try again.";
+    list.append(empty);
+    return;
+  }
+
+  for (const page of state.mcpPages) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "mcp-page secondary";
+    if (state.selectedMcpPage?.index === page.index) button.classList.add("selected");
+
+    const title = document.createElement("strong");
+    title.textContent = page.title || "Untitled tab";
+    const url = document.createElement("span");
+    url.textContent = page.url || "No URL reported";
+    const mode = document.createElement("small");
+    mode.textContent = page.cdp_url ? "CDP handoff available" : "Runs through Chrome MCP";
+    button.append(title, url, mode);
+    button.addEventListener("click", () => selectMcpPage(page));
+    list.append(button);
+  }
+}
+
+async function autoConnectChrome() {
+  if (!state.connected || state.running || state.browserLaunching) return;
+  state.browserLaunching = true;
+  state.mcpReady = false;
+  updateButtons();
+  $("agentStatus").textContent = "connecting";
+  $("runMessage").textContent = "Auto-connecting to existing Chrome.";
+  $("mcpStatus").textContent = "Connecting to Chrome MCP";
+  $("mcpMessage").textContent = "Opening the Chrome DevTools MCP auto-connect bridge.";
+  $("mcpTabPanel").classList.remove("hidden");
+  log("browser", "Chrome DevTools MCP auto-connect requested.");
+
+  try {
+    const response = await fetch(`${state.helperUrl}/browser/mcp/connect`, { method: "POST" });
+    const payload = await response.json();
+    if (!payload.ok) throw new Error(payload.message || payload.error || "Chrome MCP auto-connect failed.");
+    state.mcpConnected = true;
+    $("mcpStatus").textContent = "Chrome MCP Connected";
+    $("mcpMessage").textContent = payload.message || "Select the existing Chrome tab Flying Pig may supervise.";
+    $("agentStatus").textContent = "ready";
+    $("runMessage").textContent = "Select the existing Chrome tab to supervise.";
+    renderMcpPages(payload.pages || []);
+    log("browser", payload.message || "Chrome MCP connected.");
+  } catch (error) {
+    state.mcpConnected = false;
+    $("mcpStatus").textContent = "Allow remote debugging in Chrome";
+    $("mcpMessage").textContent = error.message || "Chrome MCP auto-connect failed.";
+    $("agentStatus").textContent = "error";
+    $("runMessage").textContent = error.message || "Chrome MCP auto-connect failed.";
+    log("error", error.message || "Chrome MCP auto-connect failed.");
+  } finally {
+    state.browserLaunching = false;
+    updateButtons();
+  }
+}
+
+async function selectMcpPage(page) {
+  if (!state.connected || state.running || state.browserLaunching) return;
+  state.browserLaunching = true;
+  state.selectedMcpPage = page;
+  updateButtons();
+  renderMcpPages(state.mcpPages);
+  $("agentStatus").textContent = "checking";
+  $("runMessage").textContent = "Verifying the selected Chrome tab.";
+
+  try {
+    const response = await fetch(`${state.helperUrl}/browser/mcp/select`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ page_index: page.index, page_id: page.id, url: page.url }),
+    });
+    const payload = await response.json();
+    if (!payload.ok) throw new Error(payload.message || payload.error || "Could not select Chrome tab.");
+    state.selectedMcpPage = payload.page || page;
+    state.browserBackend = payload.browser_backend || "mcp";
+    state.mcpReady = Boolean(payload.browser_ready);
+    $("mcpStatus").textContent = state.mcpReady ? "Chrome MCP Selected" : "Chrome MCP unavailable";
+    $("mcpMessage").textContent = payload.message || "Chrome tab selected.";
+    if (payload.current_url) {
+      setTaskUrl(payload.current_url, { workWindow: true });
+    }
+    if (payload.cdp_url) {
+      $("cdpUrl").value = payload.cdp_url;
+      storageSet({ cdpUrl: payload.cdp_url });
+    }
+    setBrowserConnection(Boolean(payload.browser_ready), "Work Window Connected");
+    recordActivationSignal("work_window_opened");
+    $("agentStatus").textContent = "ready";
+    $("runMessage").textContent = payload.message || "Chrome tab selected.";
+    renderMcpPages(state.mcpPages);
+    log("browser", payload.message || "Chrome tab selected.");
+  } catch (error) {
+    state.mcpReady = false;
+    $("agentStatus").textContent = "error";
+    $("runMessage").textContent = error.message || "Could not select Chrome tab.";
+    log("error", error.message || "Could not select Chrome tab.");
   } finally {
     state.browserLaunching = false;
     updateButtons();
@@ -623,8 +865,12 @@ async function refreshBrowserStatus() {
     setBrowserConnection(false, "Work Window Offline");
     return false;
   }
+  if (state.browserBackend === "mcp") {
+    setBrowserConnection(state.mcpReady, state.mcpReady ? "Work Window Connected" : "Work Window Offline");
+    return state.mcpReady;
+  }
   try {
-    const cdpUrl = $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
+    const cdpUrl = browserEndpoint();
     const response = await fetch(
       `${state.helperUrl}/browser/status?cdp_url=${encodeURIComponent(cdpUrl)}`,
     );
@@ -702,6 +948,9 @@ function applyBriefStarter() {
     briefStarter: $("briefStarter").value,
     taskText: $("taskText").value.trim(),
   });
+  if ($("taskText").value.trim()) {
+    recordActivationSignal("task_brief_written");
+  }
   updateButtons();
 }
 
@@ -837,6 +1086,9 @@ function handleHelperMessage(message) {
     $("agentStatus").textContent = readableRunStatus("completed");
     $("runMessage").textContent = message.summary || "Task finished.";
     renderResult(message);
+    if (message.human_reached === true || message.result?.human_reached === true) {
+      recordActivationSignal("human_reached");
+    }
     log(message.status || "result", message.summary || "Task finished.");
   } else if (message.type === "scorecard_updated") {
     if (state.lastResult) {
@@ -954,6 +1206,7 @@ async function markRunOutcome(outcome) {
   state.lastResult.scorecard = scorecard;
   renderOutcomeSelection(outcome);
   await saveLocalScorecard(scorecard);
+  recordActivationSignal("outcome_marked");
   renderBetaStats();
   try {
     const response = await fetch(`${state.helperUrl}/run/outcome`, {
@@ -1046,18 +1299,21 @@ function renderDecisionCheckpoint(checkpoint) {
 }
 
 async function startTask() {
-  const browserReady = await refreshBrowserStatus();
-  if (!browserReady) {
-    $("agentStatus").textContent = "waiting";
-    $("runMessage").textContent = "Launch the work window before starting.";
-    log("browser", "Controlled Chrome is not connected.");
-    return;
+  if (state.browserBackend !== "mcp") {
+    const browserReady = await refreshBrowserStatus();
+    if (!browserReady) {
+      $("agentStatus").textContent = "waiting";
+      $("runMessage").textContent = "Launch the work window before starting.";
+      log("browser", "Controlled Chrome is not connected.");
+      return;
+    }
   }
   const task = $("taskText").value.trim();
   if (!task) return;
 
   const payload = buildRunPayload(task);
   state.running = true;
+  recordActivationSignal("first_run_started");
   updateButtons();
   $("agentStatus").textContent = "Preparing";
   $("runMessage").textContent = "Checking permissions and preparing the supervised run.";
@@ -1066,12 +1322,14 @@ async function startTask() {
 }
 
 async function hucaTask() {
-  const browserReady = await refreshBrowserStatus();
-  if (!browserReady) {
-    $("agentStatus").textContent = "waiting";
-    $("runMessage").textContent = "Launch the work window before restarting.";
-    log("browser", "Controlled Chrome is not connected.");
-    return;
+  if (state.browserBackend !== "mcp") {
+    const browserReady = await refreshBrowserStatus();
+    if (!browserReady) {
+      $("agentStatus").textContent = "waiting";
+      $("runMessage").textContent = "Launch the work window before restarting.";
+      log("browser", "Controlled Chrome is not connected.");
+      return;
+    }
   }
   const task = $("taskText").value.trim();
   if (!task) return;
@@ -1090,7 +1348,7 @@ async function hucaTask() {
 }
 
 function buildRunPayload(task) {
-  const cdpUrl = $("cdpUrl").value.trim() || "http://127.0.0.1:9222";
+  const cdpUrl = state.browserBackend === "mcp" ? null : browserEndpoint();
   const template = $("template").value || null;
   const model = $("model").value;
   const successCriteria = $("successCriteria").value.trim();
@@ -1113,6 +1371,8 @@ function buildRunPayload(task) {
     cdp_url: cdpUrl,
     target_url: state.activeUrl,
     target_tab_id: state.activeTabId,
+    browser_backend: state.browserBackend || "browser_use",
+    mcp_page: state.selectedMcpPage,
     model,
     max_steps: 80,
     permission_mode: "supervised_browser",
@@ -1150,6 +1410,7 @@ function sendCheckpointOption(option) {
   }));
   $("checkpointPanel").classList.add("hidden");
   state.notifiedRequestKey = null;
+  recordActivationSignal("checkpoint_answered");
   log("decision", `Selected: ${option.label}`);
 }
 
@@ -1164,15 +1425,19 @@ function sendCheckpointCustom() {
   $("checkpointCustomText").value = "";
   $("checkpointPanel").classList.add("hidden");
   state.notifiedRequestKey = null;
+  recordActivationSignal("checkpoint_answered");
   log("decision", "Sent custom instruction.");
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
   await loadSettings();
+  await loadActivationSignals();
   await refreshTab();
   setConnection(false);
 
   $("refreshTab").addEventListener("click", refreshTab);
+  $("autoConnectChrome").addEventListener("click", autoConnectChrome);
+  $("attachChrome").addEventListener("click", attachChrome);
   $("launchChrome").addEventListener("click", launchChrome);
   $("statusLaunchChrome").addEventListener("click", launchChrome);
   $("setupHelper").addEventListener("click", openSetup);
@@ -1195,11 +1460,15 @@ document.addEventListener("DOMContentLoaded", async () => {
     storageSet({ model: $("model").value });
     state.modelSavedLocally = true;
     updateModelSettingsView();
+    updateButtons();
   });
   $("saveModelSettings").addEventListener("click", () => saveModelSettings());
   $("clearModelKey").addEventListener("click", () => saveModelSettings({ clearKey: true }));
   $("taskText").addEventListener("input", () => {
     storageSet({ taskText: $("taskText").value.trim() });
+    if ($("taskText").value.trim()) {
+      recordActivationSignal("task_brief_written");
+    }
     updateButtons();
   });
   $("successCriteria").addEventListener("input", () => {

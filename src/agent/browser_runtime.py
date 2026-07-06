@@ -17,6 +17,7 @@ CHROME_APP = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 DEFAULT_CHROME_USER_DATA_DIR = Path.home() / "Library" / "Application Support" / "Google" / "Chrome"
 DEDICATED_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-profile"
 DEFAULT_COPY_CHROME_USER_DATA_DIR = Path.home() / ".flyingpig" / "chrome-cdp-default-copy"
+DEFAULT_CDP_URL = "http://127.0.0.1:9222"
 
 
 class ChromeProfileMode(StrEnum):
@@ -91,20 +92,56 @@ def chrome_user_data_dir(profile: str, custom_dir: str | None) -> Path:
     return DEDICATED_CHROME_USER_DATA_DIR
 
 
-def debugger_is_ready(port: int) -> bool:
+def cdp_url_for_port(port: int) -> str:
+    """Return the legacy localhost CDP URL for a port-only call site."""
+    return f"http://127.0.0.1:{port}"
+
+
+def normalize_cdp_url(cdp_url: str | None, default_port: int = 9222) -> str:
+    """Normalize a CDP endpoint while preserving its explicit host.
+
+    Users may enter endpoints as `localhost:9222`, `http://[::1]:9222`, or a
+    full URL with a trailing path. The dashboard and helper should preserve the
+    host because Chrome can bind IPv4 and IPv6 loopback differently.
+    """
+    raw = (cdp_url or DEFAULT_CDP_URL).strip()
+    if not raw:
+        raw = DEFAULT_CDP_URL
+    if "://" not in raw:
+        raw = f"http://{raw}"
+
+    parsed = urllib.parse.urlparse(raw)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError(f"Invalid Chrome debugging endpoint: {cdp_url}")
+
+    host = parsed.hostname
+    port = parsed.port or default_port
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"{parsed.scheme}://{host}:{port}"
+
+
+def _cdp_base_url(*, port: int | None = None, cdp_url: str | None = None) -> str:
+    if cdp_url is not None:
+        return normalize_cdp_url(cdp_url)
+    return cdp_url_for_port(port or 9222)
+
+
+def debugger_is_ready(port: int | None = None, *, cdp_url: str | None = None) -> bool:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     try:
         with urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/json/version",
+            f"{base_url}/json/version",
             timeout=1,
         ) as response:
             return response.status == 200
-    except (OSError, urllib.error.URLError):
+    except (OSError, urllib.error.URLError, ValueError):
         return False
 
 
-def debugger_page_info(port: int) -> dict | None:
+def debugger_page_info(port: int | None = None, *, cdp_url: str | None = None) -> dict | None:
     """Return the first debuggable work-window page, if Chrome exposes one."""
-    targets = debugger_targets(port)
+    targets = debugger_targets(port, cdp_url=cdp_url)
     if targets is None:
         return None
 
@@ -119,22 +156,29 @@ def debugger_page_info(port: int) -> dict | None:
     return None
 
 
-def debugger_targets(port: int) -> list[dict] | None:
+def debugger_targets(port: int | None = None, *, cdp_url: str | None = None) -> list[dict] | None:
     """Return raw CDP targets for a running debug endpoint."""
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
+        with urllib.request.urlopen(f"{base_url}/json", timeout=2) as response:
             return json.load(response)
     except (OSError, urllib.error.URLError, ValueError):
         return None
 
 
-def wait_for_debugger(port: int, timeout_seconds: int = 20) -> None:
+def wait_for_debugger(
+    port: int | None = None,
+    timeout_seconds: int = 20,
+    *,
+    cdp_url: str | None = None,
+) -> None:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
-        if debugger_is_ready(port):
+        if debugger_is_ready(cdp_url=base_url):
             return
         time.sleep(0.25)
-    raise RuntimeError(f"Chrome remote debugging did not start on port {port}")
+    raise RuntimeError(f"Chrome remote debugging did not start at {base_url}")
 
 
 def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
@@ -144,10 +188,10 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
     normal Chrome must already be closed. The dedicated and copied-profile modes
     use separate user-data directories.
     """
-    cdp_url = f"http://127.0.0.1:{config.cdp_port}"
-    if debugger_is_ready(config.cdp_port):
+    cdp_url = cdp_url_for_port(config.cdp_port)
+    if debugger_is_ready(cdp_url=cdp_url):
         print(f"   Reusing Chrome remote debugging endpoint at {cdp_url}")
-        prepare_debugger_page(port=config.cdp_port, target_url=config.initial_url)
+        prepare_debugger_page(cdp_url=cdp_url, target_url=config.initial_url)
         return cdp_url
 
     user_data_dir = chrome_user_data_dir(
@@ -172,6 +216,7 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
 
     command = [
         CHROME_APP,
+        "--remote-debugging-address=127.0.0.1",
         f"--remote-debugging-port={config.cdp_port}",
         f"--user-data-dir={user_data_dir}",
         "--profile-directory=Default",
@@ -189,17 +234,22 @@ def launch_cdp_chrome(config: ChromeLaunchConfig) -> str:
     print("   Launching visible Flying Pig work window with remote debugging.")
     print(f"   Profile dir: {user_data_dir}")
     subprocess.Popen(command, start_new_session=True)
-    wait_for_debugger(config.cdp_port)
+    wait_for_debugger(cdp_url=cdp_url)
     if config.dashboard_url:
         open_dashboard_tab(
-            port=config.cdp_port,
+            cdp_url=cdp_url,
             dashboard_url=config.dashboard_url,
             target_url=config.initial_url,
         )
     return cdp_url
 
 
-def prepare_debugger_page(*, port: int, target_url: str) -> None:
+def prepare_debugger_page(
+    *,
+    target_url: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
+) -> None:
     """Reset a reused CDP work window to one task page.
 
     Chrome keeps old tabs alive when we reconnect to an existing debugging
@@ -207,26 +257,33 @@ def prepare_debugger_page(*, port: int, target_url: str) -> None:
     become the next run target, so create the requested page, activate it, and
     close the previous page targets.
     """
-    targets = debugger_targets(port) or []
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
+    targets = debugger_targets(cdp_url=base_url) or []
     page_targets = [target for target in targets if target.get("type") == "page"]
     if len(page_targets) == 1 and str(page_targets[0].get("url", "")) == target_url:
         return
 
-    new_target_id = open_debugger_page(port=port, url=target_url)
+    new_target_id = open_debugger_page(cdp_url=base_url, url=target_url)
     if not new_target_id:
         return
-    activate_debugger_target(port=port, target_id=new_target_id)
+    activate_debugger_target(cdp_url=base_url, target_id=new_target_id)
     for target in page_targets:
         old_target_id = target.get("id")
         if old_target_id and old_target_id != new_target_id:
-            close_debugger_target(port=port, target_id=old_target_id)
+            close_debugger_target(cdp_url=base_url, target_id=old_target_id)
 
 
-def open_debugger_page(*, port: int, url: str) -> str | None:
+def open_debugger_page(
+    *,
+    url: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
+) -> str | None:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     encoded_url = urllib.parse.quote(url or "about:blank", safe="")
     try:
         request = urllib.request.Request(
-            f"http://127.0.0.1:{port}/json/new?{encoded_url}",
+            f"{base_url}/json/new?{encoded_url}",
             method="PUT",
         )
         with urllib.request.urlopen(request, timeout=2) as response:
@@ -236,20 +293,32 @@ def open_debugger_page(*, port: int, url: str) -> str | None:
         return None
 
 
-def activate_debugger_target(*, port: int, target_id: str) -> None:
+def activate_debugger_target(
+    *,
+    target_id: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
+) -> None:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     try:
         urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/json/activate/{target_id}",
+            f"{base_url}/json/activate/{target_id}",
             timeout=2,
         ).close()
     except (OSError, urllib.error.URLError):
         return
 
 
-def close_debugger_target(*, port: int, target_id: str) -> None:
+def close_debugger_target(
+    *,
+    target_id: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
+) -> None:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     try:
         urllib.request.urlopen(
-            f"http://127.0.0.1:{port}/json/close/{target_id}",
+            f"{base_url}/json/close/{target_id}",
             timeout=2,
         ).close()
     except (OSError, urllib.error.URLError):
@@ -258,22 +327,24 @@ def close_debugger_target(*, port: int, target_id: str) -> None:
 
 def open_dashboard_tab(
     *,
-    port: int,
     dashboard_url: str,
     target_url: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
 ) -> None:
     """Open dashboard status beside the task tab, then reactivate task tab."""
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
     try:
-        task_target_id = find_debugger_target_id(port=port, url_prefix=target_url)
+        task_target_id = find_debugger_target_id(cdp_url=base_url, url_prefix=target_url)
         encoded_dashboard_url = urllib.parse.quote(dashboard_url, safe="")
         request = urllib.request.Request(
-            f"http://127.0.0.1:{port}/json/new?{encoded_dashboard_url}",
+            f"{base_url}/json/new?{encoded_dashboard_url}",
             method="PUT",
         )
         urllib.request.urlopen(request, timeout=2).close()
         if task_target_id:
             urllib.request.urlopen(
-                f"http://127.0.0.1:{port}/json/activate/{task_target_id}",
+                f"{base_url}/json/activate/{task_target_id}",
                 timeout=2,
             ).close()
         print(f"   Dashboard tab: {dashboard_url}")
@@ -281,15 +352,19 @@ def open_dashboard_tab(
         print(f"   Dashboard tab could not be opened automatically: {exc}")
 
 
-def find_debugger_target_id(*, port: int, url_prefix: str) -> str | None:
-    info = debugger_page_info(port)
+def find_debugger_target_id(
+    *,
+    url_prefix: str,
+    port: int | None = None,
+    cdp_url: str | None = None,
+) -> str | None:
+    base_url = _cdp_base_url(port=port, cdp_url=cdp_url)
+    info = debugger_page_info(cdp_url=base_url)
     if info and str(info.get("url", "")).startswith(url_prefix):
         return info.get("id")
 
-    try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=2) as response:
-            targets = json.load(response)
-    except (OSError, urllib.error.URLError, ValueError):
+    targets = debugger_targets(cdp_url=base_url)
+    if targets is None:
         return None
 
     for target in targets:
