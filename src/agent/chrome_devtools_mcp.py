@@ -5,10 +5,13 @@ from __future__ import annotations
 import json
 import os
 import selectors
+import shlex
+import shutil
 import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from src.agent.browser_runtime import normalize_cdp_url
@@ -19,6 +22,23 @@ REMOTE_DEBUGGING_HELP = (
 )
 
 DEFAULT_MCP_COMMAND = ["npx", "-y", "chrome-devtools-mcp@latest", "--autoConnect"]
+
+
+def chrome_devtools_mcp_command() -> list[str]:
+    """Return the command used to start chrome-devtools-mcp."""
+    override = os.environ.get("FLYINGPIG_CHROME_MCP_COMMAND", "").strip()
+    if override:
+        return shlex.split(override)
+
+    npx = shutil.which("npx")
+    if npx:
+        return [npx, "-y", "chrome-devtools-mcp@latest", "--autoConnect"]
+
+    for candidate in ("/opt/homebrew/bin/npx", "/usr/local/bin/npx"):
+        if Path(candidate).exists():
+            return [candidate, "-y", "chrome-devtools-mcp@latest", "--autoConnect"]
+
+    return list(DEFAULT_MCP_COMMAND)
 
 
 class ChromeDevtoolsMcpError(RuntimeError):
@@ -204,7 +224,8 @@ def summarize_mcp_error(exc: Exception) -> str:
     if isinstance(exc, FileNotFoundError) or "No such file" in message:
         return (
             "Could not start Chrome DevTools MCP because npx/Node was not found. "
-            "Install Node.js, then try again."
+            "Install Node.js, make sure npx is on PATH, or set "
+            "FLYINGPIG_CHROME_MCP_COMMAND to the full npx command, then try again."
         )
     return message
 
@@ -221,8 +242,13 @@ class ChromeDevtoolsMcpSession:
 
     def connect(self) -> list[dict]:
         with self._lock:
-            self._ensure_client()
-            return self.list_pages()
+            try:
+                self._ensure_client()
+                return self.list_pages()
+            except (ChromeDevtoolsMcpError, OSError):
+                self.close()
+                self._ensure_client()
+                return self.list_pages()
 
     def list_tools(self) -> list[dict]:
         with self._lock:
@@ -303,7 +329,7 @@ class ChromeDevtoolsMcpClient:
         *,
         timeout_seconds: float = 60.0,
     ):
-        self.command = command or list(DEFAULT_MCP_COMMAND)
+        self.command = command or chrome_devtools_mcp_command()
         self.timeout_seconds = timeout_seconds
         self._process: subprocess.Popen | None = None
         self._next_id = 1

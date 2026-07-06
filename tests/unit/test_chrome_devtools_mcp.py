@@ -5,6 +5,7 @@ from src.agent.chrome_devtools_mcp import (
     ChromeDevtoolsMcpClient,
     ChromeDevtoolsMcpError,
     cdp_url_from_mcp_page,
+    chrome_devtools_mcp_command,
     parse_mcp_pages,
     summarize_mcp_error,
 )
@@ -103,7 +104,6 @@ def test_call_tool_uses_mcp_tools_call_shape():
         )
     ]
 
-
 def test_call_tool_raises_mcp_tool_errors():
     class ErrorClient(FakeRpcClient):
         def _request(self, method, params):
@@ -111,3 +111,17 @@ def test_call_tool_raises_mcp_tool_errors():
 
     with pytest.raises(ChromeDevtoolsMcpError, match="boom"):
         ErrorClient().call_tool("list_pages")
+
+
+def test_chrome_devtools_mcp_command_uses_override(monkeypatch):
+    monkeypatch.setenv(
+        "FLYINGPIG_CHROME_MCP_COMMAND",
+        "/custom/npx -y chrome-devtools-mcp@latest --autoConnect",
+    )
+
+    assert chrome_devtools_mcp_command() == [
+        "/custom/npx",
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--autoConnect",
+    ]

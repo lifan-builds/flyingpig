@@ -24,6 +24,9 @@ class FakeMcpSession:
             {"name": "take_snapshot"},
             {"name": "click"},
             {"name": "fill"},
+            {"name": "fill_form"},
+            {"name": "type_text"},
+            {"name": "press_key"},
             {"name": "wait_for"},
         ]
 
@@ -122,3 +125,59 @@ async def test_mcp_executor_ask_user_delegates_to_input_handler(tmp_path: Path):
     assert result.status == TaskStatus.SUCCESS
     assert handler.events[0]["event_type"] == "question_opened"
     assert handler.events[1]["event_type"] == "question_answered"
+
+
+@pytest.mark.asyncio
+async def test_mcp_executor_maps_mcp_tool_arguments(tmp_path: Path):
+    session = FakeMcpSession()
+    actions = iter(
+        [
+            McpAgentAction(action="fill", uid="field", value="hello"),
+            McpAgentAction(action="fill_form", fields=[{"uid": "a", "value": "one"}]),
+            McpAgentAction(action="type_text", text="typed"),
+            McpAgentAction(action="press_key", key="Enter"),
+            McpAgentAction(action="wait_for", text="Done", timeout=5000),
+            McpAgentAction(action="report_outcome", outcome="Mapped"),
+        ]
+    )
+
+    async def planner(prompt):
+        return next(actions)
+
+    result = await McpBrowserExecutor(session_factory=lambda: session).run(
+        task_prompt="Task",
+        llm=planner,
+        page={"index": 1},
+        input_handler=UserInputHandler(mode="api"),
+        max_steps=6,
+        save_dir=tmp_path,
+    )
+
+    assert result.status == TaskStatus.SUCCESS
+    assert session.calls == [
+        ("fill", {"uid": "field", "value": "hello", "includeSnapshot": False}),
+        ("fill_form", {"elements": [{"uid": "a", "value": "one"}], "includeSnapshot": False}),
+        ("type_text", {"text": "typed"}),
+        ("press_key", {"key": "Enter", "includeSnapshot": False}),
+        ("wait_for", {"text": ["Done"], "timeout": 5000}),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_mcp_executor_failure_writes_artifact(tmp_path: Path):
+    async def planner(prompt):
+        return McpAgentAction(action="evaluate_script", thought="unsafe")
+
+    result = await McpBrowserExecutor(session_factory=FakeMcpSession).run(
+        task_prompt="Task",
+        llm=planner,
+        page={"index": 1},
+        input_handler=UserInputHandler(mode="api"),
+        max_steps=1,
+        save_dir=tmp_path,
+    )
+
+    assert result.status == TaskStatus.FAILED
+    assert result.transcript_path
+    artifact = json.loads(Path(result.transcript_path).read_text())
+    assert artifact["outcome"]["error"] == result.summary

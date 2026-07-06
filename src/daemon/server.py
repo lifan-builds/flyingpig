@@ -420,6 +420,8 @@ class RunManager:
         last_seen: str | None = None
         while self.agent_task and not self.agent_task.done():
             await asyncio.sleep(0.3)
+            if not self.agent_task or self.agent_task.done():
+                break
             if not self.brain:
                 continue
             request = getattr(self.brain.input_handler, "pending_request", None)
@@ -451,6 +453,8 @@ class RunManager:
         sent = 0
         while self.agent_task and not self.agent_task.done():
             await asyncio.sleep(0.5)
+            if not self.agent_task or self.agent_task.done():
+                break
             if not self.brain:
                 continue
             progress = self.brain.step_log
