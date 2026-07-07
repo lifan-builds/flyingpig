@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "updated_at": "2026-07-06",
-  "source_hash": "fd93248097db5b371765c247b06d66ea9eca697f6cb11e3d0822e34a7182c109",
+  "source_hash": "3b4daca8d027d63143f1d34f7a4d2e5f6d1e62a7bc5fa1d14ef10b8185fb17d6",
   "sources": [
     {
       "path": "CONTEXT.md",
@@ -10,13 +10,13 @@
     },
     {
       "path": "NOW.md",
-      "sha256": "36c0c39d42db0b87dcb22ee4c01027cb814d3c329f7de6485192ded0039f1e06",
-      "lines": 20
+      "sha256": "2a75e8e25ca0bfc6a0e98bb36f41ea3960f7ccf93e0872d534568ab55735c903",
+      "lines": 21
     },
     {
       "path": "PLAN.md",
-      "sha256": "1c6e07a23b3c95eb2aaeb577758280e7db3d4f6c0dc3293c7ac1ce7de990959a",
-      "lines": 401
+      "sha256": "8c78e12089bc6c643d841b0c6e556256c1490f010a8b24440317bd02483ca878",
+      "lines": 405
     }
   ],
   "cards": [
@@ -497,7 +497,7 @@
     {
       "id": "ctx-now-now",
       "title": "NOW.md: Now",
-      "summary": "Implemented and minimally live-smoked Flying Pig's Claude-Code-style Auto-Connect Existing Chrome path through a helper-owned Chrome DevTools MCP bridge. The helper starts npx -y chrome-devtools-mcp@latest --autoConne...",
+      "summary": "Implemented and verified a minimal MCP-native existing-Chrome backend. Flying Pig can now Auto-Connect to an existing Chrome tab through Chrome DevTools MCP and run a minimal supervised backend without a browser-use/C...",
       "source": "NOW.md#now",
       "source_path": "NOW.md",
       "kind": "resume",
@@ -505,7 +505,7 @@
       "importance": 0.95,
       "confidence": "confirmed",
       "recency": "2026-07-06",
-      "tokens_est": 638,
+      "tokens_est": 765,
       "tags": [
         "now",
         "resume"
@@ -516,10 +516,10 @@
         "update context after current work"
       ],
       "card_path": ".context-harness/cards/ctx-now-now.md",
-      "chunk_path": "",
-      "content_sha256": "36c0c39d42db0b87dcb22ee4c01027cb814d3c329f7de6485192ded0039f1e06",
+      "chunk_path": ".context-harness/chunks/ctx-now-now.md",
+      "content_sha256": "2a75e8e25ca0bfc6a0e98bb36f41ea3960f7ccf93e0872d534568ab55735c903",
       "key_facts": [
-        "Implemented and minimally live-smoked Flying Pig's Claude-Code-style Auto-Connect Existing Chrome path through a helper-owned Chrome DevTools MCP bridge. The...",
+        "Implemented and verified a minimal MCP-native existing-Chrome backend. Flying Pig can now Auto-Connect to an existing Chrome tab through Chrome DevTools MCP...",
         "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
         "Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.",
         "Desktop beta update checking and release verification are present; GitHub repo visibility is public. The app must describe updates as manual GitHub release d...",
@@ -557,7 +557,7 @@
     {
       "id": "ctx-plan-progress",
       "title": "PLAN.md: Progress",
-      "summary": "[x] Research, architecture decision (Option A: browser-use), scaffold (2026-04-09)",
+      "summary": "[ ] Configure preferred fallback provider before the next live Amex run.",
       "source": "PLAN.md#progress",
       "source_path": "PLAN.md",
       "kind": "plan",
@@ -565,7 +565,7 @@
       "importance": 0.85,
       "confidence": "confirmed",
       "recency": "2026-07-06",
-      "tokens_est": 1294,
+      "tokens_est": 74,
       "tags": [
         "plan",
         "progress"
@@ -576,14 +576,13 @@
         "update context with task-local progress"
       ],
       "card_path": ".context-harness/cards/ctx-plan-progress.md",
-      "chunk_path": ".context-harness/chunks/ctx-plan-progress.md",
-      "content_sha256": "d508d05d77732dc76a61b36e6d75baf35128403ac89e174c2c808904b2f6ee8b",
+      "chunk_path": "",
+      "content_sha256": "2e3dc40140386348ca94a132002ef005a5a6d4595ae1d90a9e27328eabe0c849",
       "key_facts": [
-        "[x] Research, architecture decision (Option A: browser-use), scaffold (2026-04-09)",
-        "[x] Core agent loop, AI detection, escalation, Amex adapter (2026-04-09)",
-        "[x] React dashboard, session recording, auth, e2e test, MVP deploy (2026-04-10)",
-        "[x] Attach to user's existing browser window via CDP instead of spawning a new profile (2026-04-16) — --cdp-url wired through demoamex.py → AgentBrain → Chat...",
-        "[x] Switch CDP attach to \"bring your own tab\" — agent uses the user's currently focused tab, never navigates or opens a new tab; fixes lost-cookie problem wh..."
+        "[ ] Configure preferred fallback provider before the next live Amex run.",
+        "[ ] Measure human-escalation success rate against recorded session suite; iterate to ≥75%",
+        "[ ] Measure negotiation goal-achievement rate; iterate to ≥60%",
+        "[ ] Expand adapter coverage beyond Amex (telecom, utilities)"
       ]
     },
     {
@@ -597,7 +596,7 @@
       "importance": 0.85,
       "confidence": "confirmed",
       "recency": "2026-07-06",
-      "tokens_est": 9896,
+      "tokens_est": 10178,
       "tags": [
         "plan",
         "findings",
@@ -631,7 +630,7 @@
       ],
       "card_path": ".context-harness/cards/ctx-plan-findings.md",
       "chunk_path": ".context-harness/chunks/ctx-plan-findings.md",
-      "content_sha256": "a1ddf158320e2f217163a61c7abf073361e83b441ca01fa80c38fcee04415d4f",
+      "content_sha256": "6332c2b5a486b17228d1cccfb34bd2fc9298c6cb7b62d17beae78981c8b8cc2d",
       "key_facts": [
         "See archived FINDINGS.md (if retained) for research on DoNotPay, browser-use, Playwright vs Puppeteer, FTC/legal landscape, and industry predictions (Gartner...",
         "The running desktop app is the packaged local build at dist/desktop/mac-arm64/Flying Pig.app; no /Applications/Flying Pig.app install was found in this session.",
@@ -715,7 +714,7 @@
       "importance": 0.85,
       "confidence": "confirmed",
       "recency": "2026-07-06",
-      "tokens_est": 31,
+      "tokens_est": 1351,
       "tags": [
         "plan",
         "archive",
@@ -727,10 +726,14 @@
         "update context with task-local progress"
       ],
       "card_path": ".context-harness/cards/ctx-plan-archive.md",
-      "chunk_path": "",
-      "content_sha256": "eccd323c48ed99a53a1de4df3b34fed877d1eeddee81561d52b3a284253c7c8e",
+      "chunk_path": ".context-harness/chunks/ctx-plan-archive.md",
+      "content_sha256": "8195af146082a9a40573eff50c48bf941399d2b0a5757a38fa4a8e3feb2b9352",
       "key_facts": [
-        "(Empty — initial migration.)"
+        "(Empty — initial migration.)",
+        "Research, architecture decision (Option A: browser-use), scaffold (2026-04-09) (archived 2026-07-06)",
+        "Core agent loop, AI detection, escalation, Amex adapter (2026-04-09) (archived 2026-07-06)",
+        "React dashboard, session recording, auth, e2e test, MVP deploy (2026-04-10) (archived 2026-07-06)",
+        "Attach to user's existing browser window via CDP instead of spawning a new profile (2026-04-16) — --cdp-url wired through demoamex.py → AgentBrain → ChatNavi..."
       ]
     },
     {

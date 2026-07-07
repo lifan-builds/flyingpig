@@ -26,5 +26,10 @@ Last modified: 2026-05-25
 - Docs/context changes: README now leads with packaged Mac beta install and unsigned/manual-update expectations; added docs/public-beta-quickstart.md; updated...
 - Verification: node scripts/context-index.js update; node --check dashboard/dashboard.js; node --check scripts/testhelperdashboard.mjs; node scripts/testdashb...
 
-## Open next
+## Retrieval order
+- Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.
+- Use this card before opening bulky `PLAN.md`, chunks, or raw source sections for this topic.
+- Open raw detail only when this summary is insufficient for the task.
+
+## Open next only if needed
 - `PLAN.md#session-state`

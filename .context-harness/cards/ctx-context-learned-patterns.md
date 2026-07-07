@@ -25,6 +25,11 @@ CDP attach must reuse the current tab — when attaching via CDP, never call nav
 - CDP host/port conflicts can split loopback — if normal Chrome already owns 127.0.0.1:9222, Flying Pig Chrome may bind only [::1]:9222 and print DevTools list...
 - Chrome DevTools MCP can drive existing Chrome through a minimal native backend — chrome-devtools-mcp --autoConnect can list/select/snapshot the user's existi...
 
-## Open next
+## Retrieval order
+- Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.
+- Use this card before opening bulky `PLAN.md`, chunks, or raw source sections for this topic.
+- Open raw detail only when this summary is insufficient for the task.
+
+## Open next only if needed
 - `CONTEXT.md#learned-patterns`
 - `.context-harness/chunks/ctx-context-learned-patterns.md`

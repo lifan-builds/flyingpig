@@ -1,0 +1,32 @@
+# Archive
+
+(Empty — initial migration.)
+
+### 2026-06-26 Oversized NOW.md Snapshot
+```markdown
+<!-- context-harness:schema v2 -->
+
+# Now
+
+- Research, architecture decision (Option A: browser-use), scaffold (2026-04-09) (archived 2026-07-06)
+- Core agent loop, AI detection, escalation, Amex adapter (2026-04-09) (archived 2026-07-06)
+- React dashboard, session recording, auth, e2e test, MVP deploy (2026-04-10) (archived 2026-07-06)
+- Attach to user's existing browser window via CDP instead of spawning a new profile (2026-04-16) — `--cdp-url` wired through `demo_amex.py` → `AgentBrain` → `ChatNavigator`; login wait skipped on attach; browser left open on detach (archived 2026-07-06)
+- Switch CDP attach to "bring your own tab" — agent uses the user's currently focused tab, never navigates or opens a new tab; fixes lost-cookie problem when CDP `Target.createTarget` lands in a fresh context (2026-04-16). Added attached-mode prompt prefix in `AgentBrain.execute()`. Browser-use `ChatGoogle` (Gemini) added as third LLM option. (archived 2026-07-06)
+- One-command launcher `scripts/start.py` (2026-04-17) — now delegates browser launch to `BrowserSession.from_system_chrome()` instead of custom CDP launch/profile management. (archived 2026-07-06)
+- Generic auto-detect adapter (2026-04-19) — `GenericAdapter` + `resolve_from_url()` fallback. Generic prompt teaches the agent to find chat widgets via iframe/role/aria heuristics across Intercom / Zendesk / Drift / LiveChat patterns. Own template set in `prompts/generic/`. (archived 2026-07-06)
+- Chrome extension + WebSocket daemon (2026-04-19) — superseded and removed in favor of `BrowserSession.from_system_chrome()`. (archived 2026-07-06)
+- Existing normal Chrome tab bridge (2026-05-04) — superseded by system Chrome profile launch; CDP remains advanced/debug only. (archived 2026-07-06)
+- Mandatory pre-flight goal confirmation in Amex prompt (2026-04-18) — before sending any chat message, agent must verify chat is ready, summarize intended action, and ask follow-ups if specifics (card, amount, dates, walk-away threshold) are missing. (archived 2026-07-06)
+- Default browser path switched to `BrowserSession.from_system_chrome()` (2026-05-04) — launches user's real Chrome profile under Playwright/browser-use control; requires Chrome to be closed first because the profile is locked while running. (archived 2026-07-06)
+- Harden Amex live-login path after end-to-end testing issues (2026-05-05) — fixed browser-use `Page` wrapper API usage, CLI EOF background failure message, mock e2e determinism, and smoke-tested system Chrome launch to Amex. (archived 2026-07-06)
+- Mock Amex system-Chrome rerun completed with CLIProxy `gpt-5.5` (2026-05-06) — added chat transcript capture, `scripts/run_mock_amex.py`, system Chrome visibility guards, and completed a mock cancellation/retention flow yielding `$50` credit confirmation `MOCK-12345`. (archived 2026-07-06)
+- Added inspected CDP Chrome launch path to `scripts/start.py` (2026-05-06) — can launch a visible remote-debugging Chrome window using a persistent copied default profile, pause for login, then attach browser-use to the same active tab Computer Use sees. (archived 2026-07-06)
+- Attempted live Amex Oura Ring run through inspected CDP Chrome (2026-05-06) — agent reached Amex chat, sent the confirmed request, and reached a human representative before the LLM backend entered cooldown. (archived 2026-07-06)
+- Deepened live-run architecture after CDP/Computer Use debugging (2026-05-06) — extracted browser runtime, LLM runtime, user input/tools, evidence capture, result types, and prompt rendering out of `AgentBrain`, `ChatNavigator`, and site adapters; added `--fallback-model` for mid-run primary LLM failures. (archived 2026-07-06)
+- Re-run final non-slow verification after the CDP launcher and architecture edits (2026-05-06) — `ruff check src scripts tests`, `pytest tests -q -m "not slow"` (69 passed, 2 slow browser tests deselected), and `scripts/start.py --dry-run` passed. (archived 2026-07-06)
+- Add fallback LLM path for live customer-service runs so a primary model failure can continue in the current browser state. (archived 2026-07-06)
+- Real-browser live Amex smoke reverified (2026-05-06) — `python scripts/demo_amex.py --launch-smoke --headless` reached `https://www.americanexpress.com/us/customer-service/` with title `American Express Customer Service and Help Center | Amex US` when run outside the sandbox. (archived 2026-07-06)
+- Simplified live browser paths (2026-05-06) — user-facing runs now use either `--cdp-url` to attach to an existing remote-debugging tab, or the default `scripts/start.py` FlyingPig-controlled Chrome launch. Dedicated FlyingPig Chrome can run alongside normal Chrome. (archived 2026-07-06)
+- Resume live Amex Oura benefit request with updated card details and one-by-one ask sequence (2026-05-06) — narrowed to Platinum ending 71009 after user confirmed Morgan Stanley Platinum ending 81004 already received credit; Mitchell manually submitted a $200 credit request, expected to post in 5 working days. (archived 2026-07-06)
+- Add live-chat pacing and Hangup/Call-again prompt guidance (2026-05-06) — Amex prompt now tells the agent to prefer 30-120s waits for human reps and to ask the user before ending a refused/dead chat and starting a fresh one; `scripts/start.py` default step budget raised to 50. (archived 2026-07-06)

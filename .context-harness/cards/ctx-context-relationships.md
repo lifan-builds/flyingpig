@@ -25,6 +25,11 @@ AGENTS.md is the small activation layer; CONTEXT.md is the durable source of tru
 - The desktop app starts the helper and the dashboard launches a Controlled Chrome Window for v1 customer-service runs. The UX should present this as a purpose...
 - When the dashboard shows Work Window Offline while the helper is online, it should expose an immediate Open Work Window action beside that status instead of...
 
-## Open next
+## Retrieval order
+- Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.
+- Use this card before opening bulky `PLAN.md`, chunks, or raw source sections for this topic.
+- Open raw detail only when this summary is insufficient for the task.
+
+## Open next only if needed
 - `CONTEXT.md#relationships`
 - `.context-harness/chunks/ctx-context-relationships.md`

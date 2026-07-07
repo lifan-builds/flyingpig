@@ -25,6 +25,11 @@ Hangup and Call-again: User-approved recovery when a rep gives a final refusal o
 - Helper-First Startup: Superseded helper/dashboard product path kept as historical language for older ADRs. Avoid: reintroducing flyingpig-helper or localhost...
 - CLI-Owned Helper Lifecycle: Development-only helper lifecycle where a foreground flyingpig-helper process is stopped with Ctrl+C. Avoid: describing this as a...
 
-## Open next
+## Retrieval order
+- Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.
+- Use this card before opening bulky `PLAN.md`, chunks, or raw source sections for this topic.
+- Open raw detail only when this summary is insufficient for the task.
+
+## Open next only if needed
 - `CONTEXT.md#language`
 - `.context-harness/chunks/ctx-context-language.md`
