@@ -15,6 +15,7 @@ from src.agent.browser_runtime import (
     launch_cdp_chrome,
     supported_chrome_profile_modes,
 )
+from src.agent.run_authorization import RunAuthorization
 from src.api.auth import get_current_user
 from src.api.auth import router as auth_router
 from src.models.db import AsyncSessionLocal, init_db
@@ -72,6 +73,7 @@ class TaskRequest(BaseModel):
     cdp_url: str | None = None
     navigate_on_attach: bool = False
     max_steps: int = 100
+    authorization: dict | None = None
 
 
 class TaskResponse(BaseModel):
@@ -243,6 +245,9 @@ async def create_task(request: TaskRequest, current_user: User = Depends(get_cur
         fallback_model=request.fallback_model,
         cdp_url=request.cdp_url,
         navigate_on_attach=request.navigate_on_attach,
+        authorization=(
+            RunAuthorization(**request.authorization) if request.authorization else None
+        ),
     )
     _task_brains[task_id] = brain
 

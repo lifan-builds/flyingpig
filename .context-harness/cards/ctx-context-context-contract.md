@@ -18,7 +18,6 @@ At session start/resume, read NOW.md first, then CONTEXT.md.
 - working on context contract
 
 ## Key facts
-- At session start/resume, read NOW.md first, then CONTEXT.md.
 - Before planning or editing, respect CONTEXT.md ## Rules.
 - If the user teaches a durable term, invariant, workflow, constraint, or correction, update CONTEXT.md before it scrolls away.
 - Route task-local findings to PLAN.md; hard-to-reverse trade-offs to ADRs.

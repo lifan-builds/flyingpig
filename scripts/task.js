@@ -12,6 +12,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { refreshContextIndex } = require("./lib");
 
 const cmd = process.argv[2];
 const arg = process.argv.slice(3).join(" ").trim();
@@ -32,19 +33,23 @@ if (cmd === "start") {
 
 function startTask(title) {
   const priorFocus = readFocus();
+  let changed = false;
   if (priorFocus && priorFocus !== "(none)" && fs.existsSync(planPath)) {
-    appendProgress(`- [~] ${priorFocus} (switched away ${today()})`);
+    changed = appendProgress(`- [~] ${priorFocus} (switched away ${today()})`) || changed;
   }
-  writeNow(title);
+  changed = writeNow(title) || changed;
+  refreshIfChanged(changed);
   console.log(`[task] started: ${title}`);
 }
 
 function doneTask() {
   const focus = readFocus();
+  let changed = false;
   if (focus && focus !== "(none)" && fs.existsSync(planPath)) {
-    appendProgress(`- [x] ${focus} (done ${today()})`);
+    changed = appendProgress(`- [x] ${focus} (done ${today()})`) || changed;
   }
-  writeNow("(none)");
+  changed = writeNow("(none)") || changed;
+  refreshIfChanged(changed);
   console.log(`[task] done: ${focus || "(no prior focus)"}`);
 }
 
@@ -81,7 +86,9 @@ function writeNow(focus) {
     "- Files touched: (none yet)",
     "",
   ].join("\n");
+  if (fs.existsSync(nowPath) && fs.readFileSync(nowPath, "utf8") === content) return false;
   fs.writeFileSync(nowPath, content);
+  return true;
 }
 
 function appendProgress(line) {
@@ -90,7 +97,7 @@ function appendProgress(line) {
   const progressIdx = lines.findIndex((l) => /^##\s+Progress/i.test(l));
   if (progressIdx === -1) {
     fs.appendFileSync(planPath, `\n${line}\n`);
-    return;
+    return true;
   }
   let insertAt = progressIdx + 1;
   for (let i = insertAt; i < lines.length; i++) {
@@ -99,6 +106,16 @@ function appendProgress(line) {
   }
   lines.splice(insertAt, 0, line);
   fs.writeFileSync(planPath, lines.join("\n"));
+  return true;
+}
+
+function refreshIfChanged(changed) {
+  if (!changed) return;
+  const result = refreshContextIndex(root);
+  if (result.exitCode !== 0) {
+    const detail = result.stderr.trim() || `exit ${result.exitCode}`;
+    console.error(`[task] WARN context index refresh failed: ${detail}`);
+  }
 }
 
 function today() {

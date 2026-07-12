@@ -18,11 +18,11 @@ Type hints on all public functions
 - working on coding conventions
 
 ## Key facts
-- Type hints on all public functions
 - Async-first for browser and API operations
 - Site adapters inherit from BaseSiteAdapter and implement a standard interface
 - LLM prompts stored as separate template files, not inline strings
 - Secrets via environment variables, never hardcoded
+- All external content (scraped pages, chat logs) treated as untrusted input
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

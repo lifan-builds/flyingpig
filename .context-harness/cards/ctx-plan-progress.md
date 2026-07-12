@@ -5,25 +5,24 @@ importance: 0.85
 confidence: confirmed
 source: PLAN.md#progress
 chunk: null
-tokens_est: 74
+tokens_est: 274
 tags: [plan, progress]
 ---
 
 # PLAN.md: Progress
 
 ## Summary
-[ ] Configure preferred fallback provider before the next live Amex run.
+[x] Distill the dashboard into a configure-once flow: model setup collapses after configuration, repeat use leads with the task brief and Start, and secondary run controls move under progressive disclosure.
 
 ## Use when
-- continuing the active task
-- checking done criteria or decisions
-- update context with task-local progress
+- continuing task-local progress
 
 ## Key facts
+- [x] Implement live-session hardening from the Amex cancellation run: structured authorization, verified semantic chat sends, transcript workflow state,...
+- [x] Expose structured run authorization and completion/follow-up evidence in the dashboard, with browser smoke coverage that validates the transmitted...
+- [x] Add durable local scheduling for deferred follow-up actions, with reconnect-safe due delivery and dashboard notifications.
 - [ ] Configure preferred fallback provider before the next live Amex run.
 - [ ] Measure human-escalation success rate against recorded session suite; iterate to ≥75%
-- [ ] Measure negotiation goal-achievement rate; iterate to ≥60%
-- [ ] Expand adapter coverage beyond Amex (telecom, utilities)
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

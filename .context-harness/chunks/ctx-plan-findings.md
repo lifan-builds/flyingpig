@@ -2,6 +2,16 @@
 
 See archived `FINDINGS.md` (if retained) for research on DoNotPay, browser-use, Playwright vs Puppeteer, FTC/legal landscape, and industry predictions (Gartner/Forrester/CNBC 2026).
 
+### 2026-07-12 Amex-session hardening implementation
+- Added `RunAuthorization` and carried explicit target/action/refund/declined-alternative/HUCA scope through REST, daemon orchestration, `AgentBrain`, MCP execution, and dashboard payloads. Unstructured `user_authorized` remains conservative and grants no consequential action by itself.
+- Added transcript-derived chat workflow state for human handoff/activity, cancellation disclosure and consent, closure confirmation, confirmation-email expectation, refund disposition, representative departure, completion checks, and deferred follow-up actions.
+- Added semantic `send_chat_message` with exact composer replacement, draft verification, one send, transcript verification, and duplicate suppression; raw composer fill/type/key actions are blocked.
+- Added MCP active-human waits, one bounded warm holding message, bounded model calls, fallback planning, trailing-JSON recovery, textless internal waits, and a visible-closure success gate.
+- Added CLIProxy model listing/probing with candidate preference `gpt-5.6-luna`, `gpt-5.4-mini`, configured preference, `gpt-5.5`, then `gpt-5.4`; probes contain no page data and skip failed candidates.
+- Dashboard now collects explicit authorization scope and renders completion checks, expected confirmation, and deferred follow-up actions.
+- Deferred follow-up actions can now be scheduled as durable local reminders. The helper persists them atomically under `~/.flyingpig`, exposes create/list/cancel APIs, and delivers due reminders over the reconnecting dashboard WebSocket before marking them delivered.
+- Verification: `pytest tests/unit -q` (154 passed), `ruff check src tests`, `node --check dashboard/dashboard.js`, `node --check scripts/test_helper_dashboard.mjs`, `npm run test:dashboard` (protocol and browser smoke passed), `npm run build:helper`, `npm run desktop:package`, `npm run desktop:verify-update`, release secret/PII scans, and `git diff --check`.
+
 ### 2026-07-05 Installed work-window CDP conflict
 - The running desktop app is the packaged local build at `dist/desktop/mac-arm64/Flying Pig.app`; no `/Applications/Flying Pig.app` install was found in this session.
 - The helper is healthy on `127.0.0.1:8765`, but Open Work Window fails because normal Chrome owns IPv4 `127.0.0.1:9222` and returns 404 for `/json/version`, while the Flying Pig work Chrome falls back to IPv6 `[::1]:9222` and logs `bind() failed: Address already in use (48)` followed by `DevTools listening on ws://[::1]:9222/...`.

@@ -31,6 +31,8 @@ import asyncio
 import json
 import logging
 import sys
+from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from time import perf_counter
 
@@ -56,6 +58,7 @@ from src.agent.chrome_devtools_mcp import (
     summarize_mcp_error,
 )
 from src.agent.run_orchestration import build_agent_run_plan
+from src.daemon.follow_up_reminders import FollowUpReminderStore
 from src.daemon.model_settings import model_settings_payload, save_model_settings
 from src.daemon.preflight import preflight_check, task_with_success_criteria
 from src.daemon.run_session import (
@@ -127,6 +130,7 @@ class RunStartRequest(BaseModel):
     evidence_capture: bool = True
     login_expectation: str | None = None
     irreversible_actions_require_checkpoint: bool = True
+    authorization: dict | None = None
 
 
 class RunAnswerRequest(BaseModel):
@@ -143,6 +147,13 @@ class ModelSettingsRequest(BaseModel):
     provider: str | None = None
     api_key: str | None = None
     clear_key: bool = False
+
+
+class FollowUpReminderRequest(BaseModel):
+    title: str
+    message: str
+    due_at: datetime
+    source: dict | None = None
 
 
 class RunManager:
@@ -320,9 +331,7 @@ class RunManager:
             preflight_failures=[],
             timing_spans=list(self.timing_spans),
         )
-        self.agent_task = asyncio.create_task(
-            self._run_agent(**run_plan.execute_kwargs())
-        )
+        self.agent_task = asyncio.create_task(self._run_agent(**run_plan.execute_kwargs()))
         self.questions_task = asyncio.create_task(self._poll_questions())
         self.progress_task = asyncio.create_task(self._poll_progress())
 
@@ -669,8 +678,7 @@ def browser_mcp_select_payload(request: BrowserMcpSelectRequest) -> dict:
                 "ok": False,
                 "connected": True,
                 "message": (
-                    "Selected Chrome tab was not found. Refresh the tab list "
-                    "and try again."
+                    "Selected Chrome tab was not found. Refresh the tab list and try again."
                 ),
                 "pages": pages,
             }
@@ -757,8 +765,30 @@ class Session:
                 await self.send(type="error", text=f"unknown message type: {mtype}")
 
 
-def create_app() -> FastAPI:
-    app = FastAPI()
+def create_app(reminder_store: FollowUpReminderStore | None = None) -> FastAPI:
+    store = reminder_store or FollowUpReminderStore()
+
+    async def reminder_loop() -> None:
+        while True:
+            if run_manager.sessions:
+                for reminder in store.claim_due():
+                    await run_manager.broadcast(
+                        type="follow_up_reminder_due",
+                        reminder=reminder.model_dump(mode="json"),
+                    )
+            await asyncio.sleep(5)
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        app.state.follow_up_reminder_store = store
+        task = asyncio.create_task(reminder_loop())
+        try:
+            yield
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    app = FastAPI(lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origin_regex=(
@@ -817,6 +847,25 @@ def create_app() -> FastAPI:
     @app.post("/run/outcome")
     async def run_outcome(request: RunOutcomeRequest):
         return await run_manager.mark_outcome(request.outcome)
+
+    @app.get("/follow-up-reminders")
+    async def follow_up_reminders():
+        return {
+            "items": [item.model_dump(mode="json") for item in store.list()],
+        }
+
+    @app.post("/follow-up-reminders")
+    async def follow_up_reminder_create(request: FollowUpReminderRequest):
+        reminder = store.create(**request.model_dump())
+        return {"ok": True, "reminder": reminder.model_dump(mode="json")}
+
+    @app.delete("/follow-up-reminders/{reminder_id}")
+    async def follow_up_reminder_cancel(reminder_id: str):
+        reminder = store.cancel(reminder_id)
+        return {
+            "ok": reminder is not None,
+            "reminder": reminder.model_dump(mode="json") if reminder else None,
+        }
 
     @app.post("/run/cancel")
     async def run_cancel():

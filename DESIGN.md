@@ -242,6 +242,7 @@ Flying Pig uses a hybrid of tonal layering, borders, and two soft shadows. Depth
 
 ### Navigation
 - **Topbar:** Brand lockup on the left, status pills on the right, single bottom border, no sidebar.
+- **Settings Access:** A compact Settings button reopens model configuration. Model setup collapses automatically after a valid provider is configured.
 - **Advanced Controls:** Use native details/summary. Advanced settings stay inline and progressive, not modal.
 - **Mobile Treatment:** At 920px the topbar and hero stack. At 620px readiness, metrics, and action groups collapse to one column.
 
@@ -262,6 +263,7 @@ The trust boundary is an inline permission summary inside the task panel. It use
 - **Do** use Action Green only for primary actions, ready states, selection, and focus.
 - **Do** preserve explicit disabled, hover, focus, active, danger, warning, and loading states on every interactive control.
 - **Do** use inline progressive disclosure for Advanced settings and model keys.
+- **Do** make repeat use task-first: starter, editable problem brief, current status, and one primary Start action. Keep success criteria, authorization, browser selection, and diagnostics under Run options.
 - **Do** keep user-attention moments, Decision Checkpoints, and irreversible actions visually distinct with amber or blue state treatment.
 - **Do** verify mobile breakpoints for no horizontal overflow at 390px wide.
 

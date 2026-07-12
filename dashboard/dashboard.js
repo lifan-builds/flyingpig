@@ -43,6 +43,7 @@ const state = {
   mcpPages: [],
   selectedMcpPage: null,
   mcpReady: false,
+  settingsOpen: false,
 };
 
 const betaScorecardsKey = "betaScorecards";
@@ -204,6 +205,7 @@ function setConnection(connected) {
   updateReadiness();
   updateButtons();
   updateModelSettingsView();
+  updateExperienceMode();
 }
 
 function setBrowserConnection(connected, label) {
@@ -268,6 +270,8 @@ function updateButtons() {
   $("startTask").disabled = Boolean(startReason);
   $("hucaTask").disabled = !state.connected || !state.browserConnected || !hasTask;
   $("cancelTask").disabled = !state.connected || !state.running;
+  $("hucaTask").classList.toggle("hidden", !state.running && !state.lastResult);
+  $("cancelTask").classList.toggle("hidden", !state.running);
   $("launchChrome").disabled = !canLaunchBrowser;
   $("attachChrome").disabled = !canLaunchBrowser;
   $("autoConnectChrome").disabled = !canLaunchBrowser;
@@ -277,6 +281,16 @@ function updateButtons() {
   $("startDisabledReason").textContent = startReason || "Ready to start when the chat surface is prepared.";
   $("startDisabledReason").classList.toggle("ready", !startReason);
   updateReadiness();
+}
+
+function updateExperienceMode() {
+  const configured = modelReady();
+  const showSetup = !configured || state.settingsOpen;
+  $("firstRunPanel").classList.toggle("hidden", !showSetup);
+  $("readinessStrip").classList.toggle("compact", configured);
+  $("modelSettingsToggle").setAttribute("aria-expanded", String(state.settingsOpen));
+  $("modelSettingsToggle").textContent = state.settingsOpen ? "Done" : "Settings";
+  document.body.classList.toggle("configured", configured);
 }
 
 function startDisabledReason({ hasTask } = { hasTask: Boolean($("taskText").value.trim()) }) {
@@ -381,6 +395,7 @@ function updateModelSettingsView() {
     recordActivationSignal("model_configured");
   }
   updateReadiness();
+  updateExperienceMode();
 }
 
 async function loadModelSettings() {
@@ -433,7 +448,9 @@ async function saveModelSettings({ clearKey = false } = {}) {
     updateModelSettingsView();
     if (!clearKey && selectedProviderSettings().configured) {
       recordActivationSignal("model_configured");
+      state.settingsOpen = false;
     }
+    updateExperienceMode();
     log("settings", clearKey ? "Cleared saved model key." : "Saved model settings.");
   } catch (error) {
     $("modelKeyStatus").textContent = error.message || "Could not save model settings.";
@@ -905,6 +922,13 @@ async function loadSettings() {
     "notifySound",
     "notifyOs",
     "selectedSite",
+    "authorizationTarget",
+    "authorizeClosure",
+    "authorizeRefund",
+    "refundChecking",
+    "refundCheck",
+    "authorizeHuca",
+    "declinedAlternatives",
   ]);
   $("cdpUrl").value = saved.cdpUrl || "http://127.0.0.1:9222";
   state.helperUrl = new URLSearchParams(window.location.search).get("helperUrl")
@@ -935,6 +959,46 @@ async function loadSettings() {
   state.notifyOs = saved.notifyOs ?? true;
   $("notifySound").checked = state.notifySound;
   $("notifyOs").checked = state.notifyOs;
+  $("authorizationTarget").value = saved.authorizationTarget || "";
+  $("authorizeClosure").checked = Boolean(saved.authorizeClosure);
+  $("authorizeRefund").checked = Boolean(saved.authorizeRefund);
+  $("refundChecking").checked = Boolean(saved.refundChecking);
+  $("refundCheck").checked = Boolean(saved.refundCheck);
+  $("authorizeHuca").checked = Boolean(saved.authorizeHuca);
+  $("declinedAlternatives").value = saved.declinedAlternatives || "";
+}
+
+function saveRunAuthorization() {
+  storageSet({
+    authorizationTarget: $("authorizationTarget").value.trim(),
+    authorizeClosure: $("authorizeClosure").checked,
+    authorizeRefund: $("authorizeRefund").checked,
+    refundChecking: $("refundChecking").checked,
+    refundCheck: $("refundCheck").checked,
+    authorizeHuca: $("authorizeHuca").checked,
+    declinedAlternatives: $("declinedAlternatives").value.trim(),
+  });
+}
+
+function runAuthorizationPayload() {
+  const authorizedActions = [];
+  if ($("authorizeClosure").checked) authorizedActions.push("close_card");
+  if ($("authorizeRefund").checked) authorizedActions.push("request_credit_refund");
+  const refundMethods = [];
+  if ($("refundChecking").checked) refundMethods.push("existing_checking");
+  if ($("refundCheck").checked) refundMethods.push("check");
+  const declinedAlternatives = $("declinedAlternatives").value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return {
+    target_account: $("authorizationTarget").value.trim() || null,
+    authorized_actions: authorizedActions,
+    refund_methods: refundMethods,
+    declined_alternatives: declinedAlternatives,
+    huca_authorized: $("authorizeHuca").checked,
+    user_authorized: true,
+  };
 }
 
 function applyBriefStarter() {
@@ -1053,6 +1117,12 @@ function handleHelperMessage(message) {
     log(`step ${event.step || ""}`, text);
   } else if (message.type === "timing_span") {
     addTimingSpan(message);
+  } else if (message.type === "follow_up_reminder_due") {
+    const reminder = message.reminder || {};
+    const title = reminder.title || "Customer-service follow-up";
+    const body = reminder.message || "A scheduled follow-up is due.";
+    notifyAttention(title, body);
+    log("follow up", body);
   } else if (isUserAttentionRequest(message)) {
     const request = message.original_type === "decision_checkpoint" || message.type === "decision_checkpoint"
       ? {
@@ -1152,6 +1222,7 @@ function renderResult(result) {
     ["Timing", result.timing_summary ? `${formatDuration(result.timing_summary.total_ms)} across ${result.timing_summary.span_count} spans` : "Not captured"],
     ["Approvals", String(result.checkpoint_decisions?.length ?? result.checkpoint_events_count ?? 0)],
     ["Unresolved", Array.isArray(result.unresolved_items) && result.unresolved_items.length ? result.unresolved_items.join("; ") : "None captured"],
+    ["Confirmation expected", result.confirmation_expected === true ? "Yes" : (result.confirmation_expected === false ? "No" : "Not captured")],
   ];
   for (const [label, value] of rows) {
     const dt = document.createElement("dt");
@@ -1160,8 +1231,97 @@ function renderResult(result) {
     dd.textContent = value;
     details.append(dt, dd);
   }
+  renderResultEvidence(result);
   renderOutcomeSelection(scorecard.user_confirmed_outcome || null);
   renderBetaStats();
+}
+
+function renderResultEvidence(result) {
+  const checklist = Array.isArray(result.completion_checklist) ? result.completion_checklist : [];
+  const completionPanel = $("completionPanel");
+  const completionList = $("completionChecklist");
+  completionList.replaceChildren();
+  completionPanel.classList.toggle("hidden", checklist.length === 0);
+  for (const item of checklist) {
+    const li = document.createElement("li");
+    const status = item.complete ? "Complete" : "Incomplete";
+    const deferred = item.deferred ? " (deferred)" : "";
+    li.textContent = `${status}${deferred}: ${String(item.id || "goal").replaceAll("_", " ")}${item.evidence ? ` - ${item.evidence}` : ""}`;
+    completionList.append(li);
+  }
+
+  const followUps = Array.isArray(result.follow_up_actions) ? result.follow_up_actions : [];
+  const followUpPanel = $("followUpPanel");
+  const followUpList = $("followUpActions");
+  followUpList.replaceChildren();
+  followUpPanel.classList.toggle("hidden", followUps.length === 0);
+  for (const action of followUps) {
+    const li = document.createElement("li");
+    const summary = document.createElement("div");
+    const methods = Array.isArray(action.methods) && action.methods.length
+      ? ` via ${action.methods.map((method) => method.replaceAll("_", " ")).join(" or ")}`
+      : "";
+    summary.textContent = `${String(action.status || "pending")}: ${String(action.type || "follow up").replaceAll("_", " ")}${methods}`;
+    const controls = document.createElement("div");
+    controls.className = "follow-up-controls";
+    const dueAt = document.createElement("input");
+    dueAt.type = "datetime-local";
+    dueAt.value = defaultReminderDateTime();
+    dueAt.setAttribute("aria-label", "Reminder date and time");
+    const schedule = document.createElement("button");
+    schedule.type = "button";
+    schedule.className = "secondary";
+    schedule.textContent = "Schedule reminder";
+    const status = document.createElement("span");
+    status.className = "field-note";
+    schedule.addEventListener("click", async () => {
+      schedule.disabled = true;
+      status.textContent = "Scheduling...";
+      try {
+        const reminder = await scheduleFollowUpReminder(action, dueAt.value);
+        status.textContent = `Scheduled for ${new Date(reminder.due_at).toLocaleString()}.`;
+      } catch (error) {
+        status.textContent = error.message || "Could not schedule reminder.";
+        schedule.disabled = false;
+      }
+    });
+    controls.append(dueAt, schedule, status);
+    li.append(summary, controls);
+    followUpList.append(li);
+  }
+}
+
+function defaultReminderDateTime() {
+  const date = new Date();
+  date.setDate(date.getDate() + 1);
+  date.setHours(9, 0, 0, 0);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 16);
+}
+
+async function scheduleFollowUpReminder(action, localDueAt) {
+  const dueAt = new Date(localDueAt);
+  if (!localDueAt || Number.isNaN(dueAt.getTime())) {
+    throw new Error("Choose a valid reminder date and time.");
+  }
+  const methods = Array.isArray(action.methods) && action.methods.length
+    ? action.methods.map((method) => method.replaceAll("_", " ")).join(" or ")
+    : "the available method";
+  const response = await fetch(`${state.helperUrl}/follow-up-reminders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      title: "Flying Pig follow-up",
+      message: `Contact customer service and request the deferred resolution via ${methods}.`,
+      due_at: dueAt.toISOString(),
+      source: action,
+    }),
+  });
+  const payload = await response.json();
+  if (!response.ok || !payload.ok) {
+    throw new Error(payload.error || "Could not schedule reminder.");
+  }
+  return payload.reminder;
 }
 
 function scorecardFromResult(result) {
@@ -1380,6 +1540,7 @@ function buildRunPayload(task) {
     evidence_capture: true,
     login_expectation: "manual_visible_browser",
     irreversible_actions_require_checkpoint: true,
+    authorization: runAuthorizationPayload(),
   };
 }
 
@@ -1440,6 +1601,11 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("attachChrome").addEventListener("click", attachChrome);
   $("launchChrome").addEventListener("click", launchChrome);
   $("statusLaunchChrome").addEventListener("click", launchChrome);
+  $("modelSettingsToggle").addEventListener("click", () => {
+    state.settingsOpen = !state.settingsOpen;
+    updateExperienceMode();
+    if (state.settingsOpen) $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
   $("setupHelper").addEventListener("click", openSetup);
   $("reconnectHelper").addEventListener("click", () => {
     state.socket?.close();
@@ -1474,6 +1640,17 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("successCriteria").addEventListener("input", () => {
     storageSet({ successCriteria: $("successCriteria").value.trim() });
   });
+  for (const id of [
+    "authorizationTarget",
+    "authorizeClosure",
+    "authorizeRefund",
+    "refundChecking",
+    "refundCheck",
+    "authorizeHuca",
+    "declinedAlternatives",
+  ]) {
+    $(id).addEventListener("change", saveRunAuthorization);
+  }
   $("notifySound").addEventListener("change", saveNotificationSettings);
   $("notifyOs").addEventListener("change", saveNotificationSettings);
   $("helperUrl").addEventListener("change", () => {

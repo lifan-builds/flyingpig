@@ -15,14 +15,14 @@ tags: [context, workflow, verification]
 Setup: pip install -e ".[dev]"
 
 ## Use when
-- running, testing, linting, deploying, deployment, or verifying changes
+- running, testing, linting, deploying, or verifying changes
 
 ## Key facts
-- Setup: pip install -e ".[dev]"
 - Run product app: npm run desktop:dev
 - Build helper sidecar: npm run build:helper
 - Package desktop app: npm run desktop:package
 - Publish desktop update artifacts: npm run desktop:publish
+- Debug helper only: flyingpig-helper
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

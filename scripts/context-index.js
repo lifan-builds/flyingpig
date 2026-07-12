@@ -25,7 +25,7 @@ const {
 
 const START = "<!-- context-harness:index:start -->";
 const END = "<!-- context-harness:index:end -->";
-const LIBRARY_SCHEMA = 1;
+const LIBRARY_SCHEMA = 2;
 const LARGE_SECTION_LINES = 80;
 const LARGE_SECTION_CHARS = 3000;
 const ALWAYS_READ_CONTEXT_LINES = 120;
@@ -60,6 +60,7 @@ const STOP_WORDS = new Set([
   "task",
   "this",
   "to",
+  "up",
   "work",
   "working",
   "with",
@@ -77,7 +78,8 @@ const PURPOSES = {
 };
 
 const command = process.argv[2] || "update";
-const arg = process.argv.slice(3).join(" ").trim();
+const jsonOutput = process.argv.slice(3).includes("--json");
+const arg = process.argv.slice(3).filter((value) => value !== "--json").join(" ").trim();
 const root = findProjectRoot(process.cwd());
 const contextFile = path.join(root, "CONTEXT.md");
 const agentsFile = path.join(root, "AGENTS.md");
@@ -188,18 +190,16 @@ function defaultAgents() {
 <!-- context-harness:schema v3 -->
 
 ## Context Contract
-- At session start/resume, read \`NOW.md\` first and read concise \`CONTEXT.md\` as the always-read project layer.
+- At a fresh session or true resume, read the small \`NOW.md\` packet first.
+- If the user supplied an objective, question, or context, hydrate with that objective and read only the durable sections/cards it selects. Otherwise hydrate from \`NOW.md\` focus and next step.
+- Reconcile user context with repository state, prefer the user's current objective when scope changed, and surface material conflicts.
+- Reuse loaded context on ordinary follow-ups; catch up again only after a real context boundary, materially different objective, or external context change.
 - Use \`node scripts/context-index.js hydrate "<task>"\` before opening \`PLAN.md\`, chunks, or bulky/task-specific context.
-- Keep \`CONTEXT.md\` small; if it no longer fits the always-read layer, use hydrate-selected cards/sections and compact it.
-- Before planning or editing, respect \`CONTEXT.md\` \`## Operating Constraints\`.
-- If context-harness files or generated indexes look stale, note that as a follow-up unless it blocks the user task; do not let harness maintenance replace the requested work.
-- If the user teaches a durable term, invariant, workflow, constraint, or
-  correction, update \`CONTEXT.md\` before it scrolls away.
-- Route task-local findings and decisions to \`PLAN.md\`; durable lessons to
-  \`CONTEXT.md\`.
-- After updating \`CONTEXT.md\`, \`PLAN.md\`, or \`NOW.md\`, run \`node scripts/context-index.js update\` when the change should affect future retrieval.
-- Before ending, update \`NOW.md\` with current focus, blockers, next step, and
-  touched files.
+- Read concise \`CONTEXT.md\` directly while it fits the always-read budget; otherwise use selected cards/sections. Respect \`## Operating Constraints\` before planning or editing.
+- If generated context is stale, note it as a follow-up unless it blocks correctness; do not let harness maintenance replace the requested work.
+- Route task-local findings and decisions to \`PLAN.md\`; durable terms, invariants, workflows, constraints, corrections, and lessons to \`CONTEXT.md\`.
+- After any update to \`CONTEXT.md\`, \`PLAN.md\`, or \`NOW.md\`, run \`node scripts/context-index.js update\`.
+- Before ending, rewrite \`NOW.md\` from the observed final state after the last state-changing action, with focus, blockers, next step, and touched files.
 `;
 }
 
@@ -253,9 +253,20 @@ function checkHarness(context) {
 
   checkLibraryFresh(context, failures, warnings);
 
-  if (now.trim()) {
+  if (!now.trim()) {
+    failures.push("NOW.md is missing or empty.");
+  } else {
     const nowLines = now.trimEnd().split("\n").length;
     if (nowLines > 20) warnings.push(`NOW.md has ${nowLines} lines; consider a Dream/Compact pass.`);
+    for (const heading of ["Current Focus", "Active Blockers", "Immediate Next Step", "Session State"]) {
+      if (!hasHeading(now, 2, heading)) failures.push(`NOW.md is missing ## ${heading}.`);
+    }
+    for (const heading of ["Current Focus", "Active Blockers", "Immediate Next Step", "Session State"]) {
+      const value = readSection(now, heading).trim();
+      if (!value || /^[-*]?\s*(todo|tbd|unknown|placeholder)\.?$/i.test(value)) {
+        failures.push(`NOW.md ## ${heading} is empty or a placeholder.`);
+      }
+    }
   }
 
   if (plan.trim()) {
@@ -508,31 +519,53 @@ function hydrateContext(context, query) {
     .map((card) => ({ card, ...scoreCard(card, terms) }))
     .filter((entry) => entry.matched)
     .sort((a, b) => b.score - a.score || b.card.importance - a.card.importance || a.card.id.localeCompare(b.card.id));
-
   const selected = (scored.length ? scored : library.cards.map((card) => ({ card, score: card.importance, matched: false })))
-    .slice(0, HYDRATE_LIMIT);
+    .slice(0, HYDRATE_LIMIT)
+    .map((entry) => ({ ...entry, excerpts: selectExcerpts(entry.card, terms) }));
+  const contextPolicy = contextSizePolicy(context);
+  const deferred = selected.filter((entry) => entry.card.chunk_path || entry.card.source);
+  const payload = {
+    schema: 1,
+    query,
+    stale: library.stale,
+    context_policy: contextPolicy,
+    selected_cards: selected.map(({ card, score, excerpts }) => ({
+      id: card.id,
+      title: card.title,
+      score,
+      source: card.source,
+      card_path: library.stale ? null : card.card_path,
+      chunk_path: card.chunk_path || null,
+      reason: readableMatchReason(card, terms),
+      summary: card.summary,
+      key_facts: (card.key_facts || []).slice(0, 3),
+      excerpts,
+    })),
+    raw_sources_deferred: deferred.length > 0,
+  };
 
+  if (jsonOutput) {
+    process.stdout.write(`${JSON.stringify(payload, null, 2)}\n`);
+    return;
+  }
   if (!selected.length) {
     console.log("No context cards available. Read `NOW.md` and concise `CONTEXT.md`; run `node scripts/context-index.js update` when context sources exist.");
     return;
   }
 
-  const contextPolicy = contextSizePolicy(context);
   const totalTokens = selected.reduce((sum, entry) => sum + (entry.card.tokens_est || 0), 0);
   console.log(`Hydrated context for: ${query}`);
   if (library.stale) console.log("WARN .context-harness/index.json is stale; selected cards are computed from current markdown, but generated card files may be stale. Use the source sections below or run `node scripts/context-index.js update` before opening card files.");
   console.log(`Cards: ${selected.length}; estimated raw tokens if fully opened: ~${totalTokens}`);
   console.log("");
-
   console.log("Always-read layer:");
   console.log("- Read `NOW.md` first.");
   console.log(contextPolicy.alwaysRead
     ? `- Read concise \`CONTEXT.md\` directly (${contextPolicy.lines} lines, ~${contextPolicy.chars} chars).`
-    : `- \`CONTEXT.md\` is beyond the always-read budget (${contextPolicy.lines} lines, ~${contextPolicy.chars} chars); use selected cards/sections before opening it wholesale.`);
+    : `- \`CONTEXT.md\` exceeds the always-read budget (${contextPolicy.lines} lines, ~${contextPolicy.chars} chars); use selected cards/sections first.`);
   console.log("");
-
   console.log("Open first for progressive detail:");
-  selected.forEach(({ card, score }, index) => {
+  selected.forEach(({ card, score, excerpts }, index) => {
     console.log(`${index + 1}. ${card.id} (${card.title})`);
     console.log(`   score: ${score.toFixed(2)}; source: ${card.source}`);
     console.log(`   why: ${readableMatchReason(card, terms)}`);
@@ -541,25 +574,46 @@ function hydrateContext(context, query) {
       console.log("   key facts:");
       for (const fact of card.key_facts.slice(0, 3)) console.log(`   - ${fact}`);
     }
-    if (library.stale) console.log(`   source section: ${card.source}`);
-    else console.log(`   open card: ${card.card_path}`);
+    if (excerpts.length) {
+      console.log("   relevant excerpts:");
+      for (const excerpt of excerpts) console.log(`   - ${excerpt.text} (${excerpt.source}:${excerpt.start_line}-${excerpt.end_line})`);
+    }
+    console.log(library.stale ? `   source section: ${card.source}` : `   open card: ${card.card_path}`);
   });
   console.log("");
-
-  const deferred = selected.filter((entry) => entry.card.chunk_path || entry.card.source);
   console.log("Open next only if needed:");
   for (const { card } of deferred) {
     console.log(`- ${card.source}`);
     if (card.chunk_path) console.log(`  raw detail on demand: ${card.chunk_path}`);
   }
   console.log("");
-
   console.log("Retrieval evidence:");
   console.log(`- hydrate_query: ${query}`);
   console.log(`- always_read_context: ${contextPolicy.alwaysRead ? "CONTEXT.md" : "selected cards before full CONTEXT.md"}`);
   console.log(`- context_size_policy: ${contextPolicy.reason}`);
   console.log(`- selected_cards: ${selected.map((entry) => entry.card.id).join(", ")}`);
   console.log(`- raw_sources_deferred: ${deferred.length ? "true" : "false"}`);
+}
+
+function selectExcerpts(card, terms) {
+  const summary = normalizeFact(card.summary);
+  return (card.logical_blocks || [])
+    .map((block) => {
+      const normalized = normalizeForSearch(block.text);
+      let score = 0;
+      for (const term of terms) if (normalized.includes(term)) score += 2;
+      if (terms.every((term) => normalized.includes(term))) score += 2;
+      return { block, score };
+    })
+    .filter(({ block, score }) => score > 0 && normalizeFact(block.text) !== summary)
+    .sort((a, b) => b.score - a.score || a.block.start_line - b.block.start_line)
+    .slice(0, 2)
+    .map(({ block }) => ({
+      text: truncate(cleanMarkdown(block.text), 240),
+      source: card.source_path,
+      start_line: block.start_line,
+      end_line: block.end_line,
+    }));
 }
 
 function contextSizePolicy(context) {
@@ -609,17 +663,17 @@ function writeContextLibrary(context) {
 
   pruneGeneratedMarkdown(cardsDir, expectedCards);
   pruneGeneratedMarkdown(chunksDir, expectedChunks);
-  writeJson(indexFile, { ...library, cards: library.cards.map(({ raw, ...card }) => card) });
+  writeJson(indexFile, { ...library, cards: library.cards.map(({ raw, logical_blocks, ...card }) => card) });
 }
 
 function readFreshLibrary(context) {
-  const sourceFiles = readSourceFiles(context);
-  const expectedHash = sourceHash(sourceFiles);
+  const built = buildLibrary(context);
   const manifest = readJSONSafe(indexFile);
-  if (manifest && manifest.schema === LIBRARY_SCHEMA && manifest.source_hash === expectedHash && Array.isArray(manifest.cards)) {
-    return { ...manifest, stale: false };
-  }
-  return { ...buildLibrary(context), stale: Boolean(manifest) };
+  const fresh = manifest
+    && manifest.schema === LIBRARY_SCHEMA
+    && manifest.source_hash === built.source_hash
+    && Array.isArray(manifest.cards);
+  return { ...built, stale: !fresh && Boolean(manifest) };
 }
 
 function buildLibrary(context) {
@@ -647,8 +701,9 @@ function buildCard(section) {
   const sourceStem = slug(path.basename(section.file, ".md"));
   const id = `ctx-${sourceStem}-${slug(section.anchor || section.title)}`;
   const source = `${section.file}${section.anchor ? `#${section.anchor}` : ""}`;
-  const summary = summarize(section.title, section.body);
-  const keyFacts = extractKeyFacts(section.body);
+  const logical_blocks = logicalMarkdownBlocks(section.body, section.startLine || 1);
+  const summary = summarize(section.title, logical_blocks);
+  const keyFacts = extractKeyFacts(logical_blocks, summary);
   const needsChunk = section.lineCount > LARGE_SECTION_LINES || section.charCount > LARGE_SECTION_CHARS;
   const chunkPath = needsChunk ? `.context-harness/chunks/${id}.md` : "";
 
@@ -670,6 +725,7 @@ function buildCard(section) {
     chunk_path: chunkPath,
     content_sha256: sha256(section.body),
     key_facts: keyFacts,
+    logical_blocks,
     raw: `# ${section.title}\n\n${section.body.trimEnd()}`,
   };
 }
@@ -720,7 +776,7 @@ function readSourceFiles(context) {
 
 function contextUnits(source) {
   if (source.path === "NOW.md") {
-    return [{ file: source.path, title: "Now", anchor: "now", body: source.text, lineCount: countLines(source.text), charCount: source.text.length }];
+    return [{ file: source.path, title: "Now", anchor: "now", body: source.text, startLine: 1, lineCount: countLines(source.text), charCount: source.text.length }];
   }
 
   const sections = parseTopSections(source.text, source.path);
@@ -787,26 +843,75 @@ function scoreCard(card, terms) {
   };
 }
 
-function summarize(title, body) {
-  const explicit = cleanLines(body).find((line) => !/^#+\s/u.test(line));
-  if (explicit) return truncate(cleanMarkdown(explicit), 220);
+function summarize(title, blocks) {
+  const explicit = blocks.find((block) => block.text);
+  if (explicit) return truncate(cleanMarkdown(explicit.text), 220);
   if (PURPOSES[title]) return PURPOSES[title];
   return `Context for ${title}.`;
 }
 
-function extractKeyFacts(body) {
-  return cleanLines(body)
-    .map(cleanMarkdown)
-    .filter((line) => line && !line.startsWith("#"))
-    .slice(0, 5)
-    .map((line) => truncate(line, 160));
+function extractKeyFacts(blocks, summary) {
+  const seen = new Set([normalizeFact(summary)]);
+  const facts = [];
+  for (const block of blocks) {
+    const fact = truncate(cleanMarkdown(block.text), 160);
+    const normalized = normalizeFact(fact);
+    const normalizedSummary = normalizeFact(summary);
+    if (!fact || !normalized || seen.has(normalized) || normalized.startsWith(normalizedSummary) || normalizedSummary.startsWith(normalized)) continue;
+    seen.add(normalized);
+    facts.push(fact);
+    if (facts.length === 5) break;
+  }
+  return facts;
 }
 
-function cleanLines(body) {
-  return body
-    .split("\n")
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("<!--") && !line.startsWith("```"));
+function logicalMarkdownBlocks(body, startLine = 1) {
+  const lines = body.split("\n");
+  const blocks = [];
+  let current = null;
+  let inFence = false;
+  const flush = () => {
+    if (!current) return;
+    const text = current.parts.join(" ").replace(/\s+/g, " ").trim();
+    if (text) blocks.push({ text, start_line: current.start, end_line: current.end });
+    current = null;
+  };
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
+    const lineNumber = startLine + index;
+    if (/^\s*```/.test(raw)) {
+      flush();
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence || /^\s*<!--/.test(raw) || /^\s*#{1,6}\s+/.test(raw)) {
+      flush();
+      continue;
+    }
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      flush();
+      continue;
+    }
+    const list = trimmed.match(/^[-*+]\s+(.*)$/) || trimmed.match(/^\d+[.)]\s+(.*)$/);
+    if (list) {
+      flush();
+      current = { parts: [list[1]], start: lineNumber, end: lineNumber, list: true };
+      continue;
+    }
+    if (!current) current = { parts: [trimmed], start: lineNumber, end: lineNumber, list: false };
+    else {
+      current.parts.push(trimmed);
+      current.end = lineNumber;
+    }
+  }
+  flush();
+  return blocks;
+}
+
+function normalizeFact(value) {
+  return normalizeForSearch(value).replace(/\s+/g, " ").trim();
 }
 
 function classifyKind(file, title) {
@@ -840,14 +945,15 @@ function tagsFor(section) {
 }
 
 function readWhenFor(section) {
-  if (section.file === "NOW.md") return ["resuming the current session", "choosing the immediate next step", "update context after current work"];
-  if (section.file === "PLAN.md") return ["continuing the active task", "checking done criteria or decisions", "update context with task-local progress"];
-  if (section.title === "Operating Constraints") return ["before planning or editing", "checking project constraints", "update context safely"];
-  if (section.title === "Workflow") return ["running, testing, linting, deploying, deployment, or verifying changes"];
-  if (section.title === "Language") return ["using project terms or resolving naming ambiguity", "update context terminology"];
-  if (section.title === "Relationships") return ["changing architecture or domain relationships", "update context invariants"];
-  if (section.title === "Learned Patterns") return ["avoiding repeated mistakes or applying prior corrections", "update context with durable lessons"];
-  return [`working on ${section.title.toLowerCase()}`];
+  if (section.file === "NOW.md") return ["recovering current focus, blockers, or the immediate next step"];
+  if (section.file === "PLAN.md") return [`continuing task-local ${section.title.toLowerCase()}`];
+  if (section.title === "Operating Constraints") return ["before choosing an implementation or changing project behavior"];
+  if (section.title === "Workflow") return ["running, testing, linting, deploying, or verifying changes"];
+  if (section.title === "Language") return ["using canonical project terms or resolving naming ambiguity"];
+  if (section.title === "Relationships") return ["changing architecture or domain relationships"];
+  if (section.title === "Learned Patterns") return ["avoiding a repeated failure or applying a durable correction"];
+  const cues = [section.title, ...(section.children || [])].map((value) => value.toLowerCase()).filter(Boolean);
+  return cues.length ? [`working on ${cues.slice(0, 3).join(", ")}`] : [];
 }
 
 function sourceHash(sourceFiles) {
@@ -946,7 +1052,14 @@ function cleanMarkdown(line) {
 
 function truncate(text, max) {
   if (text.length <= max) return text;
-  return `${text.slice(0, max - 3).trimEnd()}...`;
+  const available = text.slice(0, max - 3).trimEnd();
+  const sentence = available.match(/^(.+[.!?])(?:\s|$)/u);
+  if (sentence && sentence[1].length >= Math.floor(max * 0.45)) return sentence[1];
+  const clauseAt = Math.max(available.lastIndexOf("; "), available.lastIndexOf(": "), available.lastIndexOf(", "));
+  if (clauseAt >= Math.floor(max * 0.6)) return `${available.slice(0, clauseAt + 1).trimEnd()}...`;
+  const wordAt = available.lastIndexOf(" ");
+  const bounded = wordAt > 0 ? available.slice(0, wordAt) : available;
+  return `${bounded.replace(/[\s,;:()[\]{}*_`-]+$/u, "")}...`;
 }
 
 function sha256(text) {

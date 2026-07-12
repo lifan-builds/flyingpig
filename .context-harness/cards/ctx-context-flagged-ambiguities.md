@@ -18,7 +18,7 @@ None currently flagged.
 - working on flagged ambiguities
 
 ## Key facts
-- None currently flagged.
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

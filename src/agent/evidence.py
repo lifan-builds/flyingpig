@@ -251,6 +251,9 @@ def result_ready_payload(result: TaskResult) -> dict:
         or details.get("result")
         or details.get("confirmation_number"),
         "unresolved_items": unresolved_items,
+        "completion_checklist": details.get("completion_checklist") or [],
+        "follow_up_actions": details.get("follow_up_actions") or [],
+        "confirmation_expected": details.get("confirmation_expected"),
         "time_saved": details.get("time_saved"),
         "checkpoint_decisions": checkpoint_decisions,
         "checkpoint_events_count": len(result.checkpoint_events),
@@ -294,9 +297,7 @@ def run_scorecard_payload(
         )
     )
     question_count = sum(
-        1
-        for event in result.checkpoint_events
-        if event.get("event_type") == "question_answered"
+        1 for event in result.checkpoint_events if event.get("event_type") == "question_answered"
     )
     unresolved = unresolved_items if unresolved_items is not None else []
     blocked_reason = (

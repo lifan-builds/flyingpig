@@ -5,26 +5,24 @@ importance: 0.95
 confidence: confirmed
 source: NOW.md#now
 chunk: .context-harness/chunks/ctx-now-now.md
-tokens_est: 765
+tokens_est: 847
 tags: [now, resume]
 ---
 
 # NOW.md: Now
 
 ## Summary
-Implemented and verified a minimal MCP-native existing-Chrome backend. Flying Pig can now Auto-Connect to an existing Chrome tab through Chrome DevTools MCP and run a minimal supervised backend without a browser-use/C...
+Simplified the desktop dashboard into a configure-once, task-first experience while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.
 
 ## Use when
-- resuming the current session
-- choosing the immediate next step
-- update context after current work
+- recovering current focus, blockers, or the immediate next step
 
 ## Key facts
-- Implemented and verified a minimal MCP-native existing-Chrome backend. Flying Pig can now Auto-Connect to an existing Chrome tab through Chrome DevTools MCP...
 - Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
 - Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.
-- Desktop beta update checking and release verification are present; GitHub repo visibility is public. The app must describe updates as manual GitHub release d...
+- Desktop beta update checking and release verification are present; GitHub repo visibility is public.
 - Published v1.0.1 is not update-checking capable because that release predates updater code/assets. v1.0.2 is the first unsigned beta update-checking baseline.
+- The currently running packaged app will not include the new Connect Existing Chrome, Auto-Connect Existing Chrome,...
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

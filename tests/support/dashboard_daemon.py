@@ -29,6 +29,7 @@ async def dashboard_root():
     return RedirectResponse(url="/dashboard/")
 
 mock_browser_connected = False
+mock_reminders = []
 mock_work_window_url = "https://support.ouraring.com/hc/en-us/articles/360047222554-Contact-Us"
 mock_state = {
     "type": "state",
@@ -107,6 +108,19 @@ def checkpoint_request() -> dict:
 @app.get("/health")
 async def health():
     return {"ok": True}
+
+
+@app.post("/follow-up-reminders")
+async def create_follow_up_reminder(request: Request):
+    payload = await request.json()
+    reminder = {
+        "id": f"mock-reminder-{len(mock_reminders) + 1}",
+        "status": "pending",
+        "created_at": now(),
+        **payload,
+    }
+    mock_reminders.append(reminder)
+    return {"ok": True, "reminder": reminder}
 
 
 @app.get("/model/settings")
@@ -345,6 +359,19 @@ async def ws_endpoint(ws: WebSocket):
                     )
                 )
             elif mtype == "start":
+                if "dashboard smoke test" in (msg.get("task") or "").lower():
+                    authorization = msg.get("authorization") or {}
+                    if authorization.get("target_account") != "12345":
+                        raise RuntimeError(
+                            "Mock run did not receive the target account authorization"
+                        )
+                    if authorization.get("authorized_actions") != [
+                        "close_card",
+                        "request_credit_refund",
+                    ]:
+                        raise RuntimeError("Mock run did not receive explicit authorized actions")
+                    if authorization.get("refund_methods") != ["existing_checking", "check"]:
+                        raise RuntimeError("Mock run did not receive allowed refund methods")
                 preflight_span = add_timing_span(
                     timing_span("preflight", "Pre-flight safety gate", 7.0)
                 )
@@ -440,6 +467,21 @@ async def ws_endpoint(ws: WebSocket):
                             "duration": 0.1,
                             "timing_spans": result_timing,
                             "timing_summary": timing_summary,
+                            "completion_checklist": [
+                                {
+                                    "id": "close_card",
+                                    "complete": True,
+                                    "evidence": "Mock cancellation confirmed.",
+                                }
+                            ],
+                            "follow_up_actions": [
+                                {
+                                    "type": "contact_support_after_credit_posts",
+                                    "status": "pending",
+                                    "methods": ["existing_checking", "check"],
+                                }
+                            ],
+                            "confirmation_expected": True,
                         }
                     )
                 )
@@ -464,6 +506,21 @@ async def ws_endpoint(ws: WebSocket):
                                 "transcript": "recordings/mock.json",
                                 "timing_spans": result_timing,
                                 "timing_summary": timing_summary,
+                                "completion_checklist": [
+                                    {
+                                        "id": "close_card",
+                                        "complete": True,
+                                        "evidence": "Mock cancellation confirmed.",
+                                    }
+                                ],
+                                "follow_up_actions": [
+                                    {
+                                        "type": "contact_support_after_credit_posts",
+                                        "status": "pending",
+                                        "methods": ["existing_checking", "check"],
+                                    }
+                                ],
+                                "confirmation_expected": True,
                             },
                             pending_request=None,
                             timing_spans=result_timing,

@@ -18,6 +18,7 @@
           </div>
         </div>
         <div class="status-pills">
+          <button id="modelSettingsToggle" class="settings-action secondary" type="button" aria-expanded="false" aria-controls="firstRunPanel">Settings</button>
           <div class="status-row">
             <span id="runtimeStatus" class="pill disconnected">Helper Offline</span>
           </div>
@@ -36,7 +37,7 @@
         <p id="runMessage">Tell Flying Pig the customer-service problem, then supervise it in the visible work window.</p>
       </section>
 
-      <section class="readiness-strip" aria-label="Run readiness">
+      <section id="readinessStrip" class="readiness-strip" aria-label="Run readiness">
         <div class="readiness-item" data-ready="false">
           <span>Helper</span>
           <strong id="readyHelper">Offline</strong>
@@ -80,11 +81,11 @@
         <code id="setupDiagnostic">localhost:8765 unavailable</code>
       </section>
 
-      <section class="first-run-panel" aria-label="First run setup">
+      <section id="firstRunPanel" class="first-run-panel" aria-label="First run setup">
         <section class="panel model-setup">
           <div class="section-heading">
-            <p class="eyebrow">First run</p>
-            <h2>Model setup</h2>
+            <p class="eyebrow">Setup</p>
+            <h2>Choose the model Flying Pig will use</h2>
           </div>
           <div class="model-grid">
             <div>
@@ -105,34 +106,33 @@
           <input id="modelApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="Leave blank to keep the saved key">
           <p id="modelKeyHelp" class="field-note">Keys are stored only in your local Flying Pig env file.</p>
           <div class="row model-key-actions">
-            <button id="saveModelSettings" class="secondary" type="button">Save Model Settings</button>
+            <button id="saveModelSettings" type="button">Save and continue</button>
             <button id="clearModelKey" class="danger" type="button">Clear Saved Key</button>
           </div>
         </section>
 
         <section class="panel quickstart-panel">
           <div class="section-heading">
-            <p class="eyebrow">First task</p>
-            <h2>Path to a supervised run</h2>
+            <p class="eyebrow">Getting ready</p>
+            <h2>Three things before the first run</h2>
           </div>
           <ol class="quickstart-list" id="quickstartList">
-            <li data-step="model"><strong>Configure model</strong><span>Save a provider key or use local CLIProxyAPI.</span></li>
-            <li data-step="work_window"><strong>Open work window</strong><span>Use the separate browser window for login and support chat.</span></li>
-            <li data-step="chat_surface"><strong>Prepare chat</strong><span>Navigate to the support page and expose the chat surface.</span></li>
-            <li data-step="task_brief"><strong>Describe the goal</strong><span>Keep the problem brief editable and specific.</span></li>
-            <li data-step="start"><strong>Start supervised run</strong><span>Approve checkpoints from this cockpit when asked.</span></li>
+            <li data-step="model"><strong>Configure the model</strong><span>Use a saved API key or local CLIProxyAPI.</span></li>
+            <li data-step="work_window"><strong>Open the work window</strong><span>Log in and open the support chat there.</span></li>
+            <li data-step="start"><strong>Start the task</strong><span>Flying Pig will ask only when your decision matters.</span></li>
           </ol>
         </section>
       </section>
 
       <section class="dashboard-grid">
         <section class="panel task-panel">
-          <div class="section-heading">
-            <p class="eyebrow">Task brief</p>
-            <h2>What customer-service problem do you want handled?</h2>
+          <div class="section-heading task-heading">
+            <p class="eyebrow">New task</p>
+            <h2>What should Flying Pig handle?</h2>
+            <p>Describe the outcome you want. You can refine the starter text before beginning.</p>
           </div>
 
-          <label for="briefStarter">Brief starter</label>
+          <label for="briefStarter">Start with</label>
           <select id="briefStarter">
             <option value="custom">Custom brief</option>
             <option value="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
@@ -143,9 +143,12 @@
             <option value="continue_chat" data-task="Continue this existing support chat from the visible conversation. Treat prior messages as context and ask me before irreversible actions.">Continue existing chat</option>
           </select>
 
-          <label for="taskText">Problem brief (editable)</label>
+          <label for="taskText">Problem</label>
           <textarea id="taskText" rows="5" placeholder="Example: Ask Amex to review this fee and request a courtesy credit.">Help me with this customer-service chat. Ask for a human representative if the chatbot cannot resolve it.</textarea>
 
+          <details class="run-options">
+            <summary>Run options</summary>
+            <div class="run-options-content">
           <label for="successCriteria">What counts as done?</label>
           <textarea id="successCriteria" rows="3" placeholder="Example: A confirmed refund, credit amount, cancellation confirmation, reference number, or clear unresolved next step."></textarea>
 
@@ -161,6 +164,38 @@
               <li>Saves transcript and evidence references for the final result.</li>
             </ul>
           </section>
+
+          <fieldset class="run-authorization">
+            <legend>Authorized actions for this run</legend>
+            <label for="authorizationTarget">Target account or service</label>
+            <input id="authorizationTarget" placeholder="Example: card ending 12345">
+            <label class="check-row">
+              <input id="authorizeClosure" type="checkbox">
+              Close or cancel the target account/service without asking again
+            </label>
+            <label class="check-row">
+              <input id="authorizeRefund" type="checkbox">
+              Request return of a remaining credit or negative balance
+            </label>
+            <div class="authorization-refund-methods">
+              <span>Allowed refund methods</span>
+              <label class="check-row">
+                <input id="refundChecking" type="checkbox">
+                Existing checking account
+              </label>
+              <label class="check-row">
+                <input id="refundCheck" type="checkbox">
+                Check by mail
+              </label>
+            </div>
+            <label class="check-row">
+              <input id="authorizeHuca" type="checkbox">
+              Allow ending a refused/dead chat and starting a fresh one
+            </label>
+            <label for="declinedAlternatives">Declined alternatives</label>
+            <input id="declinedAlternatives" placeholder="Example: retention offers, product changes">
+            <p class="field-note">Only checked actions are pre-authorized. Other consequential actions still require a checkpoint.</p>
+          </fieldset>
 
           <label for="sitePicker">Website</label>
           <select id="sitePicker">
@@ -222,9 +257,11 @@
               </label>
             </fieldset>
           </details>
+            </div>
+          </details>
 
           <div class="actions">
-            <button id="startTask" type="button">Start</button>
+            <button id="startTask" type="button">Start task</button>
             <button id="hucaTask" class="huca" type="button">HUCA</button>
             <button id="cancelTask" class="danger" type="button">Cancel</button>
           </div>
@@ -281,6 +318,14 @@
             <p class="eyebrow">Result</p>
             <h2 id="resultSummary">Task finished</h2>
             <dl id="resultDetails"></dl>
+            <section id="completionPanel" class="result-evidence hidden" aria-label="Completion checklist">
+              <p class="eyebrow">Completion checklist</p>
+              <ul id="completionChecklist"></ul>
+            </section>
+            <section id="followUpPanel" class="result-evidence hidden" aria-label="Follow-up actions">
+              <p class="eyebrow">Follow-up actions</p>
+              <ul id="followUpActions"></ul>
+            </section>
             <section class="outcome-confirmation" aria-label="Confirm run outcome">
               <div>
                 <strong>Did Flying Pig solve it?</strong>

@@ -94,6 +94,11 @@ def test_result_ready_payload_is_evidence_linked():
                 "human_reached": True,
                 "amount_saved": "$25",
                 "next_steps": "Credit posts in 5 days.",
+                "completion_checklist": [{"id": "close_card", "complete": True}],
+                "follow_up_actions": [
+                    {"type": "contact_support_after_credit_posts", "status": "pending"}
+                ],
+                "confirmation_expected": True,
             },
             checkpoint_events=[
                 {
@@ -124,6 +129,9 @@ def test_result_ready_payload_is_evidence_linked():
     assert payload["human_reached"] is True
     assert payload["offer_result"] == "$25"
     assert payload["unresolved_items"] == ["Credit posts in 5 days."]
+    assert payload["completion_checklist"][0]["complete"] is True
+    assert payload["follow_up_actions"][0]["status"] == "pending"
+    assert payload["confirmation_expected"] is True
     assert payload["checkpoint_decisions"][0]["selected_option_id"] == "accept"
     assert payload["checkpoint_events_count"] == 1
     assert payload["evidence"]["timing_spans_count"] == 1

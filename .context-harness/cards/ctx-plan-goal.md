@@ -15,12 +15,10 @@ tags: [plan, goal]
 Fully automate customer service chat through the user's real Chrome profile with a high rate of successfully reaching and negotiating with a human representative.
 
 ## Use when
-- continuing the active task
-- checking done criteria or decisions
-- update context with task-local progress
+- continuing task-local goal
 
 ## Key facts
-- Fully automate customer service chat through the user's real Chrome profile with a high rate of successfully reaching and negotiating with a human representa...
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

@@ -12,17 +12,13 @@ tags: [context, project-structure, project]
 # CONTEXT.md: Project Structure
 
 ## Summary
-flyingpig/
+Context for Project Structure.
 
 ## Use when
 - working on project structure
 
 ## Key facts
-- flyingpig/
-- ├── AGENTS.md              # This file
-- ├── PLANS.md               # Living execution plan
-- ├── FINDINGS.md            # Research & external content log
-- ├── EVALUATION.md          # Quality contracts
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

@@ -15,12 +15,10 @@ tags: [plan, immediate-next-step]
 Review the first-run readiness diff, then decide whether to cut/publish the next unsigned beta release so public testers get the onboarding improvements.
 
 ## Use when
-- continuing the active task
-- checking done criteria or decisions
-- update context with task-local progress
+- continuing task-local immediate next step
 
 ## Key facts
-- Review the first-run readiness diff, then decide whether to cut/publish the next unsigned beta release so public testers get the onboarding improvements.
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

@@ -11,10 +11,11 @@ from browser_use.agent.views import AgentHistoryList
 from src.agent.detector import ChatbotDetector
 from src.agent.escalator import EscalationManager
 from src.agent.evidence import EvidenceRecorder
-from src.agent.llm_runtime import create_llm
+from src.agent.llm_runtime import create_llm, select_healthy_cliproxy_llm
 from src.agent.mcp_executor import McpBrowserExecutor
 from src.agent.navigator import ChatNavigator
 from src.agent.result import TaskResult, TaskStatus
+from src.agent.run_authorization import RunAuthorization
 from src.agent.user_input import UserInputHandler, build_tools
 from src.config import settings
 from src.sites.registry import get_site_adapter
@@ -43,6 +44,7 @@ class AgentBrain:
         use_vision: bool = True,
         llm_timeout: int = 180,
         fallback_model: str | None = None,
+        authorization: RunAuthorization | None = None,
     ):
         self.site_adapter = get_site_adapter(site)
         self.headless = headless
@@ -55,6 +57,7 @@ class AgentBrain:
         self.use_vision = use_vision
         self.llm_timeout = llm_timeout
         self.fallback_model = fallback_model or settings.default_fallback_llm or None
+        self.authorization = authorization or RunAuthorization()
         self.detector = ChatbotDetector()
         self.escalation = EscalationManager()
         self.input_handler = UserInputHandler(mode=input_mode)
@@ -201,6 +204,12 @@ class AgentBrain:
                 )
 
             if self.browser_backend == "mcp":
+                model_probe: list[dict] = []
+                selected_model = self._model_name or settings.default_llm
+                if selected_model in (None, "cliproxyapi", "cliproxy"):
+                    self.llm, selected_model, model_probe = await select_healthy_cliproxy_llm(
+                        preferred_model=settings.cliproxyapi_model,
+                    )
                 mcp_started_at = perf_counter()
                 executor = McpBrowserExecutor()
                 result = await executor.run(
@@ -210,7 +219,15 @@ class AgentBrain:
                     input_handler=self.input_handler,
                     max_steps=max_steps,
                     save_dir=save_dir,
+                    authorization=self.authorization,
+                    fallback_llm=self.fallback_llm,
+                    llm_timeout_seconds=settings.mcp_llm_timeout_seconds,
                 )
+                result.outcome_details = {
+                    **(result.outcome_details or {}),
+                    "selected_model": selected_model,
+                    "model_probe": model_probe,
+                }
                 self._step_log = list(executor.step_log)
                 self._record_timing_span(
                     "mcp_browser_attach",

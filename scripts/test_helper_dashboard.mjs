@@ -79,6 +79,13 @@ async function setValue(page, selector, value) {
   );
 }
 
+async function clickElement(page, selector) {
+  await page.$eval(selector, (element) => {
+    if (element.disabled) throw new Error(`Element is disabled: ${element.id || element.tagName}`);
+    element.click();
+  });
+}
+
 async function openDashboardPage(browser) {
   const page = await browser.newPage();
   const url = `${dashboardUrl}?targetUrl=${encodeURIComponent(mockUrl)}&helperUrl=${encodeURIComponent(helperUrl)}`;
@@ -180,15 +187,22 @@ async function main() {
       inAdvanced: select.closest("details")?.classList.contains("advanced") || false,
       readyModel: document.getElementById("readyModel")?.textContent || "",
       quickstartText: document.getElementById("quickstartList")?.textContent || "",
+      setupHidden: document.getElementById("firstRunPanel")?.classList.contains("hidden") || false,
     }));
     if (
       modelSetupPlacement.inAdvanced
       || modelSetupPlacement.readyModel !== "Configured"
-      || !modelSetupPlacement.quickstartText.includes("Configure model")
-      || !modelSetupPlacement.quickstartText.includes("Open work window")
+      || !modelSetupPlacement.quickstartText.includes("Configure the model")
+      || !modelSetupPlacement.quickstartText.includes("Open the work window")
+      || !modelSetupPlacement.setupHidden
     ) {
-      throw new Error(`Model setup is not visible in the first-run flow: ${JSON.stringify(modelSetupPlacement)}`);
+      throw new Error(`Configured model setup did not collapse for repeat use: ${JSON.stringify(modelSetupPlacement)}`);
     }
+    await clickElement(dashboardPage, "#modelSettingsToggle");
+    await dashboardPage.waitForFunction(
+      () => !document.getElementById("firstRunPanel")?.classList.contains("hidden"),
+      { timeout: 10000 },
+    );
     const modelKeyField = await dashboardPage.$eval("#modelApiKey", (input) => ({
       type: input.type,
       value: input.value,
@@ -214,13 +228,18 @@ async function main() {
       throw new Error(`Start-disabled reason does not block unconfigured models: ${startReasonWithoutModel}`);
     }
     await setValue(dashboardPage, "#modelApiKey", "sk-ant-test-dashboard");
-    await dashboardPage.click("#saveModelSettings");
+    await clickElement(dashboardPage, "#saveModelSettings");
     await dashboardPage.waitForFunction(
       () => document.getElementById("modelKeyStatus")?.textContent.includes("key is configured")
         && document.getElementById("modelApiKey")?.value === "",
       { timeout: 10000 },
     );
-    await dashboardPage.click("#clearModelKey");
+    await clickElement(dashboardPage, "#modelSettingsToggle");
+    await dashboardPage.waitForFunction(
+      () => !document.getElementById("firstRunPanel")?.classList.contains("hidden"),
+      { timeout: 10000 },
+    );
+    await clickElement(dashboardPage, "#clearModelKey");
     await dashboardPage.waitForFunction(
       () => document.getElementById("modelKeyStatus")?.textContent.includes("not configured"),
       { timeout: 10000 },
@@ -364,7 +383,7 @@ async function main() {
       throw new Error("Dashboard does not expose the user default profile option.");
     }
 
-    await dashboardPage.click("#statusLaunchChrome");
+    await clickElement(dashboardPage, "#statusLaunchChrome");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CHROME-READY"),
       { timeout: 10000 },
@@ -387,7 +406,8 @@ async function main() {
     }
 
     await setValue(dashboardPage, "#cdpUrl", cdpUrlForDashboard);
-    await dashboardPage.click("#attachChrome");
+    await dashboardPage.$eval(".run-options", (details) => { details.open = true; });
+    await clickElement(dashboardPage, "#attachChrome");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-EXISTING-CHROME-READY"),
       { timeout: 10000 },
@@ -397,7 +417,7 @@ async function main() {
       throw new Error(`Existing-Chrome attach did not preserve endpoint: ${attachedEndpoint}`);
     }
 
-    await dashboardPage.click("#autoConnectChrome");
+    await clickElement(dashboardPage, "#autoConnectChrome");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-MCP-CONNECTED"),
       { timeout: 10000 },
@@ -424,7 +444,14 @@ async function main() {
       "#taskText",
       "Mock helper dashboard smoke test: verify the dashboard can start a browser-use helper run.",
     );
-    await dashboardPage.click("#startTask");
+    await setValue(dashboardPage, "#authorizationTarget", "12345");
+    await clickElement(dashboardPage, "#authorizeClosure");
+    await clickElement(dashboardPage, "#authorizeRefund");
+    await clickElement(dashboardPage, "#refundChecking");
+    await clickElement(dashboardPage, "#refundCheck");
+    await clickElement(dashboardPage, "#authorizeHuca");
+    await setValue(dashboardPage, "#declinedAlternatives", "retention offers, product changes");
+    await clickElement(dashboardPage, "#startTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-RUN-OK"),
       { timeout: 10000 },
@@ -447,10 +474,19 @@ async function main() {
     benchmark.mockRunDoneMs = Math.round(performance.now() - startedAt);
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("Model planning step")
-        && document.body.textContent.includes("Timing"),
+        && document.body.textContent.includes("Timing")
+        && document.getElementById("completionChecklist")?.textContent.includes("Complete: close card")
+        && document.getElementById("followUpActions")?.textContent.includes("contact support after credit posts")
+        && document.getElementById("resultDetails")?.textContent.includes("Confirmation expected")
+        && document.getElementById("resultDetails")?.textContent.includes("Yes"),
       { timeout: 10000 },
     );
-    await dashboardPage.click("#markSolved");
+    await clickElement(dashboardPage, "#followUpActions .follow-up-controls button");
+    await dashboardPage.waitForFunction(
+      () => document.getElementById("followUpActions")?.textContent.includes("Scheduled for"),
+      { timeout: 10000 },
+    );
+    await clickElement(dashboardPage, "#markSolved");
     await dashboardPage.waitForFunction(
       () => document.getElementById("outcomeStatus")?.textContent.includes("Marked Solved")
         && document.getElementById("betaStats")?.textContent.includes("Marked runs")
@@ -459,26 +495,26 @@ async function main() {
     );
 
     await setValue(dashboardPage, "#taskText", "Mock HUCA smoke.");
-    await dashboardPage.click("#hucaTask");
+    await clickElement(dashboardPage, "#hucaTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-HUCA-OK"),
       { timeout: 10000 },
     );
 
     await setValue(dashboardPage, "#taskText", "Mock cancel smoke.");
-    await dashboardPage.click("#startTask");
+    await clickElement(dashboardPage, "#startTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CANCEL-RUNNING"),
       { timeout: 10000 },
     );
-    await dashboardPage.click("#cancelTask");
+    await clickElement(dashboardPage, "#cancelTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CANCELLED"),
       { timeout: 10000 },
     );
 
     await setValue(dashboardPage, "#taskText", "Mock checkpoint flow.");
-    await dashboardPage.click("#startTask");
+    await clickElement(dashboardPage, "#startTask");
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("No retention offer is available."),
       { timeout: 10000 },

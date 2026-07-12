@@ -12,13 +12,13 @@ tags: [context, project]
 # CONTEXT.md: Project
 
 ## Summary
-Flying Pig AI (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention). Python 3.12+ helper runtime, Electron desktop shell...
+Flying Pig AI (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, retention).
 
 ## Use when
 - working on project
 
 ## Key facts
-- Flying Pig AI (客服上树) — consumer-side AI agent that drives customer service chat interfaces on behalf of users (bill negotiation, disputes, cancellations, ret...
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

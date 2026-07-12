@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     max_interaction_minutes: int = 15
     agent_max_actions_per_step: int = 4
     agent_pending_outcome_grace_seconds: int = 75
+    mcp_llm_timeout_seconds: int = 30
+    model_probe_timeout_seconds: int = 12
     browser_viewport_width: int = 1920
     browser_viewport_height: int = 1080
 

@@ -4,7 +4,7 @@
 // All scripts in this directory should import from here to keep one source
 // of truth for hook I/O, project detection, markdown parsing, and commands.
 
-const { execSync } = require("child_process");
+const { execFileSync, execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
@@ -297,6 +297,25 @@ function runCheck(cmd, opts = {}) {
   }
 }
 
+function refreshContextIndex(root) {
+  const script = path.join(root, "scripts", "context-index.js");
+  if (!fs.existsSync(script)) return { exitCode: 1, stdout: "", stderr: `Missing ${script}` };
+  try {
+    const stdout = execFileSync(process.execPath, [script, "update"], {
+      cwd: root,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return { exitCode: 0, stdout: stdout || "", stderr: "" };
+  } catch (err) {
+    return {
+      exitCode: typeof err.status === "number" ? err.status : 1,
+      stdout: err.stdout ? err.stdout.toString() : "",
+      stderr: err.stderr ? err.stderr.toString() : String(err.message || ""),
+    };
+  }
+}
+
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -317,5 +336,6 @@ module.exports = {
   hasConfig,
   readSection,
   runCheck,
+  refreshContextIndex,
   today,
 };

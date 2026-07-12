@@ -9,21 +9,31 @@
 
 const fs = require("fs");
 const path = require("path");
+const { refreshContextIndex } = require("./lib");
 
 const root = process.cwd();
 const nowPath = path.join(root, "NOW.md");
 const planPath = path.join(root, "PLAN.md");
 
+let changed = false;
 try {
-  if (fs.existsSync(nowPath)) touchNow(nowPath);
+  if (fs.existsSync(nowPath)) changed = touchNow(nowPath) || changed;
 } catch {
   // best-effort
 }
 
 try {
-  if (fs.existsSync(planPath)) prunePlan(planPath);
+  if (fs.existsSync(planPath)) changed = prunePlan(planPath) || changed;
 } catch {
   // best-effort
+}
+
+if (changed) {
+  const result = refreshContextIndex(root);
+  if (result.exitCode !== 0) {
+    const detail = result.stderr.trim() || `exit ${result.exitCode}`;
+    console.error(`[session-end] WARN context index refresh failed: ${detail}`);
+  }
 }
 
 process.exit(0);
@@ -42,18 +52,19 @@ function touchNow(file) {
       break;
     }
   }
-  if (!touched) return; // NOW.md doesn't follow the template — skip silently
+  if (!touched) return false;
   fs.writeFileSync(file, lines.join("\n"));
+  return true;
 }
 
 function prunePlan(file) {
   const content = fs.readFileSync(file, "utf8");
-  if (content.split("\n").length <= 150) return;
+  if (content.split("\n").length <= 150) return false;
 
   const lines = content.split("\n");
   const sections = indexHeadings(lines);
   const progress = sections["Progress"];
-  if (!progress) return;
+  if (!progress) return false;
 
   const completed = [];
   const remaining = [];
@@ -65,7 +76,7 @@ function prunePlan(file) {
       remaining.push(line);
     }
   }
-  if (completed.length === 0) return;
+  if (completed.length === 0) return false;
 
   const date = new Date().toISOString().slice(0, 10);
   const archiveEntries = completed.map((c) => `- ${c} (archived ${date})`);
@@ -83,6 +94,7 @@ function prunePlan(file) {
       ];
 
   fs.writeFileSync(file, next.join("\n"));
+  return true;
 }
 
 // Build a new line array with Progress shrunk to `remaining` and Archive

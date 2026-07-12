@@ -18,11 +18,11 @@ Language: Python 3.12+
 - working on tech stack
 
 ## Key facts
-- Language: Python 3.12+
 - Browser Automation: Playwright (via browser-use framework)
 - LLM Integration: Anthropic Claude API (primary), OpenAI API (fallback)
 - Framework: browser-use (open-source LLM browser automation)
 - Web Framework: FastAPI (backend API)
+- Task Queue: Celery + Redis (async job processing)
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

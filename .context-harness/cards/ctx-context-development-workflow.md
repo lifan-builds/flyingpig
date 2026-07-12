@@ -18,7 +18,6 @@ Setup: pip install -e ".[dev]" (once the project is scaffolded)
 - working on development workflow
 
 ## Key facts
-- Setup: pip install -e ".[dev]" (once the project is scaffolded)
 - Run: python -m flyingpig or uvicorn src.api.main:app
 - Test: pytest tests/
 - Lint: ruff check src/

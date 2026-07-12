@@ -31,11 +31,11 @@ Use `node scripts/context-index.js hydrate "<task>"` to select cards before open
 - `CONTEXT.md#learned-patterns` - durable lessons.
 - `CONTEXT.md#imported-agent-notes` - context section.
 - `CONTEXT.md#context-contract` - At session start/resume, read NOW.md first, then CONTEXT.md..
-- `CONTEXT.md#project-overview` - Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service c....
+- `CONTEXT.md#project-overview` - Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service....
 - `CONTEXT.md#tech-stack` - Language: Python 3.12+.
 - `CONTEXT.md#project-structure` - flyingpig/.
 - `CONTEXT.md#development-workflow` - Setup: pip install -e ".[dev]" (once the project is scaffolded).
 - `CONTEXT.md#coding-conventions` - Type hints on all public functions.
-- `CONTEXT.md#architecture-decisions` - 2026-04-09: Chose Playwright over Puppeteer — multi-browser support, auto-waiting, bett....
+- `CONTEXT.md#architecture-decisions` - 2026-04-09: Chose Playwright over Puppeteer — multi-browser support, auto-waiting,....
 - `CONTEXT.md#context-index` - context section.
 <!-- context-harness:index:end -->

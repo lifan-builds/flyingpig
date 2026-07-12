@@ -12,15 +12,13 @@ tags: [plan, current-focus]
 # PLAN.md: Current Focus
 
 ## Summary
-Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explains the supervised work-window path, Start blocks unconfigure...
+Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explains the supervised work-window path,...
 
 ## Use when
-- continuing the active task
-- checking done criteria or decisions
-- update context with task-local progress
+- continuing task-local current focus
 
 ## Key facts
-- Public beta first-run readiness is implemented for the dashboard and docs: model/API-key setup is visible in the primary first-run flow, the dashboard explai...
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

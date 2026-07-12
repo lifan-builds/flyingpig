@@ -6,6 +6,7 @@ import time
 import src.daemon.server as daemon_server
 from fastapi.testclient import TestClient
 from src.agent.result import TaskResult, TaskStatus
+from src.daemon.follow_up_reminders import FollowUpReminderStore
 from src.daemon.run_session import progress_message
 
 
@@ -796,6 +797,31 @@ def test_preflight_gate_failures_are_visible_without_starting_agent(monkeypatch)
     assert "missing_user_authorization" in codes
     assert "missing_work_window" in codes
     assert "checkpoint_required" in codes
+
+
+def test_follow_up_reminder_api_persists_and_cancels(tmp_path):
+    reset_run_manager()
+    store = FollowUpReminderStore(tmp_path / "reminders.json")
+    app = daemon_server.create_app(reminder_store=store)
+
+    with TestClient(app) as client:
+        created = client.post(
+            "/follow-up-reminders",
+            json={
+                "title": "Contact support",
+                "message": "Request the remaining credit balance.",
+                "due_at": "2026-07-14T16:00:00Z",
+                "source": {"type": "contact_support_after_credit_posts"},
+            },
+        )
+        reminder = created.json()["reminder"]
+        listed = client.get("/follow-up-reminders").json()["items"]
+        cancelled = client.delete(f"/follow-up-reminders/{reminder['id']}").json()
+
+    assert created.status_code == 200
+    assert listed[0]["id"] == reminder["id"]
+    assert cancelled["ok"] is True
+    assert cancelled["reminder"]["status"] == "cancelled"
 
 
 def test_waiting_on_rep_state_snapshot_from_active_human_work(monkeypatch):

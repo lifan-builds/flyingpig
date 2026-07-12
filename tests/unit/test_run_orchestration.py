@@ -45,6 +45,28 @@ def test_agent_run_plan_carries_mcp_backend():
     }
 
 
+def test_agent_run_plan_carries_structured_authorization():
+    plan = build_agent_run_plan(
+        {
+            "task": "Close the card.",
+            "user_authorized": True,
+            "authorization": {
+                "target_account": "12345",
+                "authorized_actions": ["close_card", "request_credit_refund"],
+                "refund_methods": ["existing_checking", "check"],
+                "huca_authorized": True,
+            },
+        },
+        site="amex",
+        task_brief="Close the card.",
+    )
+
+    authorization = plan.agent_kwargs()["authorization"]
+    assert authorization.target_account == "12345"
+    assert authorization.permits("close_card") is True
+    assert authorization.huca_authorized is True
+
+
 def test_huca_recovery_task_uses_prompt_template():
     task = huca_recovery_task("Ask for a refund.")
 

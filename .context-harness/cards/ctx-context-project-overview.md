@@ -12,13 +12,13 @@ tags: [context, project-overview, project]
 # CONTEXT.md: Project Overview
 
 ## Summary
-Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate website chat widgets (Amex, telecom, utilities, etc.), communicat...
+Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users.
 
 ## Use when
 - working on project overview
 
 ## Key facts
-- Flying Pig AI (客服上树) is a consumer-side AI agent that interacts with customer service chat interfaces on behalf of users. It leverages LLMs to navigate websi...
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

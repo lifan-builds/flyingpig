@@ -15,16 +15,10 @@ tags: [plan, long-running-coding-agent-task-pine-informed-product-protocol-harde
 Use this prompt to deploy a coding agent:
 
 ## Use when
-- continuing the active task
-- checking done criteria or decisions
-- update context with task-local progress
+- continuing task-local long-running coding agent task: pine-informed product/protocol hardening
 
 ## Key facts
-- Use this prompt to deploy a coding agent:
-- You are working in /Users/lfan/Project/flyingpig. Read NOW.md first, then CONTEXT.md, then PLAN.md and FINDINGS.md. Respect CONTEXT.md Rules. Do not revert u...
-- Goal:
-- Improve Flying Pig using Pine AI / 19pine.ai learnings while preserving Flying Pig's narrower supervised browser-first customer-service wedge. This is not a...
-- Context:
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

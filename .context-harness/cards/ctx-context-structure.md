@@ -12,17 +12,13 @@ tags: [context, structure]
 # CONTEXT.md: Structure
 
 ## Summary
-.
+repo map
 
 ## Use when
 - working on structure
 
 ## Key facts
-- .
-- ├── config/
-- ├── dashboard/          # Helper-served cockpit UI that talks to local helper over WS
-- ├── desktop/            # Electron desktop shell and helper supervision
-- ├── docs/legacy/        # Archived old extension and React frontend references
+- Use this card before opening bulky raw context for this topic.
 
 ## Retrieval order
 - Read `NOW.md` and concise `CONTEXT.md` as the always-read layer.

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from src.agent.run_authorization import RunAuthorization, authorization_from_payload
 from src.sites.task_templates import load_prompt_template
 
 
@@ -24,6 +25,7 @@ class AgentRunPlan:
     permission_mode: str
     browser_backend: str = "browser_use"
     mcp_page: dict | None = None
+    authorization: RunAuthorization = field(default_factory=RunAuthorization)
 
     def agent_kwargs(self) -> dict:
         """Return the AgentBrain construction kwargs for this run."""
@@ -38,6 +40,7 @@ class AgentRunPlan:
             "navigate_on_attach": self.navigate_on_attach,
             "browser_backend": self.browser_backend,
             "mcp_page": self.mcp_page,
+            "authorization": self.authorization,
         }
 
     def execute_kwargs(self) -> dict:
@@ -73,6 +76,7 @@ def build_agent_run_plan(
         permission_mode=msg.get("permission_mode") or "supervised_browser",
         browser_backend=msg.get("browser_backend") or "browser_use",
         mcp_page=msg.get("mcp_page") or None,
+        authorization=authorization_from_payload(msg),
     )
 
 
