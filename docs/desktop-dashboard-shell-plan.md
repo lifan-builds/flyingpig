@@ -66,7 +66,7 @@ Reconsider Tauri later if app size becomes a real constraint.
 ```markdown
 You are working in `/Users/lfan/Project/flyingpig`.
 
-Before doing anything, read `NOW.md`, then `CONTEXT.md`, and follow the rules in `CONTEXT.md`. Keep browser-use execution in the Python helper. Do not rewrite the dashboard or move browser automation into frontend JavaScript.
+Before doing anything, read `.trellis/workflow.md` and `.trellis/spec/flyingpig/index.md`, then follow the linked architecture, safety, and verification rules. Keep browser-use execution in the Python helper. Do not rewrite the dashboard or move browser automation into frontend JavaScript.
 
 Goal: implement a high-quality cross-platform native desktop product shell for Flying Pig. The app should replace the current script/localhost startup experience with a normal desktop launch while preserving the existing helper-served dashboard, WebSocket/API protocol, Decision Checkpoints, HUCA, cancel/reconnect behavior, and separate Controlled Chrome Window.
 
@@ -97,7 +97,7 @@ Quality bar:
 
 Before finishing:
 - Run the strongest practical verification.
-- Update `PLAN.md` with completed work and any blockers.
-- Update `NOW.md` with current focus, blockers, next step, touched files, and verification.
+- Record completed work and blockers in the active `.trellis/tasks/` artifact.
+- Record durable project rules in `.trellis/spec/flyingpig/` and keep transient task state out of specs.
 - If a durable architectural decision is made, add an ADR instead of burying it in chat.
 ```
