@@ -1,22 +1,22 @@
 {
   "schema": 2,
   "updated_at": "2026-07-12",
-  "source_hash": "6228b65b85a868c3a304ae7e387b397cc79eecb8df79baf3510c3a71fa1a2ea6",
+  "source_hash": "98aee3ce8a326ee62a9ca9cb008e5d3fda9b53d0f99be8bc9fd0cdd3faf37919",
   "sources": [
     {
       "path": "CONTEXT.md",
-      "sha256": "ec2795dc7b3c7fcf6f601011fe87bfede6eb61a76f54ad18411cc7a2c9bad099",
-      "lines": 233
+      "sha256": "a5756c279355b0fd53364a8a9c7f87a27acf58ee74b749ec35edb93519dbfc0d",
+      "lines": 235
     },
     {
       "path": "NOW.md",
-      "sha256": "5d63781c1b78fcfad0c32010c85e6835642469f5ff6faad86663dda6730de562",
-      "lines": 26
+      "sha256": "27c8e94b2a3da12cf076b3f6df7ff0ecb4e45eaa4c2d710dcec4dfc39ae3cde1",
+      "lines": 28
     },
     {
       "path": "PLAN.md",
-      "sha256": "2759f45e6e794f1fae0a31eef2b0df192fbaef07f38b952c5ae6090dd621a591",
-      "lines": 419
+      "sha256": "b3f46105a13406e91ed32f3f8a490fa4486e189b1ee3b15e30189601e53aee2f",
+      "lines": 420
     }
   ],
   "cards": [
@@ -171,7 +171,7 @@
       "importance": 0.82,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 2161,
+      "tokens_est": 2347,
       "tags": [
         "context",
         "relationships",
@@ -182,7 +182,7 @@
       ],
       "card_path": ".context-harness/cards/ctx-context-relationships.md",
       "chunk_path": ".context-harness/chunks/ctx-context-relationships.md",
-      "content_sha256": "62b6544ea2d1841625abd7f5fd5ece66124d60b2fc24629008df4cc439284507",
+      "content_sha256": "33abd36e60235fcc6dc2428354a293b7db4d970da01626243721208a25335fcc",
       "key_facts": [
         "The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls,...",
         "Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.",
@@ -471,7 +471,7 @@
     {
       "id": "ctx-now-now",
       "title": "NOW.md: Now",
-      "summary": "Simplified the desktop dashboard into a configure-once, task-first experience while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.",
+      "summary": "Simplified the desktop dashboard into a configure-once, state-driven assistant while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.",
       "source": "NOW.md#now",
       "source_path": "NOW.md",
       "kind": "resume",
@@ -479,7 +479,7 @@
       "importance": 0.95,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 847,
+      "tokens_est": 951,
       "tags": [
         "now",
         "resume"
@@ -489,7 +489,7 @@
       ],
       "card_path": ".context-harness/cards/ctx-now-now.md",
       "chunk_path": ".context-harness/chunks/ctx-now-now.md",
-      "content_sha256": "5d63781c1b78fcfad0c32010c85e6835642469f5ff6faad86663dda6730de562",
+      "content_sha256": "27c8e94b2a3da12cf076b3f6df7ff0ecb4e45eaa4c2d710dcec4dfc39ae3cde1",
       "key_facts": [
         "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
         "Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.",
@@ -525,7 +525,7 @@
     {
       "id": "ctx-plan-progress",
       "title": "PLAN.md: Progress",
-      "summary": "[x] Distill the dashboard into a configure-once flow: model setup collapses after configuration, repeat use leads with the task brief and Start, and secondary run controls move under progressive disclosure.",
+      "summary": "[x] Distill the dashboard into a state-driven assistant: model setup collapses after configuration; Start owns work-window preparation; request, preparation, running, decision,...",
       "source": "PLAN.md#progress",
       "source_path": "PLAN.md",
       "kind": "plan",
@@ -533,7 +533,7 @@
       "importance": 0.85,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 274,
+      "tokens_est": 320,
       "tags": [
         "plan",
         "progress"
@@ -543,13 +543,13 @@
       ],
       "card_path": ".context-harness/cards/ctx-plan-progress.md",
       "chunk_path": "",
-      "content_sha256": "8c0a1c94a8662baed6426e53fa29db399f817f4ef6a23847646ce5bda4b8afac",
+      "content_sha256": "bfa41b0fff2e5eb117147c851b58986f0724d835620c6d839e116d717cb34c50",
       "key_facts": [
+        "[x] Add a temporary first-use guide for Configure, Open website, and Start, with model-configuration recovery and browser smoke coverage.",
         "[x] Implement live-session hardening from the Amex cancellation run: structured authorization, verified semantic chat sends, transcript workflow state,...",
         "[x] Expose structured run authorization and completion/follow-up evidence in the dashboard, with browser smoke coverage that validates the transmitted...",
         "[x] Add durable local scheduling for deferred follow-up actions, with reconnect-safe due delivery and dashboard notifications.",
-        "[ ] Configure preferred fallback provider before the next live Amex run.",
-        "[ ] Measure human-escalation success rate against recorded session suite; iterate to ≥75%"
+        "[ ] Configure preferred fallback provider before the next live Amex run."
       ]
     },
     {

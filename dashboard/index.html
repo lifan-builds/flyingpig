@@ -13,8 +13,7 @@
         <div class="brand-lockup">
           <img src="assets/app-icon-64.png" alt="" width="44" height="44">
           <div>
-            <p class="eyebrow">Flying Pig</p>
-            <h1>Customer Service Copilot</h1>
+            <h1>Flying Pig</h1>
           </div>
         </div>
         <div class="status-pills">
@@ -35,6 +34,26 @@
           <strong id="agentStatus">Ready</strong>
         </div>
         <p id="runMessage">Tell Flying Pig the customer-service problem, then supervise it in the visible work window.</p>
+      </section>
+
+      <section id="preparationPanel" class="focus-panel preparation-view hidden" aria-live="polite">
+        <p class="eyebrow">One quick step</p>
+        <h2>Open the support chat</h2>
+        <p id="preparationMessage">Flying Pig opened a work window. Log in and navigate to the customer-service chat.</p>
+        <div class="focus-actions">
+          <button id="browserReady" type="button">I'm ready</button>
+          <button id="backToTask" class="secondary" type="button">Back</button>
+        </div>
+      </section>
+
+      <section id="runningFocus" class="focus-panel running-view hidden" aria-live="polite">
+        <p class="eyebrow">In progress</p>
+        <h2 id="focusedRunTitle">Talking to customer service</h2>
+        <p id="focusedRunMessage">Flying Pig is working. You only need to return when a decision is required.</p>
+        <div class="focus-actions">
+          <button id="activityToggle" class="secondary" type="button" aria-expanded="false">View activity</button>
+          <button id="focusedCancel" class="danger" type="button">Cancel</button>
+        </div>
       </section>
 
       <section id="readinessStrip" class="readiness-strip" aria-label="Run readiness">
@@ -85,7 +104,7 @@
         <section class="panel model-setup">
           <div class="section-heading">
             <p class="eyebrow">Setup</p>
-            <h2>Choose the model Flying Pig will use</h2>
+            <h2 id="modelSetupHeading">Choose the model Flying Pig will use</h2>
           </div>
           <div class="model-grid">
             <div>
@@ -124,15 +143,37 @@
         </section>
       </section>
 
+      <section id="firstUseGuide" class="first-use-guide hidden" aria-labelledby="firstUseGuideTitle">
+        <div>
+          <p class="eyebrow">Getting started</p>
+          <h2 id="firstUseGuideTitle">Your first task</h2>
+        </div>
+        <ol class="guide-steps">
+          <li data-guide-step="configure">
+            <span>1</span>
+            <div><strong>Configure</strong><small id="guideConfigureStatus">Model ready</small></div>
+            <button id="guideConfigure" class="link" type="button">Review</button>
+          </li>
+          <li data-guide-step="website">
+            <span>2</span>
+            <div><strong>Open the website</strong><small id="guideWebsiteStatus">Use the work window</small></div>
+            <button id="guideOpenWebsite" class="link" type="button">Open</button>
+          </li>
+          <li data-guide-step="start">
+            <span>3</span>
+            <div><strong>Start</strong><small>Describe the request below</small></div>
+          </li>
+        </ol>
+      </section>
+
       <section class="dashboard-grid">
         <section class="panel task-panel">
           <div class="section-heading task-heading">
-            <p class="eyebrow">New task</p>
-            <h2>What should Flying Pig handle?</h2>
-            <p>Describe the outcome you want. You can refine the starter text before beginning.</p>
+            <h2>What do you need help with?</h2>
+            <p>Describe the outcome you want. Flying Pig will ask when a decision matters.</p>
           </div>
 
-          <label for="briefStarter">Start with</label>
+          <label for="briefStarter">Common requests</label>
           <select id="briefStarter">
             <option value="custom">Custom brief</option>
             <option value="retention_offer" data-task="Help me lower this bill or find a retention offer. Escalate to a human if the chatbot cannot help.">Lower bill or retention offer</option>
@@ -143,11 +184,11 @@
             <option value="continue_chat" data-task="Continue this existing support chat from the visible conversation. Treat prior messages as context and ask me before irreversible actions.">Continue existing chat</option>
           </select>
 
-          <label for="taskText">Problem</label>
+          <label for="taskText">Your request</label>
           <textarea id="taskText" rows="5" placeholder="Example: Ask Amex to review this fee and request a courtesy credit.">Help me with this customer-service chat. Ask for a human representative if the chatbot cannot resolve it.</textarea>
 
           <details class="run-options">
-            <summary>Run options</summary>
+            <summary>More options</summary>
             <div class="run-options-content">
           <label for="successCriteria">What counts as done?</label>
           <textarea id="successCriteria" rows="3" placeholder="Example: A confirmed refund, credit amount, cancellation confirmation, reference number, or clear unresolved next step."></textarea>
@@ -261,11 +302,11 @@
           </details>
 
           <div class="actions">
-            <button id="startTask" type="button">Start task</button>
+            <button id="startTask" type="button">Start</button>
             <button id="hucaTask" class="huca" type="button">HUCA</button>
             <button id="cancelTask" class="danger" type="button">Cancel</button>
           </div>
-          <p id="startDisabledReason" class="start-reason">Open the work window before starting.</p>
+          <p id="startDisabledReason" class="start-reason">Ready when you are.</p>
         </section>
 
         <section class="work-column">

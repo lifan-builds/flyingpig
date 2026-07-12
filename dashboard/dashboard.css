@@ -42,10 +42,11 @@ body {
 }
 
 body.configured .shell {
-  max-width: 1180px;
+  max-width: 920px;
 }
 
 .shell {
+  align-content: start;
   display: grid;
   gap: 14px;
   margin: 0 auto;
@@ -171,6 +172,54 @@ label,
   box-shadow: var(--shadow-soft);
 }
 
+body.configured .hero,
+body.configured .readiness-strip {
+  display: none;
+}
+
+body.configured .status-row {
+  display: none;
+}
+
+.focus-panel {
+  align-self: start;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+  display: grid;
+  gap: 12px;
+  margin: 36px auto 0;
+  max-width: 640px;
+  padding: 28px;
+  text-align: left;
+  width: 100%;
+}
+
+.focus-panel h2,
+.task-heading h2 {
+  font-size: 24px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+
+.focus-panel > p:not(.eyebrow) {
+  color: var(--muted);
+  font-size: 15px;
+  max-width: 60ch;
+}
+
+.focus-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.focus-actions button {
+  min-width: 140px;
+}
+
 .hero {
   align-items: center;
   background:
@@ -270,6 +319,139 @@ label,
   min-height: 0;
 }
 
+body.configured[data-workflow="ready"] .dashboard-grid {
+  display: block;
+  margin: 36px auto 0;
+  max-width: 640px;
+  width: 100%;
+}
+
+body.has-first-use-guide[data-workflow="ready"] .dashboard-grid {
+  margin-top: 20px;
+}
+
+.first-use-guide {
+  display: grid;
+  gap: 12px;
+  margin: 28px auto 0;
+  max-width: 640px;
+  width: 100%;
+}
+
+.first-use-guide h2 {
+  font-size: 16px;
+}
+
+.guide-steps {
+  border-bottom: 1px solid var(--border);
+  border-top: 1px solid var(--border);
+  display: grid;
+  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.guide-steps li {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto minmax(0, 1fr);
+  padding: 10px;
+}
+
+.guide-steps li + li {
+  border-left: 1px solid var(--border);
+}
+
+.guide-steps li > span {
+  align-items: center;
+  background: var(--panel-2);
+  border-radius: 3px;
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 11px;
+  font-weight: 780;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+.guide-steps li[data-ready="true"] {
+  background: var(--accent-soft);
+}
+
+.guide-steps li[data-ready="true"] > span {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.guide-steps strong,
+.guide-steps small {
+  display: block;
+}
+
+.guide-steps strong {
+  color: var(--ink);
+  font-size: 12px;
+  margin: 0;
+  text-transform: none;
+}
+
+.guide-steps small {
+  color: var(--muted);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+.guide-steps button {
+  grid-column: 2;
+  justify-self: start;
+}
+
+body[data-workflow="ready"] .work-column,
+body[data-workflow="preparing"] .dashboard-grid,
+body[data-workflow="running"] .dashboard-grid:not(.activity-open),
+body[data-workflow="attention"] .task-panel,
+body[data-workflow="result"] .task-panel {
+  display: none;
+}
+
+body[data-workflow="running"] .dashboard-grid {
+  display: none;
+}
+
+body[data-workflow="running"].activity-open .dashboard-grid {
+  display: block;
+  margin: 14px auto 0;
+  max-width: 720px;
+}
+
+body[data-workflow="running"].activity-open .task-panel,
+body[data-workflow="running"].activity-open .metrics {
+  display: none;
+}
+
+body[data-workflow="attention"] .dashboard-grid,
+body[data-workflow="result"] .dashboard-grid {
+  display: block;
+  margin: 36px auto 0;
+  max-width: 720px;
+}
+
+body[data-workflow="attention"] .metrics,
+body[data-workflow="attention"] .timing,
+body[data-workflow="attention"] .transcript,
+body[data-workflow="result"] .metrics,
+body[data-workflow="result"] .timing,
+body[data-workflow="result"] .transcript {
+  display: none;
+}
+
 .first-run-panel {
   display: grid;
   gap: 14px;
@@ -293,6 +475,7 @@ label,
 
 .task-panel {
   align-self: start;
+  padding: 24px;
 }
 
 .task-heading p:last-child {
@@ -382,6 +565,10 @@ input[readonly] {
 textarea {
   min-height: 116px;
   resize: vertical;
+}
+
+#taskText {
+  min-height: 160px;
 }
 
 button {
@@ -476,12 +663,15 @@ button.link:hover:not(:disabled) {
 }
 
 .actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(92px, auto) minmax(92px, auto);
+  display: flex;
 }
 
 .actions button {
-  width: 100%;
+  width: auto;
+}
+
+#startTask {
+  min-width: 160px;
 }
 
 .start-reason {
@@ -1095,6 +1285,15 @@ li span {
 
   .actions {
     grid-template-columns: 1fr;
+  }
+
+  .guide-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .guide-steps li + li {
+    border-left: 0;
+    border-top: 1px solid var(--border);
   }
 
   .brand-lockup {

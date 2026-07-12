@@ -5,14 +5,14 @@ importance: 0.95
 confidence: confirmed
 source: NOW.md#now
 chunk: .context-harness/chunks/ctx-now-now.md
-tokens_est: 847
+tokens_est: 951
 tags: [now, resume]
 ---
 
 # NOW.md: Now
 
 ## Summary
-Simplified the desktop dashboard into a configure-once, task-first experience while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.
+Simplified the desktop dashboard into a configure-once, state-driven assistant while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.
 
 ## Use when
 - recovering current focus, blockers, or the immediate next step

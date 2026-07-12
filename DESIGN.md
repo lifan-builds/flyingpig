@@ -246,6 +246,14 @@ Flying Pig uses a hybrid of tonal layering, borders, and two soft shadows. Depth
 - **Advanced Controls:** Use native details/summary. Advanced settings stay inline and progressive, not modal.
 - **Mobile Treatment:** At 920px the topbar and hero stack. At 620px readiness, metrics, and action groups collapse to one column.
 
+### Configured Workflow
+- **First-use guide:** A temporary three-step progress strip for Configure, Open website, and Start. It is not a permanent dashboard element and disappears after the first run starts.
+- **Request:** One prompt, one editable request, one Start action.
+- **Preparation:** Replace the request form with one instruction to log in and expose the support chat.
+- **Running:** Show one current-status sentence. Raw activity is opt-in.
+- **Decision:** Give the pending question or checkpoint the full content focus.
+- **Result:** Lead with outcome, confirmation evidence, and required follow-up. Keep diagnostics secondary.
+
 ### Signature Component: Cockpit Status Band
 
 The hero/status band is the only dark surface. It uses Cockpit Ink to Cockpit Ink Alt as a diagonal gradient, Cockpit Text for values, and a soft strong shadow. It announces the current run state and the next user-facing instruction. Do not add metrics or decorative stats inside it.
@@ -264,6 +272,8 @@ The trust boundary is an inline permission summary inside the task panel. It use
 - **Do** preserve explicit disabled, hover, focus, active, danger, warning, and loading states on every interactive control.
 - **Do** use inline progressive disclosure for Advanced settings and model keys.
 - **Do** make repeat use task-first: starter, editable problem brief, current status, and one primary Start action. Keep success criteria, authorization, browser selection, and diagnostics under Run options.
+- **Do** replace the surface as workflow state changes instead of keeping setup, readiness, metrics, timing, and activity visible together.
+- **Do** recover configuration failures by reopening setup with plain corrective language.
 - **Do** keep user-attention moments, Decision Checkpoints, and irreversible actions visually distinct with amber or blue state treatment.
 - **Do** verify mobile breakpoints for no horizontal overflow at 390px wide.
 

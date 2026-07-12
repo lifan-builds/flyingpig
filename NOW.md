@@ -1,7 +1,7 @@
 # Now
 
 ## Current Focus
-Simplified the desktop dashboard into a configure-once, task-first experience while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.
+Simplified the desktop dashboard into a configure-once, state-driven assistant while preserving supervised runs, authorization, browser, evidence, reminder, and recovery controls.
 
 ## Active Blockers
 - Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.
@@ -22,5 +22,7 @@ Rebuild and relaunch the desktop app/helper, then visually confirm the simplifie
 - Reminder runtime: helper-owned atomic JSON persistence, create/list/cancel APIs, reconnect-safe due claiming, and WebSocket delivery from `src/daemon/follow_up_reminders.py`.
 - Verification passed: `pytest tests/unit -q` (154 passed), `ruff check src tests`, JavaScript syntax checks, `npm run test:dashboard`, `npm run build:helper`, `npm run desktop:package`, `npm run desktop:verify-update`, release path/content scans, and `git diff --check`.
 - Dashboard simplification verification: configured model setup collapses and reopens through Settings, secondary run controls stay under Run options, and the 390px dashboard smoke has no horizontal overflow.
+- Focused workflow verification: Start automatically opens the work window when needed; request, preparation, running, attention, and result states replace one another; activity remains hidden until requested.
+- First-use guidance: a temporary Configure, Open website, Start progress strip tracks readiness and disappears after the first run; invalid saved model configuration reopens setup with recovery wording.
 - Packaged artifact: `dist/desktop/Flying-Pig-1.0.2-arm64-mac.zip`, SHA-256 `4dfbc7313e73fdd2ff01904ed8b3580efadb58e819ba2206ff5b27d0008943ac` (intentionally unsigned).
 - Files touched for this design task: `PRODUCT.md`, `DESIGN.md`, dashboard files, dashboard smoke support, `PLAN.md`, `CONTEXT.md`, and `NOW.md`. Existing coherent backend and context-harness changes remain included and were not reverted.

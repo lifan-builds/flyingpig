@@ -44,6 +44,8 @@ const state = {
   selectedMcpPage: null,
   mcpReady: false,
   settingsOpen: false,
+  workflowStage: "ready",
+  activityOpen: false,
 };
 
 const betaScorecardsKey = "betaScorecards";
@@ -261,6 +263,7 @@ function setRunState(message) {
   }
   updateReadiness();
   updateButtons();
+  updateWorkflowView();
 }
 
 function updateButtons() {
@@ -278,9 +281,10 @@ function updateButtons() {
   $("refreshTab").disabled = !state.connected || !state.browserConnected;
   $("statusLaunchChrome").classList.toggle("hidden", !state.connected || state.browserConnected);
   $("statusLaunchChrome").disabled = !canLaunchBrowser;
-  $("startDisabledReason").textContent = startReason || "Ready to start when the chat surface is prepared.";
-  $("startDisabledReason").classList.toggle("ready", !startReason);
+  $("startDisabledReason").textContent = startReason;
+  $("startDisabledReason").classList.toggle("hidden", !startReason);
   updateReadiness();
+  updateWorkflowView();
 }
 
 function updateExperienceMode() {
@@ -290,15 +294,59 @@ function updateExperienceMode() {
   $("readinessStrip").classList.toggle("compact", configured);
   $("modelSettingsToggle").setAttribute("aria-expanded", String(state.settingsOpen));
   $("modelSettingsToggle").textContent = state.settingsOpen ? "Done" : "Settings";
+  const configurationBecameInvalid = Boolean(state.activationSignals.model_configured) && !configured;
+  $("modelSetupHeading").textContent = configurationBecameInvalid
+    ? "Configuration needs attention"
+    : "Choose the model Flying Pig will use";
   document.body.classList.toggle("configured", configured);
+  updateGuideView();
+}
+
+function updateGuideView() {
+  const firstRunComplete = Boolean(state.activationSignals.first_run_started);
+  const showGuide = modelReady()
+    && !firstRunComplete
+    && !state.settingsOpen
+    && state.workflowStage === "ready";
+  $("firstUseGuide").classList.toggle("hidden", !showGuide);
+  document.body.classList.toggle("has-first-use-guide", showGuide);
+  $("guideConfigureStatus").textContent = modelReady() ? "Model ready" : "Needs attention";
+  const websiteReady = state.browserConnected && Boolean(state.activeUrl);
+  $("guideWebsiteStatus").textContent = websiteReady ? "Website ready" : "Use the work window";
+  $("guideOpenWebsite").textContent = websiteReady ? "Review" : "Open";
+  for (const item of $("firstUseGuide").querySelectorAll("[data-guide-step]")) {
+    const step = item.dataset.guideStep;
+    const ready = step === "configure" ? modelReady() : step === "website" ? websiteReady : false;
+    item.dataset.ready = ready ? "true" : "false";
+  }
+}
+
+function updateWorkflowView() {
+  const attentionVisible = !$('questionPanel').classList.contains('hidden')
+    || !$('checkpointPanel').classList.contains('hidden');
+  let stage = state.workflowStage;
+  if (state.lastResult && !state.running) stage = "result";
+  if (state.running) stage = attentionVisible ? "attention" : "running";
+  if (!state.running && !state.lastResult && stage !== "preparing") stage = "ready";
+  state.workflowStage = stage;
+  document.body.dataset.workflow = stage;
+  document.body.classList.toggle("activity-open", state.activityOpen);
+  $("preparationPanel").classList.toggle("hidden", stage !== "preparing");
+  $("runningFocus").classList.toggle("hidden", stage !== "running");
+  $("activityToggle").setAttribute("aria-expanded", String(state.activityOpen));
+  $("activityToggle").textContent = state.activityOpen ? "Hide activity" : "View activity";
+  $("focusedRunTitle").textContent = state.activeSite && state.activeSite !== "generic"
+    ? `Talking to ${siteLabel(state.activeSite, state.sites)}`
+    : "Talking to customer service";
+  $("focusedRunMessage").textContent = $("runMessage").textContent
+    || "Flying Pig is working. You only need to return when a decision is required.";
+  updateGuideView();
 }
 
 function startDisabledReason({ hasTask } = { hasTask: Boolean($("taskText").value.trim()) }) {
   if (!state.connected) return "Reconnect the Flying Pig helper before starting.";
   if (!modelReady()) return "Configure the selected model before starting.";
   if (state.browserLaunching) return "Wait for the work window to finish opening.";
-  if (!state.browserConnected) return "Open the work window or select an Auto-Connected Chrome tab before starting.";
-  if (!state.activeUrl) return "Prepare a visible support page or chat surface in the work window.";
   if (!hasTask) return "Add a problem brief before starting.";
   if (state.running) return "A run is already active.";
   return "";
@@ -523,6 +571,7 @@ function updateQuickstart() {
   for (const item of list.querySelectorAll("[data-step]")) {
     item.dataset.ready = quickstartReady(item.dataset.step) ? "true" : "false";
   }
+  updateGuideView();
 }
 
 async function loadActivationSignals() {
@@ -544,6 +593,21 @@ function recordActivationSignal(name) {
   };
   storageSet({ [activationSignalsKey]: state.activationSignals });
   updateQuickstart();
+}
+
+async function openWebsiteGuide() {
+  state.workflowStage = "preparing";
+  $("preparationMessage").textContent = state.browserConnected
+    ? "Navigate to the customer-service chat in the work window, then return here."
+    : "Opening a work window. Log in and navigate to the customer-service chat.";
+  updateWorkflowView();
+  if (!state.browserConnected) {
+    const opened = await launchChrome();
+    $("preparationMessage").textContent = opened
+      ? "Log in and navigate to the customer-service chat, then return here."
+      : "The work window could not be opened. Try again or check Settings.";
+    updateWorkflowView();
+  }
 }
 
 function applyBrowserPayload(payload) {
@@ -662,7 +726,7 @@ async function workWindowPlacement() {
 }
 
 async function launchChrome() {
-  if (!state.connected || state.running || state.browserLaunching) return;
+  if (!state.connected || state.running || state.browserLaunching) return false;
   state.browserBackend = "browser_use";
   state.mcpReady = false;
   state.browserLaunching = true;
@@ -701,10 +765,12 @@ async function launchChrome() {
     $("agentStatus").textContent = "ready";
     $("runMessage").textContent = payload.message || "Work window is ready.";
     log("browser", payload.message || "Work window is ready.");
+    return true;
   } catch (error) {
     $("agentStatus").textContent = "error";
     $("runMessage").textContent = error.message || "Browser launch failed.";
     log("error", error.message || "Browser launch failed.");
+    return false;
   } finally {
     state.browserLaunching = false;
     updateButtons();
@@ -1459,26 +1525,61 @@ function renderDecisionCheckpoint(checkpoint) {
 }
 
 async function startTask() {
-  if (state.browserBackend !== "mcp") {
-    const browserReady = await refreshBrowserStatus();
-    if (!browserReady) {
-      $("agentStatus").textContent = "waiting";
-      $("runMessage").textContent = "Launch the work window before starting.";
-      log("browser", "Controlled Chrome is not connected.");
-      return;
-    }
-  }
   const task = $("taskText").value.trim();
   if (!task) return;
 
+  if (state.browserBackend !== "mcp" && !state.browserConnected) {
+    state.workflowStage = "preparing";
+    state.lastResult = null;
+    $("preparationMessage").textContent = "Opening a work window. Log in and navigate to the customer-service chat.";
+    updateWorkflowView();
+    const opened = await launchChrome();
+    $("preparationMessage").textContent = opened
+      ? "Log in and navigate to the customer-service chat, then return here."
+      : "The work window could not be opened. Try again or check Settings.";
+    updateWorkflowView();
+    return;
+  }
+
+  if (!state.activeUrl) {
+    state.workflowStage = "preparing";
+    $("preparationMessage").textContent = "Navigate to the customer-service chat in the work window, then return here.";
+    updateWorkflowView();
+    return;
+  }
+
+  beginRun(task);
+}
+
+function beginRun(task) {
+
   const payload = buildRunPayload(task);
+  state.lastResult = null;
+  $("resultPanel").classList.add("hidden");
   state.running = true;
+  state.workflowStage = "running";
+  state.activityOpen = false;
   recordActivationSignal("first_run_started");
   updateButtons();
   $("agentStatus").textContent = "Preparing";
   $("runMessage").textContent = "Checking permissions and preparing the supervised run.";
   state.socket.send(JSON.stringify({ type: "start", ...payload }));
   log("start", "Started Flying Pig for the work window.");
+  updateWorkflowView();
+}
+
+async function confirmBrowserReady() {
+  await refreshTab();
+  if (!state.browserConnected) {
+    const opened = await launchChrome();
+    if (!opened) return;
+  }
+  if (!state.activeUrl) {
+    $("preparationMessage").textContent = "Open a support page or chat in the work window, then try again.";
+    return;
+  }
+  const task = $("taskText").value.trim();
+  if (task) beginRun(task);
 }
 
 async function hucaTask() {
@@ -1551,6 +1652,8 @@ function cancelTask() {
   $("agentStatus").textContent = "cancelling";
   $("runMessage").textContent = "Cancelling.";
   log("cancel", "Cancel requested.");
+  state.workflowStage = "ready";
+  updateWorkflowView();
 }
 
 function sendAnswer() {
@@ -1601,11 +1704,27 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("attachChrome").addEventListener("click", attachChrome);
   $("launchChrome").addEventListener("click", launchChrome);
   $("statusLaunchChrome").addEventListener("click", launchChrome);
+  $("browserReady").addEventListener("click", confirmBrowserReady);
+  $("backToTask").addEventListener("click", () => {
+    state.workflowStage = "ready";
+    updateWorkflowView();
+  });
+  $("activityToggle").addEventListener("click", () => {
+    state.activityOpen = !state.activityOpen;
+    updateWorkflowView();
+  });
+  $("focusedCancel").addEventListener("click", cancelTask);
   $("modelSettingsToggle").addEventListener("click", () => {
     state.settingsOpen = !state.settingsOpen;
     updateExperienceMode();
     if (state.settingsOpen) $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  $("guideConfigure").addEventListener("click", () => {
+    state.settingsOpen = true;
+    updateExperienceMode();
+    $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  $("guideOpenWebsite").addEventListener("click", openWebsiteGuide);
   $("setupHelper").addEventListener("click", openSetup);
   $("reconnectHelper").addEventListener("click", () => {
     state.socket?.close();

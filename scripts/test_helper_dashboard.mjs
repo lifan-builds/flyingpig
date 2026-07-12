@@ -198,6 +198,20 @@ async function main() {
     ) {
       throw new Error(`Configured model setup did not collapse for repeat use: ${JSON.stringify(modelSetupPlacement)}`);
     }
+    const firstUseGuide = await dashboardPage.$eval("#firstUseGuide", (guide) => ({
+      visible: !guide.classList.contains("hidden"),
+      text: guide.textContent || "",
+      configuredReady: guide.querySelector('[data-guide-step="configure"]')?.dataset.ready || "",
+    }));
+    if (
+      !firstUseGuide.visible
+      || !firstUseGuide.text.includes("Configure")
+      || !firstUseGuide.text.includes("Open the website")
+      || !firstUseGuide.text.includes("Start")
+      || firstUseGuide.configuredReady !== "true"
+    ) {
+      throw new Error(`First-use guide is incomplete: ${JSON.stringify(firstUseGuide)}`);
+    }
     await clickElement(dashboardPage, "#modelSettingsToggle");
     await dashboardPage.waitForFunction(
       () => !document.getElementById("firstRunPanel")?.classList.contains("hidden"),
@@ -249,15 +263,15 @@ async function main() {
       "#startTask",
       (button) => button.disabled,
     );
-    if (!startDisabledWithoutBrowser) {
-      throw new Error("Start is enabled before the controlled work window is connected.");
+    if (startDisabledWithoutBrowser) {
+      throw new Error("Start should own work-window preparation after model setup.");
     }
     const startReason = await dashboardPage.$eval(
       "#startDisabledReason",
       (element) => element.textContent,
     );
-    if (!startReason.includes("Open the work window")) {
-      throw new Error(`Start-disabled reason is not specific: ${startReason}`);
+    if (startReason) {
+      throw new Error(`Ready state should not add redundant guidance: ${startReason}`);
     }
     const readinessBeforeLaunch = await dashboardPage.$$eval(
       ".readiness-item",
@@ -277,12 +291,12 @@ async function main() {
       throw new Error(`Narrow dashboard layout overflowed: ${JSON.stringify(narrowLayout)}`);
     }
     await dashboardPage.setViewport({ width: 1280, height: 900, deviceScaleFactor: 1 });
-    const statusLaunchVisible = await dashboardPage.$eval(
+    const statusLaunchHidden = await dashboardPage.$eval(
       "#statusLaunchChrome",
-      (button) => !button.classList.contains("hidden") && !button.disabled,
+      (button) => getComputedStyle(button.closest(".status-row")).display === "none",
     );
-    if (!statusLaunchVisible) {
-      throw new Error("Dashboard does not expose an enabled status-level work window button.");
+    if (!statusLaunchHidden) {
+      throw new Error("Configured users should not see a separate work-window launch control.");
     }
     const attachChromeVisible = await dashboardPage.$eval(
       "#attachChrome",
@@ -383,11 +397,16 @@ async function main() {
       throw new Error("Dashboard does not expose the user default profile option.");
     }
 
-    await clickElement(dashboardPage, "#statusLaunchChrome");
+    await clickElement(dashboardPage, "#startTask");
+    await dashboardPage.waitForFunction(
+      () => !document.getElementById("preparationPanel")?.classList.contains("hidden"),
+      { timeout: 10000 },
+    );
     await dashboardPage.waitForFunction(
       () => document.body.textContent.includes("MOCK-CHROME-READY"),
       { timeout: 10000 },
     );
+    await clickElement(dashboardPage, "#backToTask");
     await dashboardPage.waitForFunction(
       () => document.getElementById("browserStatus")?.textContent === "Work Window Connected",
       { timeout: 10000 },
@@ -456,6 +475,13 @@ async function main() {
       () => document.body.textContent.includes("MOCK-RUN-OK"),
       { timeout: 10000 },
     );
+    const guideHiddenAfterStart = await dashboardPage.$eval(
+      "#firstUseGuide",
+      (guide) => guide.classList.contains("hidden"),
+    );
+    if (!guideHiddenAfterStart) {
+      throw new Error("First-use guide should disappear after the first run starts.");
+    }
     const activationSignals = await dashboardPage.evaluate(() => {
       const raw = localStorage.getItem("flyingpig.activationSignals");
       return raw ? JSON.parse(raw) : {};
