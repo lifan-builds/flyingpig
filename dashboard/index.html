@@ -37,12 +37,12 @@
       </section>
 
       <section id="preparationPanel" class="focus-panel preparation-view hidden" aria-live="polite">
-        <p class="eyebrow">One quick step</p>
-        <h2>Open the support chat</h2>
-        <p id="preparationMessage">Flying Pig opened a work window. Log in and navigate to the customer-service chat.</p>
+        <p id="preparationStepLabel" class="eyebrow">Step 2 of 3</p>
+        <h2>Open the website</h2>
+        <p id="preparationMessage">Open the company website in the work window, log in, and navigate to customer support.</p>
         <div class="focus-actions">
-          <button id="browserReady" type="button">I'm ready</button>
-          <button id="backToTask" class="secondary" type="button">Back</button>
+          <button id="browserReady" type="button">Open work window</button>
+          <button id="backToTask" class="secondary" type="button">Back to configure</button>
         </div>
       </section>
 
@@ -103,7 +103,7 @@
       <section id="firstRunPanel" class="first-run-panel" aria-label="First run setup">
         <section class="panel model-setup">
           <div class="section-heading">
-            <p class="eyebrow">Setup</p>
+            <p class="eyebrow">Step 1 of 3</p>
             <h2 id="modelSetupHeading">Choose the model Flying Pig will use</h2>
           </div>
           <div class="model-grid">
@@ -130,45 +130,12 @@
           </div>
         </section>
 
-        <section class="panel quickstart-panel">
-          <div class="section-heading">
-            <p class="eyebrow">Getting ready</p>
-            <h2>Three things before the first run</h2>
-          </div>
-          <ol class="quickstart-list" id="quickstartList">
-            <li data-step="model"><strong>Configure the model</strong><span>Use a saved API key or local CLIProxyAPI.</span></li>
-            <li data-step="work_window"><strong>Open the work window</strong><span>Log in and open the support chat there.</span></li>
-            <li data-step="start"><strong>Start the task</strong><span>Flying Pig will ask only when your decision matters.</span></li>
-          </ol>
-        </section>
-      </section>
-
-      <section id="firstUseGuide" class="first-use-guide hidden" aria-labelledby="firstUseGuideTitle">
-        <div>
-          <p class="eyebrow">Getting started</p>
-          <h2 id="firstUseGuideTitle">Your first task</h2>
-        </div>
-        <ol class="guide-steps">
-          <li data-guide-step="configure">
-            <span>1</span>
-            <div><strong>Configure</strong><small id="guideConfigureStatus">Model ready</small></div>
-            <button id="guideConfigure" class="link" type="button">Review</button>
-          </li>
-          <li data-guide-step="website">
-            <span>2</span>
-            <div><strong>Open the website</strong><small id="guideWebsiteStatus">Use the work window</small></div>
-            <button id="guideOpenWebsite" class="link" type="button">Open</button>
-          </li>
-          <li data-guide-step="start">
-            <span>3</span>
-            <div><strong>Start</strong><small>Describe the request below</small></div>
-          </li>
-        </ol>
       </section>
 
       <section class="dashboard-grid">
         <section class="panel task-panel">
           <div class="section-heading task-heading">
+            <p id="taskStepLabel" class="eyebrow hidden">Step 3 of 3</p>
             <h2>What do you need help with?</h2>
             <p>Describe the outcome you want. Flying Pig will ask when a decision matters.</p>
           </div>

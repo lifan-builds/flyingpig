@@ -5,7 +5,7 @@ importance: 0.82
 confidence: confirmed
 source: CONTEXT.md#relationships
 chunk: .context-harness/chunks/ctx-context-relationships.md
-tokens_est: 2347
+tokens_est: 2363
 tags: [context, relationships, invariant]
 ---
 

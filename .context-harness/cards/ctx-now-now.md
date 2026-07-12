@@ -5,7 +5,7 @@ importance: 0.95
 confidence: confirmed
 source: NOW.md#now
 chunk: .context-harness/chunks/ctx-now-now.md
-tokens_est: 951
+tokens_est: 952
 tags: [now, resume]
 ---
 

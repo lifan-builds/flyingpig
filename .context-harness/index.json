@@ -1,21 +1,21 @@
 {
   "schema": 2,
   "updated_at": "2026-07-12",
-  "source_hash": "98aee3ce8a326ee62a9ca9cb008e5d3fda9b53d0f99be8bc9fd0cdd3faf37919",
+  "source_hash": "4e36aa32d4f6323efb66f6f1b23d5ae3f82481cc4ddcfa570386802d5ebc00a4",
   "sources": [
     {
       "path": "CONTEXT.md",
-      "sha256": "a5756c279355b0fd53364a8a9c7f87a27acf58ee74b749ec35edb93519dbfc0d",
+      "sha256": "dfcdaff788f1c6505ea5f3b578970020774a0ca6dc538460d123f909c22e94f0",
       "lines": 235
     },
     {
       "path": "NOW.md",
-      "sha256": "27c8e94b2a3da12cf076b3f6df7ff0ecb4e45eaa4c2d710dcec4dfc39ae3cde1",
+      "sha256": "bdb67579e1079f467a8d9612cbd202e36ba874da0d52419d10a1813ade4a0446",
       "lines": 28
     },
     {
       "path": "PLAN.md",
-      "sha256": "b3f46105a13406e91ed32f3f8a490fa4486e189b1ee3b15e30189601e53aee2f",
+      "sha256": "5f0c64985512505ac54075469e4204981e200787a5eb402aae0be0432f84845d",
       "lines": 420
     }
   ],
@@ -171,7 +171,7 @@
       "importance": 0.82,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 2347,
+      "tokens_est": 2363,
       "tags": [
         "context",
         "relationships",
@@ -182,7 +182,7 @@
       ],
       "card_path": ".context-harness/cards/ctx-context-relationships.md",
       "chunk_path": ".context-harness/chunks/ctx-context-relationships.md",
-      "content_sha256": "33abd36e60235fcc6dc2428354a293b7db4d970da01626243721208a25335fcc",
+      "content_sha256": "2044c6ca98ca980517daa76289159a962a368548a4063b896db51f981307d8d8",
       "key_facts": [
         "The helper-served dashboard owns interaction/status UX; the packaged helper owns browser-use execution, browser/CDP policy, LLM calls,...",
         "Desktop-First Product Path should hide helper, localhost, and Chrome-debugging mechanics behind the app window.",
@@ -479,7 +479,7 @@
       "importance": 0.95,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 951,
+      "tokens_est": 952,
       "tags": [
         "now",
         "resume"
@@ -489,7 +489,7 @@
       ],
       "card_path": ".context-harness/cards/ctx-now-now.md",
       "chunk_path": ".context-harness/chunks/ctx-now-now.md",
-      "content_sha256": "27c8e94b2a3da12cf076b3f6df7ff0ecb4e45eaa4c2d710dcec4dfc39ae3cde1",
+      "content_sha256": "bdb67579e1079f467a8d9612cbd202e36ba874da0d52419d10a1813ade4a0446",
       "key_facts": [
         "Supervised real Amex beta smoke still needs a tester present for login/MFA and explicit send/approval moments.",
         "Local macOS desktop artifacts are intentionally unsigned for the no-pay beta path.",
@@ -533,7 +533,7 @@
       "importance": 0.85,
       "confidence": "confirmed",
       "recency": "2026-07-12",
-      "tokens_est": 320,
+      "tokens_est": 331,
       "tags": [
         "plan",
         "progress"
@@ -543,9 +543,9 @@
       ],
       "card_path": ".context-harness/cards/ctx-plan-progress.md",
       "chunk_path": "",
-      "content_sha256": "bfa41b0fff2e5eb117147c851b58986f0724d835620c6d839e116d717cb34c50",
+      "content_sha256": "68e6f1c29bd77e5f045a1c5808ba5d893a0fe4a600a5bce8a94c45455ec645de",
       "key_facts": [
-        "[x] Add a temporary first-use guide for Configure, Open website, and Start, with model-configuration recovery and browser smoke coverage.",
+        "[x] Convert first use into sequential Configure, Open website, and Start screens, with model-configuration recovery and browser smoke coverage proving one...",
         "[x] Implement live-session hardening from the Amex cancellation run: structured authorization, verified semantic chat sends, transcript workflow state,...",
         "[x] Expose structured run authorization and completion/follow-up evidence in the dashboard, with browser smoke coverage that validates the transmitted...",
         "[x] Add durable local scheduling for deferred follow-up actions, with reconnect-safe due delivery and dashboard notifications.",

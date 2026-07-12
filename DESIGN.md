@@ -247,7 +247,7 @@ Flying Pig uses a hybrid of tonal layering, borders, and two soft shadows. Depth
 - **Mobile Treatment:** At 920px the topbar and hero stack. At 620px readiness, metrics, and action groups collapse to one column.
 
 ### Configured Workflow
-- **First-use guide:** A temporary three-step progress strip for Configure, Open website, and Start. It is not a permanent dashboard element and disappears after the first run starts.
+- **First-use onboarding:** Three sequential screens for Configure, Open website, and Start. Only one step is visible at a time. Step labels disappear after the first run starts.
 - **Request:** One prompt, one editable request, one Start action.
 - **Preparation:** Replace the request form with one instruction to log in and expose the support chat.
 - **Running:** Show one current-status sentence. Raw activity is opt-in.

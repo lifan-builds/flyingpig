@@ -5,7 +5,7 @@ Fully automate customer service chat through the user's real Chrome profile with
 
 ## Progress
 - [x] Distill the dashboard into a state-driven assistant: model setup collapses after configuration; Start owns work-window preparation; request, preparation, running, decision, and result each get one focused surface; operational detail is opt-in.
-- [x] Add a temporary first-use guide for Configure, Open website, and Start, with model-configuration recovery and browser smoke coverage.
+- [x] Convert first use into sequential Configure, Open website, and Start screens, with model-configuration recovery and browser smoke coverage proving one step is visible at a time.
 - [x] Implement live-session hardening from the Amex cancellation run: structured authorization, verified semantic chat sends, transcript workflow state, active-human patience, bounded/fallback MCP planning, CLIProxy health routing, completion checklist, and deferred follow-up metadata.
 - [x] Expose structured run authorization and completion/follow-up evidence in the dashboard, with browser smoke coverage that validates the transmitted authorization payload.
 - [x] Add durable local scheduling for deferred follow-up actions, with reconnect-safe due delivery and dashboard notifications.

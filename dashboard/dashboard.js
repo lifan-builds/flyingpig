@@ -299,32 +299,22 @@ function updateExperienceMode() {
     ? "Configuration needs attention"
     : "Choose the model Flying Pig will use";
   document.body.classList.toggle("configured", configured);
-  updateGuideView();
-}
-
-function updateGuideView() {
-  const firstRunComplete = Boolean(state.activationSignals.first_run_started);
-  const showGuide = modelReady()
-    && !firstRunComplete
-    && !state.settingsOpen
-    && state.workflowStage === "ready";
-  $("firstUseGuide").classList.toggle("hidden", !showGuide);
-  document.body.classList.toggle("has-first-use-guide", showGuide);
-  $("guideConfigureStatus").textContent = modelReady() ? "Model ready" : "Needs attention";
-  const websiteReady = state.browserConnected && Boolean(state.activeUrl);
-  $("guideWebsiteStatus").textContent = websiteReady ? "Website ready" : "Use the work window";
-  $("guideOpenWebsite").textContent = websiteReady ? "Review" : "Open";
-  for (const item of $("firstUseGuide").querySelectorAll("[data-guide-step]")) {
-    const step = item.dataset.guideStep;
-    const ready = step === "configure" ? modelReady() : step === "website" ? websiteReady : false;
-    item.dataset.ready = ready ? "true" : "false";
-  }
+  document.body.classList.toggle("settings-open", state.settingsOpen);
+  updateWorkflowView();
 }
 
 function updateWorkflowView() {
   const attentionVisible = !$('questionPanel').classList.contains('hidden')
     || !$('checkpointPanel').classList.contains('hidden');
   let stage = state.workflowStage;
+  const firstRunComplete = Boolean(state.activationSignals.first_run_started);
+  const websiteStepComplete = Boolean(state.activationSignals.first_use_website_ready);
+  if ((!modelReady() || state.settingsOpen) && !state.running && !state.lastResult) {
+    stage = "ready";
+  }
+  if (!firstRunComplete && modelReady() && !websiteStepComplete && !state.settingsOpen && !state.running && !state.lastResult) {
+    stage = "preparing";
+  }
   if (state.lastResult && !state.running) stage = "result";
   if (state.running) stage = attentionVisible ? "attention" : "running";
   if (!state.running && !state.lastResult && stage !== "preparing") stage = "ready";
@@ -340,7 +330,10 @@ function updateWorkflowView() {
     : "Talking to customer service";
   $("focusedRunMessage").textContent = $("runMessage").textContent
     || "Flying Pig is working. You only need to return when a decision is required.";
-  updateGuideView();
+  const firstUseTaskStep = !firstRunComplete && websiteStepComplete && stage === "ready";
+  $("taskStepLabel").classList.toggle("hidden", !firstUseTaskStep);
+  $("preparationStepLabel").classList.toggle("hidden", firstRunComplete);
+  $("browserReady").textContent = state.browserConnected ? "I'm ready" : "Open work window";
 }
 
 function startDisabledReason({ hasTask } = { hasTask: Boolean($("taskText").value.trim()) }) {
@@ -555,23 +548,8 @@ function setTaskUrl(url, { workWindow = false } = {}) {
   updateButtons();
 }
 
-function quickstartReady(step) {
-  const hasTask = Boolean($("taskText")?.value.trim());
-  if (step === "model") return modelReady();
-  if (step === "work_window") return state.browserConnected;
-  if (step === "chat_surface") return Boolean(state.activeUrl);
-  if (step === "task_brief") return hasTask;
-  if (step === "start") return state.running || Boolean(state.activationSignals.first_run_started);
-  return false;
-}
-
 function updateQuickstart() {
-  const list = $("quickstartList");
-  if (!list) return;
-  for (const item of list.querySelectorAll("[data-step]")) {
-    item.dataset.ready = quickstartReady(item.dataset.step) ? "true" : "false";
-  }
-  updateGuideView();
+  updateWorkflowView();
 }
 
 async function loadActivationSignals() {
@@ -593,21 +571,6 @@ function recordActivationSignal(name) {
   };
   storageSet({ [activationSignalsKey]: state.activationSignals });
   updateQuickstart();
-}
-
-async function openWebsiteGuide() {
-  state.workflowStage = "preparing";
-  $("preparationMessage").textContent = state.browserConnected
-    ? "Navigate to the customer-service chat in the work window, then return here."
-    : "Opening a work window. Log in and navigate to the customer-service chat.";
-  updateWorkflowView();
-  if (!state.browserConnected) {
-    const opened = await launchChrome();
-    $("preparationMessage").textContent = opened
-      ? "Log in and navigate to the customer-service chat, then return here."
-      : "The work window could not be opened. Try again or check Settings.";
-    updateWorkflowView();
-  }
 }
 
 function applyBrowserPayload(payload) {
@@ -1569,17 +1532,27 @@ function beginRun(task) {
 }
 
 async function confirmBrowserReady() {
-  await refreshTab();
   if (!state.browserConnected) {
     const opened = await launchChrome();
-    if (!opened) return;
+    $("preparationMessage").textContent = opened
+      ? "Log in and navigate to customer support. Select I'm ready when the website is prepared."
+      : "The work window could not be opened. Try again or check Settings.";
+    updateWorkflowView();
+    return;
   }
+  await refreshTab();
   if (!state.activeUrl) {
     $("preparationMessage").textContent = "Open a support page or chat in the work window, then try again.";
     return;
   }
-  const task = $("taskText").value.trim();
-  if (task) beginRun(task);
+  if (!state.activationSignals.first_run_started) {
+    recordActivationSignal("first_use_website_ready");
+    state.workflowStage = "ready";
+    updateWorkflowView();
+    return;
+  }
+  state.workflowStage = "ready";
+  updateWorkflowView();
 }
 
 async function hucaTask() {
@@ -1706,8 +1679,14 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("statusLaunchChrome").addEventListener("click", launchChrome);
   $("browserReady").addEventListener("click", confirmBrowserReady);
   $("backToTask").addEventListener("click", () => {
-    state.workflowStage = "ready";
-    updateWorkflowView();
+    if (!state.activationSignals.first_run_started) {
+      state.settingsOpen = true;
+      updateExperienceMode();
+      $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      state.workflowStage = "ready";
+      updateWorkflowView();
+    }
   });
   $("activityToggle").addEventListener("click", () => {
     state.activityOpen = !state.activityOpen;
@@ -1719,12 +1698,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     updateExperienceMode();
     if (state.settingsOpen) $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
   });
-  $("guideConfigure").addEventListener("click", () => {
-    state.settingsOpen = true;
-    updateExperienceMode();
-    $("firstRunPanel").scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  $("guideOpenWebsite").addEventListener("click", openWebsiteGuide);
   $("setupHelper").addEventListener("click", openSetup);
   $("reconnectHelper").addEventListener("click", () => {
     state.socket?.close();

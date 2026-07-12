@@ -186,31 +186,18 @@ async function main() {
     const modelSetupPlacement = await dashboardPage.$eval("#model", (select) => ({
       inAdvanced: select.closest("details")?.classList.contains("advanced") || false,
       readyModel: document.getElementById("readyModel")?.textContent || "",
-      quickstartText: document.getElementById("quickstartList")?.textContent || "",
       setupHidden: document.getElementById("firstRunPanel")?.classList.contains("hidden") || false,
+      preparationVisible: !document.getElementById("preparationPanel")?.classList.contains("hidden"),
+      taskVisible: getComputedStyle(document.querySelector(".dashboard-grid")).display !== "none",
     }));
     if (
       modelSetupPlacement.inAdvanced
       || modelSetupPlacement.readyModel !== "Configured"
-      || !modelSetupPlacement.quickstartText.includes("Configure the model")
-      || !modelSetupPlacement.quickstartText.includes("Open the work window")
       || !modelSetupPlacement.setupHidden
+      || !modelSetupPlacement.preparationVisible
+      || modelSetupPlacement.taskVisible
     ) {
-      throw new Error(`Configured model setup did not collapse for repeat use: ${JSON.stringify(modelSetupPlacement)}`);
-    }
-    const firstUseGuide = await dashboardPage.$eval("#firstUseGuide", (guide) => ({
-      visible: !guide.classList.contains("hidden"),
-      text: guide.textContent || "",
-      configuredReady: guide.querySelector('[data-guide-step="configure"]')?.dataset.ready || "",
-    }));
-    if (
-      !firstUseGuide.visible
-      || !firstUseGuide.text.includes("Configure")
-      || !firstUseGuide.text.includes("Open the website")
-      || !firstUseGuide.text.includes("Start")
-      || firstUseGuide.configuredReady !== "true"
-    ) {
-      throw new Error(`First-use guide is incomplete: ${JSON.stringify(firstUseGuide)}`);
+      throw new Error(`First use did not advance to website preparation only: ${JSON.stringify(modelSetupPlacement)}`);
     }
     await clickElement(dashboardPage, "#modelSettingsToggle");
     await dashboardPage.waitForFunction(
@@ -259,20 +246,12 @@ async function main() {
       { timeout: 10000 },
     );
     await setValue(dashboardPage, "#model", "cliproxyapi");
-    const startDisabledWithoutBrowser = await dashboardPage.$eval(
-      "#startTask",
-      (button) => button.disabled,
+    await clickElement(dashboardPage, "#modelSettingsToggle");
+    await dashboardPage.waitForFunction(
+      () => !document.getElementById("preparationPanel")?.classList.contains("hidden")
+        && document.getElementById("browserReady")?.textContent.includes("Open work window"),
+      { timeout: 10000 },
     );
-    if (startDisabledWithoutBrowser) {
-      throw new Error("Start should own work-window preparation after model setup.");
-    }
-    const startReason = await dashboardPage.$eval(
-      "#startDisabledReason",
-      (element) => element.textContent,
-    );
-    if (startReason) {
-      throw new Error(`Ready state should not add redundant guidance: ${startReason}`);
-    }
     const readinessBeforeLaunch = await dashboardPage.$$eval(
       ".readiness-item",
       (items) => items.map((item) => `${item.textContent}:${item.dataset.ready}`),
@@ -298,6 +277,19 @@ async function main() {
     if (!statusLaunchHidden) {
       throw new Error("Configured users should not see a separate work-window launch control.");
     }
+    await clickElement(dashboardPage, "#browserReady");
+    await dashboardPage.waitForFunction(
+      () => document.body.textContent.includes("MOCK-CHROME-READY")
+        && document.getElementById("browserReady")?.textContent.includes("I'm ready"),
+      { timeout: 10000 },
+    );
+    await clickElement(dashboardPage, "#browserReady");
+    await dashboardPage.waitForFunction(
+      () => getComputedStyle(document.querySelector(".dashboard-grid")).display !== "none"
+        && !document.getElementById("taskStepLabel")?.classList.contains("hidden")
+        && document.getElementById("preparationPanel")?.classList.contains("hidden"),
+      { timeout: 10000 },
+    );
     const attachChromeVisible = await dashboardPage.$eval(
       "#attachChrome",
       (button) => button.textContent.includes("Connect Existing Chrome") && !button.disabled,
@@ -397,16 +389,6 @@ async function main() {
       throw new Error("Dashboard does not expose the user default profile option.");
     }
 
-    await clickElement(dashboardPage, "#startTask");
-    await dashboardPage.waitForFunction(
-      () => !document.getElementById("preparationPanel")?.classList.contains("hidden"),
-      { timeout: 10000 },
-    );
-    await dashboardPage.waitForFunction(
-      () => document.body.textContent.includes("MOCK-CHROME-READY"),
-      { timeout: 10000 },
-    );
-    await clickElement(dashboardPage, "#backToTask");
     await dashboardPage.waitForFunction(
       () => document.getElementById("browserStatus")?.textContent === "Work Window Connected",
       { timeout: 10000 },
@@ -475,12 +457,12 @@ async function main() {
       () => document.body.textContent.includes("MOCK-RUN-OK"),
       { timeout: 10000 },
     );
-    const guideHiddenAfterStart = await dashboardPage.$eval(
-      "#firstUseGuide",
-      (guide) => guide.classList.contains("hidden"),
+    const onboardingLabelHiddenAfterStart = await dashboardPage.$eval(
+      "#taskStepLabel",
+      (label) => label.classList.contains("hidden"),
     );
-    if (!guideHiddenAfterStart) {
-      throw new Error("First-use guide should disappear after the first run starts.");
+    if (!onboardingLabelHiddenAfterStart) {
+      throw new Error("First-use step labels should disappear after the first run starts.");
     }
     const activationSignals = await dashboardPage.evaluate(() => {
       const raw = localStorage.getItem("flyingpig.activationSignals");

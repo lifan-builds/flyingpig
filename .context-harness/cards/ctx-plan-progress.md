@@ -5,7 +5,7 @@ importance: 0.85
 confidence: confirmed
 source: PLAN.md#progress
 chunk: null
-tokens_est: 320
+tokens_est: 331
 tags: [plan, progress]
 ---
 
@@ -18,7 +18,7 @@ tags: [plan, progress]
 - continuing task-local progress
 
 ## Key facts
-- [x] Add a temporary first-use guide for Configure, Open website, and Start, with model-configuration recovery and browser smoke coverage.
+- [x] Convert first use into sequential Configure, Open website, and Start screens, with model-configuration recovery and browser smoke coverage proving one...
 - [x] Implement live-session hardening from the Amex cancellation run: structured authorization, verified semantic chat sends, transcript workflow state,...
 - [x] Expose structured run authorization and completion/follow-up evidence in the dashboard, with browser smoke coverage that validates the transmitted...
 - [x] Add durable local scheduling for deferred follow-up actions, with reconnect-safe due delivery and dashboard notifications.

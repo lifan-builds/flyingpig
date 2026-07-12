@@ -181,6 +181,19 @@ body.configured .status-row {
   display: none;
 }
 
+body:not(.configured) .status-row,
+body.settings-open .status-row {
+  display: none;
+}
+
+body:not(.configured) .hero,
+body:not(.configured) .readiness-strip,
+body:not(.configured) .dashboard-grid,
+body.settings-open .dashboard-grid,
+body.settings-open .focus-panel {
+  display: none;
+}
+
 .focus-panel {
   align-self: start;
   background: var(--panel);
@@ -326,93 +339,6 @@ body.configured[data-workflow="ready"] .dashboard-grid {
   width: 100%;
 }
 
-body.has-first-use-guide[data-workflow="ready"] .dashboard-grid {
-  margin-top: 20px;
-}
-
-.first-use-guide {
-  display: grid;
-  gap: 12px;
-  margin: 28px auto 0;
-  max-width: 640px;
-  width: 100%;
-}
-
-.first-use-guide h2 {
-  font-size: 16px;
-}
-
-.guide-steps {
-  border-bottom: 1px solid var(--border);
-  border-top: 1px solid var(--border);
-  display: grid;
-  gap: 0;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.guide-steps li {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: auto minmax(0, 1fr);
-  padding: 10px;
-}
-
-.guide-steps li + li {
-  border-left: 1px solid var(--border);
-}
-
-.guide-steps li > span {
-  align-items: center;
-  background: var(--panel-2);
-  border-radius: 3px;
-  color: var(--muted);
-  display: inline-flex;
-  font-size: 11px;
-  font-weight: 780;
-  height: 22px;
-  justify-content: center;
-  width: 22px;
-}
-
-.guide-steps li[data-ready="true"] {
-  background: var(--accent-soft);
-}
-
-.guide-steps li[data-ready="true"] > span {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.guide-steps strong,
-.guide-steps small {
-  display: block;
-}
-
-.guide-steps strong {
-  color: var(--ink);
-  font-size: 12px;
-  margin: 0;
-  text-transform: none;
-}
-
-.guide-steps small {
-  color: var(--muted);
-  font-size: 11px;
-  margin-top: 2px;
-}
-
-.guide-steps button {
-  grid-column: 2;
-  justify-self: start;
-}
-
 body[data-workflow="ready"] .work-column,
 body[data-workflow="preparing"] .dashboard-grid,
 body[data-workflow="running"] .dashboard-grid:not(.activity-open),
@@ -453,9 +379,10 @@ body[data-workflow="result"] .transcript {
 }
 
 .first-run-panel {
-  display: grid;
-  gap: 14px;
-  grid-template-columns: minmax(390px, 0.82fr) minmax(480px, 1.18fr);
+  display: block;
+  margin: 28px auto 0;
+  max-width: 640px;
+  width: 100%;
 }
 
 .work-column {
@@ -1228,10 +1155,6 @@ li span {
     grid-template-columns: minmax(340px, 0.92fr) minmax(420px, 1.08fr);
   }
 
-  .first-run-panel {
-    grid-template-columns: minmax(340px, 0.92fr) minmax(420px, 1.08fr);
-  }
-
   .readiness-strip {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1262,10 +1185,6 @@ li span {
     grid-template-columns: 1fr;
   }
 
-  .first-run-panel {
-    grid-template-columns: 1fr;
-  }
-
   .model-grid {
     grid-template-columns: 1fr;
   }
@@ -1285,15 +1204,6 @@ li span {
 
   .actions {
     grid-template-columns: 1fr;
-  }
-
-  .guide-steps {
-    grid-template-columns: 1fr;
-  }
-
-  .guide-steps li + li {
-    border-left: 0;
-    border-top: 1px solid var(--border);
   }
 
   .brand-lockup {
