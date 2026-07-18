@@ -3,7 +3,7 @@
   "name": "prepare-next-supervised-beta-run",
   "title": "Prepare next supervised beta run",
   "description": "Track remaining public-beta readiness work without private account or session details.",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,
@@ -18,7 +18,9 @@
   "commit": null,
   "pr_url": null,
   "subtasks": [],
-  "children": [],
+  "children": [
+    "07-18-harden-supervised-mcp-runs"
+  ],
   "parent": null,
   "relatedFiles": [],
   "notes": "",

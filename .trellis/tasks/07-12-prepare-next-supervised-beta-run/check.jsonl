@@ -1,1 +1,5 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/flyingpig/index.md", "reason": "Run the full Flying Pig quality checklist for the operational task."}
+{"file": ".trellis/spec/flyingpig/safety-auth.md", "reason": "Verify authorization, checkpoint, verified-send, and live supervision claims from safe evidence only."}
+{"file": ".trellis/spec/flyingpig/browser-runtime.md", "reason": "Verify browser and MCP scope without launching or touching an authenticated surface."}
+{"file": ".trellis/spec/flyingpig/data-privacy.md", "reason": "Inspect all parent artifacts for secrets, PII, private run content, recordings, and session state."}
+{"file": ".trellis/spec/flyingpig/verification.md", "reason": "Apply safe gates and report gated or skipped live, package, and release checks honestly."}
