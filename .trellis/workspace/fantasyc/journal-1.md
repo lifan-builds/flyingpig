@@ -39,3 +39,37 @@ Rebuilt and visually verified the packaged dashboard, validated bounded model re
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Harden supervised MCP execution
+
+**Date**: 2026-07-18
+**Task**: Harden supervised MCP execution
+**Branch**: `task/prepare-next-supervised-beta-run`
+
+### Summary
+
+Added live PII-safe progress, target-scoped authorization, fresh completion, duplicate-intent protection, graceful supervisor stop, bounded planner recovery, reproducible build identity, startup diagnostics, regression coverage, and executable runtime specs.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `99db6bd` | (see git log) |
+| `ee51209` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
