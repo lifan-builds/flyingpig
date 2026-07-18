@@ -20,6 +20,7 @@
 - Before publishing any release artifact, scan it for PII, API keys, credentials, tokens, cookies, logs, recordings, user-specific account information, database files, browser state, and private build inputs.
 - Signing, notarization, packaging, and publishing are explicit release operations. They are not default development or migration validation.
 - Public update checks must not embed a private repository token or other credential.
+- Packaged helper/desktop builds generate a PII-free identity from application version, bounded source revision, build timestamp, and channel. Development builds say `development`; startup UI may show selected local port and match state, but not commands, environment values, user paths, or port-owner details.
 
 ## Review Rule
 

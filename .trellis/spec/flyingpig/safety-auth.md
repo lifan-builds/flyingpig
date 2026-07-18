@@ -22,6 +22,10 @@ Consequential authorization must be structured and travel with the run:
 
 A generic `user_authorized=true` value grants no permission to close, cancel, refund, accept, recover, or make another irreversible account change. A clear user task permits normal mechanics needed to pursue that task, but not an unlisted consequential action.
 
+- Authorization targets are an ordered structured collection. Each target has a stable key, a user-visible target description, and its own permitted actions. Never apply aggregate/global actions across multiple targets.
+- Legacy target-plus-global-action payloads may normalize to exactly one target. Structured targets take precedence, and legacy fields must not broaden them.
+- Every automatically generated consequential message binds to one target. If fresh visible context cannot resolve one among several permitted targets, use a Decision Checkpoint rather than guessing.
+
 ## Decision Checkpoints
 
 - Use a structured **Decision Checkpoint** for offers, strategy pivots after refusal, irreversible account changes, material tradeoffs, verification boundaries, and other consequential choices.
@@ -37,5 +41,6 @@ A generic `user_authorized=true` value grants no permission to close, cancel, re
 - Do not expose raw fill, type, or key actions against the chat composer as an alternative send path.
 - Recognize **Active Human Work** when a representative is checking or reviewing. Use a real patience window and warm acknowledgements; do not burn steps or repeatedly nudge.
 - **Hangup and Call-again** is user-gated recovery after final refusal or a dead/disconnected chat. Ask first, retain the current task scope, and never restart while a human is typing or reviewing.
-- Base completion on the freshest visible transcript and the authorization-specific completion checklist. Do not claim a deferred support contact or expected future event is already complete.
+- Base completion on the freshest visible transcript and the authorization-specific, target-scoped completion checklist. Do not claim a deferred support contact or expected future event is already complete. A deferred accepted disposition remains partial/follow-up, not full success.
+- A supervisor stop prevents future outbound actions at verified-send boundaries, evaluates the latest fresh snapshot, and preserves grounded success or partial work. Keep hard cancellation separate for teardown and replacement/HUCA flows.
 - Live authenticated customer-service actions require the user present for login/MFA and explicit approval moments. They are never routine test fixtures.

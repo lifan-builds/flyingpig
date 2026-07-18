@@ -25,7 +25,7 @@ Keep `AgentBrain` a coordinator. Browser launch/profile rules, model creation/fa
 - The configured dashboard is a state-driven single-task assistant. Replace the primary surface across request, preparation, running, decision, and result states; keep diagnostics and operational controls progressively disclosed.
 - First use is sequential: Configure, Open website, then Start. Repeat users go to the request form, while invalid saved model configuration returns fully to recovery/setup.
 - The **Agent Run Plan** is the seam between daemon transport and `AgentBrain`; transport passes a prepared plan rather than constructing model/browser kwargs.
-- The **Run Session** owns status, progress, pending attention, results, and reconnect snapshots.
+- The **Run Session** owns status, progress, pending attention, results, and reconnect snapshots. Executor progress publishes append-only into the brain-owned stream while the daemon remains the sole cursor-based broadcaster. Graceful supervisor stop and hard cancellation are distinct helper-owned lifecycle operations.
 - The **Evidence Bundle** owns links among visible transcript evidence, checkpoint audit events, saved artifacts, and `TaskResult`.
 - Support profiles hold declarative surface knowledge. Bespoke adapters are reserved for unusual mechanics or recovery policy.
 - Deferred follow-up reminders are helper-owned durable local state, not transient dashboard-only state.

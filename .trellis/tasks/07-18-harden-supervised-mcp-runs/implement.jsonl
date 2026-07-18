@@ -1,1 +1,8 @@
-{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/flyingpig/index.md", "reason": "Apply Flying Pig ownership boundaries and the pre-development checklist across helper, MCP, daemon, dashboard, and desktop changes."}
+{"file": ".trellis/spec/flyingpig/architecture.md", "reason": "Preserve helper-owned run state and the Electron/helper/dashboard responsibility split while adding live progress and graceful stop behavior."}
+{"file": ".trellis/spec/flyingpig/safety-auth.md", "reason": "Implement target-scoped authorization, completion, duplicate, verified-send, checkpoint, and supervisor-stop behavior without broadening consequential permissions."}
+{"file": ".trellis/spec/flyingpig/browser-runtime.md", "reason": "Keep MCP actions allowlisted, browser attachment bounded, planner recovery narrow, and all live customer-service validation gated."}
+{"file": ".trellis/spec/flyingpig/supervised-mcp-runtime.md", "reason": "Implement the executable cross-layer contracts for progress delivery, target authorization, completion, duplicate suppression, stop/cancel behavior, planner normalization, and build/startup diagnostics."}
+{"file": ".trellis/spec/flyingpig/data-privacy.md", "reason": "Ensure progress, timing, build diagnostics, results, fixtures, and logs remain PII-free and exclude private browser/session state."}
+{"file": ".trellis/spec/flyingpig/coding.md", "reason": "Match existing Python and JavaScript patterns for async boundaries, schemas, adapters, validation, and typed failures."}
+{"file": ".trellis/spec/flyingpig/verification.md", "reason": "Run focused and full safe gates while keeping authenticated browser, publish, signing, and release operations explicitly gated."}

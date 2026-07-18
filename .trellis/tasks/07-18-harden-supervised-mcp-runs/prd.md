@@ -105,4 +105,4 @@ The evidence for this task is intentionally PII-free. Do not add account identif
 
 ## Implementation Approval
 
-This child task remains in `planning`. Do not run `task.py start`, modify product code, or perform another authenticated smoke until the user separately approves implementation and any live validation.
+On 2026-07-18, the user explicitly instructed the agent to continue working until all remaining tasks are complete, approving implementation of this child task. Authenticated customer-service smoke, publishing, signing, notarization, and other gated external operations remain out of scope without separate explicit approval.
