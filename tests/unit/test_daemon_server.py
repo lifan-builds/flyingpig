@@ -51,6 +51,47 @@ class FakeAgentBrain:
         )
 
 
+class FakeLiveProgressAgentBrain:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.input_handler = FakeCheckpointInputHandler()
+        self._step_log: list[dict] = []
+
+    @property
+    def step_log(self) -> list[dict]:
+        return list(self._step_log)
+
+    async def execute(self, **kwargs) -> TaskResult:
+        self._step_log.append(
+            {
+                "type": "progress",
+                "phase": "page_selection",
+                "state": "starting",
+                "message": "Authorized tab selection started.",
+            }
+        )
+        await asyncio.sleep(1.2)
+        self._step_log.extend(
+            [
+                {
+                    "type": "progress",
+                    "phase": "page_selection",
+                    "state": "complete",
+                    "message": "Authorized tab selection completed.",
+                },
+                {
+                    "type": "timing_span",
+                    "name": "page_selection",
+                    "label": "Authorized tab selection",
+                    "duration_ms": 1200.0,
+                    "status": "ok",
+                    "metadata": {},
+                },
+            ]
+        )
+        return TaskResult(status=TaskStatus.SUCCESS, summary="synthetic progress complete")
+
+
 class FakeWaitingRepAgentBrain:
     def __init__(self, **kwargs):
         self.kwargs = kwargs
@@ -165,6 +206,34 @@ class FakeManualLoginAgentBrain:
         )
 
 
+class FakeGracefulStopAgentBrain:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+        self.input_handler = FakeCheckpointInputHandler()
+        self._step_log: list[dict] = []
+        self.stop_requested = asyncio.Event()
+
+    @property
+    def step_log(self) -> list[dict]:
+        return list(self._step_log)
+
+    def request_stop(self, reason: str | None = None) -> bool:
+        self.stop_requested.set()
+        return True
+
+    async def execute(self, **kwargs) -> TaskResult:
+        await self.stop_requested.wait()
+        return TaskResult(
+            status=TaskStatus.SUCCESS,
+            summary="Fresh synthetic evidence confirmed completion.",
+            outcome_details={
+                "termination_reason": "supervisor_stop",
+                "stop_evaluation": "success",
+            },
+            steps_taken=1,
+        )
+
+
 class FakeHucaAgentBrain:
     tasks: list[str] = []
 
@@ -223,6 +292,60 @@ def run_payload(**overrides) -> dict:
     }
     payload.update(overrides)
     return payload
+
+
+def test_live_progress_updates_state_and_websocket_before_run_finishes(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeLiveProgressAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            ws.receive_json()
+            ws.send_json({"type": "start", **run_payload(max_steps=2)})
+
+            progress = None
+            for _ in range(20):
+                message = ws.receive_json()
+                if message.get("type") == "progress":
+                    progress = message["event"]
+                    break
+
+            state = client.get("/run/state").json()
+
+    assert progress is not None
+    assert progress["phase"] == "page_selection"
+    assert state["running"] is True
+    assert state["message"] == "Authorized tab selection started."
+    serialized = str(progress)
+    assert "snapshot" not in serialized.casefold()
+    assert "prompt" not in serialized.casefold()
+
+
+def test_progress_cursor_flushes_final_events_once_before_result(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeLiveProgressAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws") as ws:
+            assert ws.receive_json()["type"] == "ready"
+            ws.receive_json()
+            ws.send_json({"type": "start", **run_payload(max_steps=2)})
+            progress_states = []
+            timing_spans = []
+            for _ in range(40):
+                message = ws.receive_json()
+                if message.get("type") == "progress":
+                    progress_states.append(message["event"]["state"])
+                elif message.get("type") == "timing_span":
+                    timing_spans.append(message["name"])
+                elif message.get("type") == "result_ready":
+                    break
+
+    assert progress_states == ["starting", "complete"]
+    assert timing_spans.count("page_selection") == 1
 
 
 def test_agent_run_survives_dashboard_disconnect(monkeypatch):
@@ -732,6 +855,38 @@ def test_rest_run_endpoints_answer_pending_decision_checkpoint(monkeypatch):
         assert result is not None
         assert result["status"] == "completed"
         assert '"selected_option_id": "close_card"' in result["message"]
+
+
+def test_graceful_stop_preserves_grounded_result(monkeypatch):
+    reset_run_manager()
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeGracefulStopAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        start = client.post("/run/start", json=run_payload(max_steps=2))
+        assert start.json()["running"] is True
+
+        stopped = client.post("/run/stop")
+
+    assert stopped.status_code == 200
+    state = stopped.json()
+    assert state["status"] == "completed"
+    assert state["result"]["termination_reason"] == "supervisor_stop"
+    assert state["result"]["stop_evaluation"] == "success"
+    assert state["result"]["supervisor_stopped"] is True
+
+
+def test_helper_health_exposes_safe_build_identity():
+    reset_run_manager()
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        health = client.get("/health").json()
+
+    assert health["ok"] is True
+    assert health["build"]["version"]
+    assert health["build"]["channel"] in {"development", "packaged"}
+    assert "/" not in health["build"]["identity"]
 
 
 def test_huca_cancels_active_run_and_restarts_same_task(monkeypatch):

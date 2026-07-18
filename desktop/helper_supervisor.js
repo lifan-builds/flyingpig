@@ -10,6 +10,35 @@ export const DEFAULT_HOST = "127.0.0.1";
 export const DEFAULT_START_PORT = 8765;
 export const DEFAULT_CDP_PORT = 9222;
 
+export function compareBuildIdentity(expected, actual) {
+  if (!expected?.version || !actual?.version) return "unknown";
+  if (expected.version !== actual.version) return "mismatch";
+  if ((expected.revision || actual.revision) && expected.revision !== actual.revision) {
+    return "mismatch";
+  }
+  const expectedBuiltAt = expected.builtAt || expected.built_at;
+  const actualBuiltAt = actual.builtAt || actual.built_at;
+  if ((expectedBuiltAt || actualBuiltAt) && expectedBuiltAt !== actualBuiltAt) {
+    return "mismatch";
+  }
+  if (expected.channel && actual.channel && expected.channel !== actual.channel) {
+    return "mismatch";
+  }
+  return "match";
+}
+
+function safeStartupError(phase, category) {
+  const messages = {
+    port_selection: "No local helper port is available. Close another Flying Pig helper and retry.",
+    spawn: "The local helper could not be launched. Open Logs for details and retry.",
+    health_wait: "The local helper did not become ready in time. Open Logs for details and retry.",
+    early_exit: "The local helper exited before it became ready. Open Logs for details and retry.",
+  };
+  const error = new Error(messages[category] || messages[phase] || "The local helper could not start.");
+  error.phase = category || phase;
+  return error;
+}
+
 export function helperExecutableName(platform = process.platform) {
   return platform === "win32" ? "flyingpig-helper.exe" : "flyingpig-helper";
 }
@@ -116,9 +145,9 @@ export async function waitForHelperReady({
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
 
-  throw new Error(
-    `Timed out waiting for Flying Pig helper at ${baseUrl}: ${lastError?.message || "unknown"}`,
-  );
+  const error = safeStartupError("health_wait", "health_wait");
+  error.causeCategory = lastError ? "health_unavailable" : "timeout";
+  throw error;
 }
 
 async function fetchJson(url) {
@@ -155,6 +184,8 @@ export class HelperSupervisor {
     env = process.env,
     spawnFn = spawn,
     waitForReady = waitForHelperReady,
+    expectedBuild = null,
+    onDiagnostics = null,
   } = {}) {
     this.host = host;
     this.startPort = startPort;
@@ -166,33 +197,61 @@ export class HelperSupervisor {
     this.env = env;
     this.spawnFn = spawnFn;
     this.waitForReady = waitForReady;
+    this.expectedBuild = expectedBuild;
+    this.onDiagnostics = onDiagnostics;
     this.child = null;
     this.port = null;
     this.baseUrl = null;
     this.logPath = path.join(logsDir, "desktop-helper.log");
     this.launch = null;
     this.lastError = null;
+    this.phase = "idle";
+    this.preferredPortOccupied = false;
+    this.helperBuild = null;
+    this.buildMatch = "unknown";
   }
 
   diagnostics() {
     return {
       baseUrl: this.baseUrl,
-      command: this.launch?.command,
-      args: this.launch?.args || [],
-      logPath: this.logPath,
       port: this.port,
+      preferredPort: this.startPort,
+      preferredPortOccupied: this.preferredPortOccupied,
+      phase: this.phase,
       running: Boolean(this.child && !this.child.killed),
       lastError: this.lastError?.message || null,
+      build: this.helperBuild,
+      expectedBuild: this.expectedBuild,
+      buildMatch: this.buildMatch,
+      logsAvailable: true,
     };
+  }
+
+  notifyDiagnostics() {
+    try {
+      this.onDiagnostics?.(this.diagnostics());
+    } catch {
+      // UI diagnostics must never interrupt helper supervision.
+    }
   }
 
   async start() {
     if (this.child) return this.diagnostics();
 
-    this.port = await findAvailablePort({
-      host: this.host,
-      startPort: this.startPort,
-    });
+    this.phase = "port_selection";
+    this.notifyDiagnostics();
+    try {
+      this.port = await findAvailablePort({
+        host: this.host,
+        startPort: this.startPort,
+      });
+    } catch {
+      this.lastError = safeStartupError("port_selection", "port_selection");
+      this.notifyDiagnostics();
+      throw this.lastError;
+    }
+    this.preferredPortOccupied = this.port !== this.startPort;
+    this.notifyDiagnostics();
     this.baseUrl = helperBaseUrl({ host: this.host, port: this.port });
     this.launch = buildHelperLaunchCommand({
       host: this.host,
@@ -209,37 +268,65 @@ export class HelperSupervisor {
     await mkdir(this.logsDir, { recursive: true });
     const log = createWriteStream(this.logPath, { flags: "a" });
     log.write(`\n[desktop] starting helper at ${new Date().toISOString()}\n`);
-    log.write(`[desktop] ${this.launch.command} ${this.launch.args.join(" ")}\n`);
+    log.write(`[desktop] selected_port=${this.port} preferred_port_used=${!this.preferredPortOccupied}\n`);
 
-    this.child = this.spawnFn(this.launch.command, this.launch.args, {
-      cwd: this.launch.cwd,
-      env: { ...this.env, ...this.launch.envPatch },
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    });
+    this.phase = "spawn";
+    this.notifyDiagnostics();
+    try {
+      this.child = this.spawnFn(this.launch.command, this.launch.args, {
+        cwd: this.launch.cwd,
+        env: { ...this.env, ...this.launch.envPatch },
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    } catch {
+      log.write("[desktop] helper spawn failed category=spawn\n");
+      log.end();
+      this.lastError = safeStartupError("spawn", "spawn");
+      this.notifyDiagnostics();
+      throw this.lastError;
+    }
     this.child.stdout?.pipe(log, { end: false });
     this.child.stderr?.pipe(log, { end: false });
     const spawnError = new Promise((_resolve, reject) => {
-      this.child.once("error", (error) => {
-        log.write(`[desktop] helper spawn failed: ${error.message}\n`);
-        reject(error);
+      this.child.once("error", () => {
+        log.write("[desktop] helper spawn failed category=spawn\n");
+        reject(safeStartupError("spawn", "spawn"));
+      });
+    });
+    const earlyExit = new Promise((_resolve, reject) => {
+      this.child.once("exit", (code, signal) => {
+        log.write(`[desktop] helper exited code=${code ?? ""} signal=${signal ?? ""}\n`);
+        log.end();
+        this.child = null;
+        if (this.phase !== "ready") {
+          reject(safeStartupError("health_wait", "early_exit"));
+        }
       });
     });
     spawnError.catch(() => {});
-    this.child.once("exit", (code, signal) => {
-      log.write(`[desktop] helper exited code=${code ?? ""} signal=${signal ?? ""}\n`);
-      log.end();
-      this.child = null;
-    });
+    earlyExit.catch(() => {});
 
     try {
-      await Promise.race([this.waitForReady({ baseUrl: this.baseUrl }), spawnError]);
+      this.phase = "health_wait";
+      this.notifyDiagnostics();
+      const health = await Promise.race([
+        this.waitForReady({ baseUrl: this.baseUrl }),
+        spawnError,
+        earlyExit,
+      ]);
+      this.helperBuild = health?.build || null;
+      this.buildMatch = compareBuildIdentity(this.expectedBuild, this.helperBuild);
+      this.phase = "ready";
       this.lastError = null;
+      this.notifyDiagnostics();
       return this.diagnostics();
     } catch (error) {
-      this.lastError = error;
+      this.lastError = error?.phase ? error : safeStartupError(this.phase, this.phase);
+      this.phase = this.lastError.phase;
       await this.stop({ forceAfterMs: 1500 });
-      throw error;
+      this.notifyDiagnostics();
+      throw this.lastError;
     }
   }
 
@@ -249,14 +336,16 @@ export class HelperSupervisor {
 
     await new Promise((resolve) => {
       let finished = false;
+      let forceTimer;
       const done = () => {
         if (finished) return;
         finished = true;
+        clearTimeout(forceTimer);
         resolve();
       };
       child.once("exit", done);
       child.kill("SIGTERM");
-      setTimeout(() => {
+      forceTimer = setTimeout(() => {
         if (!finished) {
           child.kill("SIGKILL");
         }

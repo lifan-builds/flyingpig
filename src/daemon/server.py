@@ -7,8 +7,9 @@ Protocol (JSON per frame, both directions):
      "task": "...", "cdp_url": "http://127.0.0.1:9222",
      "permission_mode": "supervised_browser", "user_authorized": true}
     {"type": "answer", "text": "..."}                  # response to a "question"
-    {"type": "huca"}                                    # restart same task in a fresh chat
-    {"type": "cancel"}
+    {"type": "huca"}                                    # hard-cancel + fresh chat
+    {"type": "stop"}                                    # graceful supervisor stop
+    {"type": "cancel"}                                  # hard cancel / teardown
     {"type": "list_sites"}
 
   Daemon -> Client:
@@ -42,7 +43,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from src.agent.brain import AgentBrain, TaskStatus
+from src.agent.brain import AgentBrain
 from src.agent.browser_runtime import (
     ChromeLaunchConfig,
     debugger_is_ready,
@@ -57,7 +58,9 @@ from src.agent.chrome_devtools_mcp import (
     get_default_mcp_session,
     summarize_mcp_error,
 )
+from src.agent.result import TaskResult, TaskStatus
 from src.agent.run_orchestration import build_agent_run_plan
+from src.build_info import build_identity
 from src.daemon.follow_up_reminders import FollowUpReminderStore
 from src.daemon.model_settings import model_settings_payload, save_model_settings
 from src.daemon.preflight import preflight_check, task_with_success_criteria
@@ -172,6 +175,9 @@ class RunManager:
         self.huca_attempts = 0
         self._user_wait_started_at: float | None = None
         self._rep_wait_started_at: float | None = None
+        self._preserve_stop_state_on_cancel = False
+        self._progress_cursor = 0
+        self._progress_lock = asyncio.Lock()
 
     def attach(self, session: Session) -> None:
         self.sessions.add(session)
@@ -250,6 +256,8 @@ class RunManager:
             self.huca_attempts = 0
         self._user_wait_started_at = None
         self._rep_wait_started_at = None
+        self._preserve_stop_state_on_cancel = False
+        self._progress_cursor = 0
 
         preflight_started_at = perf_counter()
         preflight = preflight_check(msg, site=site)
@@ -365,6 +373,8 @@ class RunManager:
             result = await self.brain.execute(
                 task=task, max_steps=max_steps, template_id=template_id
             )
+            # Flush events emitted just before executor completion ahead of result_ready.
+            await self._drain_progress()
             await self._finish_open_wait_spans()
             result.timing_spans = self._merged_timing_spans(
                 self.timing_spans,
@@ -402,15 +412,16 @@ class RunManager:
                 timing_spans=list(result.timing_spans),
             )
         except asyncio.CancelledError:
-            await self.set_state(
-                status=RunStatus.CANCELLED.value,
-                running=False,
-                needs_input=False,
-                message="Cancelled",
-                finished_at=now_iso(),
-                pending_request=None,
-                timing_spans=list(self.timing_spans),
-            )
+            if not self._preserve_stop_state_on_cancel:
+                await self.set_state(
+                    status=RunStatus.CANCELLED.value,
+                    running=False,
+                    needs_input=False,
+                    message="Cancelled",
+                    finished_at=now_iso(),
+                    pending_request=None,
+                    timing_spans=list(self.timing_spans),
+                )
             raise
         except Exception as e:
             logger.exception("agent run failed")
@@ -459,15 +470,19 @@ class RunManager:
                 )
 
     async def _poll_progress(self) -> None:
-        sent = 0
         while self.agent_task and not self.agent_task.done():
             await asyncio.sleep(0.5)
-            if not self.agent_task or self.agent_task.done():
-                break
+            await self._drain_progress()
+        await self._drain_progress()
+
+    async def _drain_progress(self) -> None:
+        """Broadcast each append-only brain event exactly once in source order."""
+        async with self._progress_lock:
             if not self.brain:
-                continue
+                return
             progress = self.brain.step_log
-            for event in progress[sent:]:
+            pending = progress[self._progress_cursor :]
+            for event in pending:
                 if event.get("type") == "timing_span":
                     event_payload = dict(event)
                     self.timing_spans = self._merged_timing_spans(
@@ -476,6 +491,7 @@ class RunManager:
                     )
                     await self.broadcast(**event_payload)
                     await self.set_state(timing_spans=list(self.timing_spans))
+                    self._progress_cursor += 1
                     continue
                 pending_request = getattr(self.brain.input_handler, "pending_request", None)
                 normalized_request = normalize_attention_request(pending_request)
@@ -509,7 +525,7 @@ class RunManager:
                     message=display_message,
                     pending_request=normalized_request,
                 )
-            sent = len(progress)
+                self._progress_cursor += 1
 
     async def answer(self, text: str, payload: dict | None = None) -> None:
         if self.brain is None:
@@ -528,7 +544,55 @@ class RunManager:
         )
         await self._finish_user_wait_span()
 
+    async def stop(self, reason: str = "Supervisor requested a stop.") -> None:
+        """Stop future MCP actions while preserving any freshly grounded result."""
+        async with self.lock:
+            if not self.agent_task or self.agent_task.done():
+                return
+            if self.brain is None or not self.brain.request_stop(reason):
+                await self._cancel_active_run(status_message="cancelled")
+                return
+            await self.broadcast(type="status", text="Stopping safely after the current action.")
+            await self.set_state(
+                status=RunStatus.RUNNING.value,
+                running=True,
+                needs_input=False,
+                message="Stopping safely and evaluating the latest visible evidence.",
+                pending_request=None,
+            )
+            try:
+                await asyncio.wait_for(asyncio.shield(self.agent_task), timeout=120)
+            except TimeoutError:
+                logger.warning("graceful supervisor stop reached its bounded wait")
+                self._preserve_stop_state_on_cancel = True
+                self.agent_task.cancel()
+                await asyncio.gather(self.agent_task, return_exceptions=True)
+                await self._cancel_observer_tasks()
+                stop_result = TaskResult(
+                    status=TaskStatus.FAILED,
+                    summary="Supervisor stop failed to evaluate fresh evidence.",
+                    outcome_details={
+                        "termination_reason": "supervisor_stop",
+                        "stop_evaluation": "failed_to_evaluate",
+                        "failure_reason": "bounded_stop_evaluation_timeout",
+                    },
+                    timing_spans=list(self.timing_spans),
+                )
+                payload = result_payload(stop_result)
+                await self.broadcast(**payload)
+                await self.set_state(
+                    status=RunStatus.FAILED.value,
+                    running=False,
+                    needs_input=False,
+                    message="Stopped, but fresh evidence could not be evaluated in time.",
+                    finished_at=now_iso(),
+                    pending_request=None,
+                    timing_spans=list(self.timing_spans),
+                    result=payload,
+                )
+
     async def cancel(self) -> None:
+        """Hard-cancel an active run for teardown and replacement flows."""
         async with self.lock:
             await self._cancel_active_run(status_message="cancelled")
 
@@ -759,6 +823,8 @@ class Session:
                 await run_manager.answer(msg.get("text", ""), payload=msg.get("payload"))
             elif mtype == "huca":
                 await run_manager.huca(msg)
+            elif mtype == "stop":
+                await run_manager.stop()
             elif mtype == "cancel":
                 await run_manager.cancel()
             else:
@@ -812,7 +878,7 @@ def create_app(reminder_store: FollowUpReminderStore | None = None) -> FastAPI:
 
     @app.get("/health")
     async def health():
-        return {"ok": True, "sites": list_sites()}
+        return {"ok": True, "sites": list_sites(), "build": build_identity()}
 
     @app.get("/browser/status")
     async def browser_status(cdp_url: str = "http://127.0.0.1:9222"):
@@ -866,6 +932,11 @@ def create_app(reminder_store: FollowUpReminderStore | None = None) -> FastAPI:
             "ok": reminder is not None,
             "reminder": reminder.model_dump(mode="json") if reminder else None,
         }
+
+    @app.post("/run/stop")
+    async def run_stop():
+        await run_manager.stop()
+        return run_manager.state.snapshot()
 
     @app.post("/run/cancel")
     async def run_cancel():

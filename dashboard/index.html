@@ -175,16 +175,21 @@
 
           <fieldset class="run-authorization">
             <legend>Authorized actions for this run</legend>
-            <label for="authorizationTarget">Target account or service</label>
-            <input id="authorizationTarget" placeholder="Example: card ending 12345">
-            <label class="check-row">
-              <input id="authorizeClosure" type="checkbox">
-              Close or cancel the target account/service without asking again
-            </label>
-            <label class="check-row">
-              <input id="authorizeRefund" type="checkbox">
-              Request return of a remaining credit or negative balance
-            </label>
+            <div id="authorizationTargets">
+              <section class="authorization-target-row">
+                <label for="authorizationTarget">Target account or service</label>
+                <input id="authorizationTarget" class="authorization-target-display" placeholder="Example: card ending 12345">
+                <label class="check-row">
+                  <input id="authorizeClosure" class="authorize-target-closure" type="checkbox">
+                  Close or cancel this target without asking again
+                </label>
+                <label class="check-row">
+                  <input id="authorizeRefund" class="authorize-target-refund" type="checkbox">
+                  Request return of this target's remaining credit or negative balance
+                </label>
+              </section>
+            </div>
+            <button id="addAuthorizationTarget" class="secondary" type="button">Add another target</button>
             <div class="authorization-refund-methods">
               <span>Allowed refund methods</span>
               <label class="check-row">
@@ -252,6 +257,7 @@
 
             <label for="helperUrl">Helper endpoint</label>
             <input id="helperUrl" placeholder="http://127.0.0.1:8765">
+            <p class="field-note">Helper build: <span id="helperBuild">unknown/development</span></p>
 
             <fieldset class="notification-settings">
               <legend>User attention alerts</legend>
@@ -271,7 +277,7 @@
           <div class="actions">
             <button id="startTask" type="button">Start</button>
             <button id="hucaTask" class="huca" type="button">HUCA</button>
-            <button id="cancelTask" class="danger" type="button">Cancel</button>
+            <button id="cancelTask" class="danger" type="button">Stop safely</button>
           </div>
           <p id="startDisabledReason" class="start-reason">Ready when you are.</p>
         </section>

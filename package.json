@@ -8,11 +8,12 @@
   "main": "desktop/main.js",
   "scripts": {
     "desktop:dev": "electron desktop/main.js",
-    "desktop:package": "electron-builder --config desktop/electron-builder.json",
-    "desktop:publish": "electron-builder --config desktop/electron-builder.json --publish always",
+    "build:metadata": "node scripts/generate_build_metadata.mjs",
+    "desktop:package": "npm run build:metadata && electron-builder --config desktop/electron-builder.json",
+    "desktop:publish": "npm run build:metadata && electron-builder --config desktop/electron-builder.json --publish always",
     "desktop:check-signing": "node scripts/check_macos_signing_setup.mjs",
     "desktop:verify-update": "node scripts/verify_desktop_update_release.mjs",
-    "build:helper": "pyinstaller desktop/pyinstaller/flyingpig-helper.spec --distpath dist/helper --workpath build/pyinstaller --noconfirm",
+    "build:helper": "npm run build:metadata && pyinstaller desktop/pyinstaller/flyingpig-helper.spec --distpath dist/helper --workpath build/pyinstaller --noconfirm",
     "test:dashboard": "node scripts/test_dashboard_protocol.mjs && node scripts/test_helper_dashboard.mjs",
     "test:desktop": "node --test desktop/*.test.mjs && node scripts/test_desktop_shell.mjs"
   },

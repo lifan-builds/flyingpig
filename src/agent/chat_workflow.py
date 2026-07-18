@@ -1,11 +1,12 @@
-"""Transcript-derived workflow state for customer-service conversations."""
+"""Transcript-derived workflow state and fresh-evidence completion evaluation."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from typing import Literal
 
-from src.agent.run_authorization import RunAuthorization
+from src.agent.run_authorization import AuthorizationTarget, RunAuthorization
 
 STATIC_TEXT_RE = re.compile(r'(?:StaticText|text) "(.*)"$')
 
@@ -24,6 +25,7 @@ class ChatWorkflowState:
     closure_confirmed: bool = False
     confirmation_expected: bool = False
     refund_follow_up_required: bool = False
+    refund_follow_up_accepted: bool = False
     refund_methods_confirmed: list[str] = field(default_factory=list)
     representative_left: bool = False
 
@@ -42,50 +44,173 @@ class ChatWorkflowState:
         return "initial"
 
     def checklist(self, authorization: RunAuthorization) -> list[dict]:
-        """Return goal completion items appropriate to the authorization."""
+        """Return target-scoped goal items appropriate to the authorization."""
         items: list[dict] = []
-        if authorization.permits("close_card"):
-            items.append(
-                {
-                    "id": "close_card",
-                    "complete": self.closure_confirmed,
-                    "evidence": _last_matching(
+        for target in authorization.targets:
+            if "close_card" in target.authorized_actions:
+                evidence = _targeted_evidence(
+                    self.messages,
+                    target,
+                    len(authorization.targets),
+                    "invalidated successfully",
+                    "submitted for cancellation",
+                    "card has been closed",
+                    "has been closed",
+                    "cancellation has been completed",
+                )
+                items.append(
+                    _checklist_item(
+                        target=target,
+                        action="close_card",
+                        complete=self.closure_confirmed and evidence is not None,
+                        evidence=evidence,
+                        single_target=len(authorization.targets) == 1,
+                    )
+                )
+            if "request_credit_refund" in target.authorized_actions:
+                evidence = _targeted_evidence(
+                    self.messages,
+                    target,
+                    len(authorization.targets),
+                    "transfer it in your bank account",
+                    "arrange the check",
+                    "credit balance",
+                    "once the credit",
+                )
+                deferred = self.refund_follow_up_required and evidence is not None
+                acceptance = (
+                    _targeted_evidence(
                         self.messages,
-                        "invalidated successfully",
-                        "submitted for cancellation",
-                        "card has been closed",
-                    ),
-                }
-            )
-        if authorization.permits("request_credit_refund"):
-            complete = bool(self.refund_methods_confirmed) or self.refund_follow_up_required
-            items.append(
-                {
-                    "id": "credit_refund_disposition",
-                    "complete": complete,
-                    "deferred": self.refund_follow_up_required,
-                    "methods": self.refund_methods_confirmed,
-                    "evidence": _last_matching(
-                        self.messages,
-                        "transfer it in your bank account",
-                        "arrange the check",
-                        "credit balance",
-                    ),
-                }
-            )
+                        target,
+                        len(authorization.targets),
+                        "i understand",
+                        "will contact support",
+                        "contact support after",
+                    )
+                    if self.refund_follow_up_accepted
+                    else None
+                )
+                confirmed_methods = [
+                    method
+                    for method in self.refund_methods_confirmed
+                    if method in authorization.refund_methods
+                ]
+                complete = (
+                    bool(confirmed_methods) and evidence is not None and not deferred
+                )
+                item = _checklist_item(
+                    target=target,
+                    action="credit_refund_disposition",
+                    complete=complete,
+                    deferred=deferred,
+                    deferred_accepted=deferred and acceptance is not None,
+                    evidence=evidence,
+                    single_target=len(authorization.targets) == 1,
+                )
+                item["methods"] = confirmed_methods
+                items.append(item)
         return items
 
-    def follow_up_actions(self) -> list[dict]:
-        """Return deferred actions discovered from the transcript."""
+    def follow_up_actions(self, authorization: RunAuthorization) -> list[dict]:
+        """Return deferred actions without inventing an unapproved refund method."""
         if not self.refund_follow_up_required:
             return []
+        confirmed = [
+            method
+            for method in self.refund_methods_confirmed
+            if method in authorization.refund_methods
+        ]
         return [
             {
                 "type": "contact_support_after_credit_posts",
                 "status": "pending",
-                "methods": self.refund_methods_confirmed or ["existing_checking", "check"],
+                "methods": confirmed or list(authorization.refund_methods),
             }
         ]
+
+
+@dataclass(frozen=True)
+class CompletionEvaluation:
+    """Deterministic outcome grounded in one explicitly fresh visible snapshot."""
+
+    state: Literal["complete", "partial", "incomplete", "unknown"]
+    satisfied: bool
+    fresh: bool
+    items: list[dict] = field(default_factory=list)
+    unresolved_items: list[str] = field(default_factory=list)
+    evidence_references: list[dict] = field(default_factory=list)
+    follow_up_actions: list[dict] = field(default_factory=list)
+
+    def outcome_details(self) -> dict:
+        return {
+            "completion_evaluation": self.state,
+            "completion_checklist": self.items,
+            "unresolved_items": self.unresolved_items,
+            "evidence_references": self.evidence_references,
+            "follow_up_actions": self.follow_up_actions,
+        }
+
+
+def evaluate_completion(
+    workflow_state: ChatWorkflowState,
+    authorization: RunAuthorization,
+    *,
+    fresh: bool,
+    snapshot_id: str | None = None,
+    accepted_deferred: set[str] | None = None,
+) -> CompletionEvaluation:
+    """Evaluate authorized goals without using task prose or stale observations."""
+    if not fresh:
+        return CompletionEvaluation(state="unknown", satisfied=False, fresh=False)
+
+    items = workflow_state.checklist(authorization)
+    if not items:
+        return CompletionEvaluation(state="unknown", satisfied=False, fresh=True)
+
+    accepted = accepted_deferred or set()
+    normalized_items: list[dict] = []
+    unresolved: list[str] = []
+    evidence_references: list[dict] = []
+    has_deferred = False
+    for raw_item in items:
+        item = dict(raw_item)
+        item_key = f"{item.get('target_key')}:{item.get('action')}"
+        deferred = bool(item.get("deferred"))
+        deferred_accepted = deferred and (
+            bool(item.get("deferred_accepted")) or item_key in accepted
+        )
+        item["deferred_accepted"] = deferred_accepted
+        resolved = bool(item.get("complete")) or deferred_accepted
+        item["resolved"] = resolved
+        normalized_items.append(item)
+        if not resolved:
+            unresolved.append(str(item.get("id") or item_key))
+        if deferred_accepted:
+            has_deferred = True
+        if item.get("evidence_reference"):
+            reference = dict(item["evidence_reference"])
+            if snapshot_id:
+                reference["snapshot_id"] = snapshot_id
+            evidence_references.append(reference)
+
+    if unresolved:
+        state: Literal["complete", "partial", "incomplete", "unknown"] = "incomplete"
+        satisfied = False
+    elif has_deferred:
+        state = "partial"
+        satisfied = True
+    else:
+        state = "complete"
+        satisfied = True
+    return CompletionEvaluation(
+        state=state,
+        satisfied=satisfied,
+        fresh=True,
+        items=normalized_items,
+        unresolved_items=unresolved,
+        evidence_references=evidence_references,
+        follow_up_actions=workflow_state.follow_up_actions(authorization),
+    )
 
 
 def parse_workflow_state(snapshot_text: str) -> ChatWorkflowState:
@@ -124,6 +249,13 @@ def parse_workflow_state(snapshot_text: str) -> ChatWorkflowState:
         "let me check",
         "one moment",
     )
+    last_refund_deferred = _last_index_matching(messages, "once the credit")
+    last_deferred_acceptance = _last_index_matching(
+        messages,
+        "i understand",
+        "will contact support",
+        "contact support after",
+    )
     return ChatWorkflowState(
         messages=messages,
         human_reached=(
@@ -140,15 +272,62 @@ def parse_workflow_state(snapshot_text: str) -> ChatWorkflowState:
             "invalidated successfully and submitted for cancellation" in joined
             or "invalidated successfully" in joined
             or "card has been closed" in joined
+            or "has been closed" in joined
             or "cancellation has been completed" in joined
         ),
         confirmation_expected=(
             "confirmation email" in joined and ("24-48" in joined or "24–48" in joined)
         ),
         refund_follow_up_required=("once the credit" in joined and "contact us" in joined),
+        refund_follow_up_accepted=(
+            last_refund_deferred >= 0 and last_deferred_acceptance > last_refund_deferred
+        ),
         refund_methods_confirmed=refund_methods,
         representative_left=last_left > last_join,
     )
+
+
+def _checklist_item(
+    *,
+    target: AuthorizationTarget,
+    action: str,
+    complete: bool,
+    evidence: tuple[int, str] | None,
+    single_target: bool,
+    deferred: bool = False,
+    deferred_accepted: bool = False,
+) -> dict:
+    evidence_index = evidence[0] if evidence else None
+    return {
+        "id": action if single_target else f"{target.key}:{action}",
+        "target_key": target.key,
+        "action": action,
+        "complete": complete,
+        "deferred": deferred,
+        "deferred_accepted": deferred_accepted,
+        "evidence": evidence[1] if evidence else None,
+        "evidence_reference": (
+            {"kind": "visible_transcript_message", "message_index": evidence_index}
+            if evidence_index is not None
+            else None
+        ),
+    }
+
+
+def _targeted_evidence(
+    messages: list[str],
+    target: AuthorizationTarget,
+    target_count: int,
+    *phrases: str,
+) -> tuple[int, str] | None:
+    for index in range(len(messages) - 1, -1, -1):
+        message = messages[index]
+        lowered = message.lower()
+        if not any(phrase in lowered for phrase in phrases):
+            continue
+        if target_count == 1 or target.display.casefold() in message.casefold():
+            return index, message
+    return None
 
 
 def _last_matching(messages: list[str], *phrases: str) -> str | None:

@@ -16,19 +16,31 @@
         <p id="message">Preparing the dashboard.</p>
         <div id="spinner" class="spinner" aria-hidden="true"></div>
 
-        <section id="failure" class="failure hidden">
-          <div class="actions">
+        <section class="failure">
+          <div id="failure" class="actions hidden">
             <button id="retry" type="button">Retry</button>
             <button id="openLogs" class="secondary" type="button">Open Logs</button>
           </div>
           <dl>
             <div>
-              <dt>Helper URL</dt>
-              <dd id="baseUrl">-</dd>
+              <dt>Build</dt>
+              <dd id="buildIdentity">development</dd>
             </div>
             <div>
-              <dt>Log file</dt>
-              <dd id="logPath">-</dd>
+              <dt>Startup phase</dt>
+              <dd id="startupPhase">initializing</dd>
+            </div>
+            <div>
+              <dt>Helper port</dt>
+              <dd id="helperPort">-</dd>
+            </div>
+            <div>
+              <dt>Port selection</dt>
+              <dd id="portSelection">Checking preferred port</dd>
+            </div>
+            <div>
+              <dt>Helper URL</dt>
+              <dd id="baseUrl">-</dd>
             </div>
             <div>
               <dt>Last error</dt>

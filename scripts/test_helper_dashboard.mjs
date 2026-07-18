@@ -445,9 +445,19 @@ async function main() {
       "#taskText",
       "Mock helper dashboard smoke test: verify the dashboard can start a browser-use helper run.",
     );
-    await setValue(dashboardPage, "#authorizationTarget", "12345");
+    await setValue(dashboardPage, "#authorizationTarget", "synthetic service A");
     await clickElement(dashboardPage, "#authorizeClosure");
     await clickElement(dashboardPage, "#authorizeRefund");
+    await clickElement(dashboardPage, "#addAuthorizationTarget");
+    await setValue(
+      dashboardPage,
+      ".authorization-target-row:nth-child(2) .authorization-target-display",
+      "synthetic service B",
+    );
+    await clickElement(
+      dashboardPage,
+      ".authorization-target-row:nth-child(2) .authorize-target-closure",
+    );
     await clickElement(dashboardPage, "#refundChecking");
     await clickElement(dashboardPage, "#refundCheck");
     await clickElement(dashboardPage, "#authorizeHuca");

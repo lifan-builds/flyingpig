@@ -951,6 +951,7 @@ async function loadSettings() {
     "notifySound",
     "notifyOs",
     "selectedSite",
+    "authorizationTargets",
     "authorizationTarget",
     "authorizeClosure",
     "authorizeRefund",
@@ -988,20 +989,89 @@ async function loadSettings() {
   state.notifyOs = saved.notifyOs ?? true;
   $("notifySound").checked = state.notifySound;
   $("notifyOs").checked = state.notifyOs;
-  $("authorizationTarget").value = saved.authorizationTarget || "";
-  $("authorizeClosure").checked = Boolean(saved.authorizeClosure);
-  $("authorizeRefund").checked = Boolean(saved.authorizeRefund);
+  const savedTargets = Array.isArray(saved.authorizationTargets) && saved.authorizationTargets.length
+    ? saved.authorizationTargets
+    : [{
+      display: saved.authorizationTarget || "",
+      authorizeClosure: Boolean(saved.authorizeClosure),
+      authorizeRefund: Boolean(saved.authorizeRefund),
+    }];
+  setAuthorizationTargets(savedTargets);
   $("refundChecking").checked = Boolean(saved.refundChecking);
   $("refundCheck").checked = Boolean(saved.refundCheck);
   $("authorizeHuca").checked = Boolean(saved.authorizeHuca);
   $("declinedAlternatives").value = saved.declinedAlternatives || "";
 }
 
+function authorizationTargetRows() {
+  return [...document.querySelectorAll(".authorization-target-row")];
+}
+
+function authorizationTargetValues() {
+  return authorizationTargetRows().map((row) => ({
+    display: row.querySelector(".authorization-target-display").value.trim(),
+    authorizeClosure: row.querySelector(".authorize-target-closure").checked,
+    authorizeRefund: row.querySelector(".authorize-target-refund").checked,
+  }));
+}
+
+function addAuthorizationTargetRow(value = {}) {
+  const row = document.createElement("section");
+  row.className = "authorization-target-row";
+
+  const targetLabel = document.createElement("label");
+  targetLabel.textContent = "Additional target account or service";
+  const targetInput = document.createElement("input");
+  targetInput.className = "authorization-target-display";
+  targetInput.placeholder = "Example: card ending 67890";
+  targetInput.value = value.display || "";
+
+  const closureLabel = document.createElement("label");
+  closureLabel.className = "check-row";
+  const closure = document.createElement("input");
+  closure.className = "authorize-target-closure";
+  closure.type = "checkbox";
+  closure.checked = Boolean(value.authorizeClosure);
+  closureLabel.append(closure, " Close or cancel this target without asking again");
+
+  const refundLabel = document.createElement("label");
+  refundLabel.className = "check-row";
+  const refund = document.createElement("input");
+  refund.className = "authorize-target-refund";
+  refund.type = "checkbox";
+  refund.checked = Boolean(value.authorizeRefund);
+  refundLabel.append(refund, " Request return of this target's remaining credit or negative balance");
+
+  const remove = document.createElement("button");
+  remove.className = "secondary";
+  remove.type = "button";
+  remove.textContent = "Remove target";
+  remove.addEventListener("click", () => {
+    row.remove();
+    saveRunAuthorization();
+  });
+
+  row.append(targetLabel, targetInput, closureLabel, refundLabel, remove);
+  $("authorizationTargets").append(row);
+}
+
+function setAuthorizationTargets(values) {
+  for (const row of authorizationTargetRows().slice(1)) row.remove();
+  const first = values[0] || {};
+  $("authorizationTarget").value = first.display || "";
+  $("authorizeClosure").checked = Boolean(first.authorizeClosure);
+  $("authorizeRefund").checked = Boolean(first.authorizeRefund);
+  for (const value of values.slice(1)) addAuthorizationTargetRow(value);
+}
+
 function saveRunAuthorization() {
+  const targets = authorizationTargetValues();
   storageSet({
-    authorizationTarget: $("authorizationTarget").value.trim(),
-    authorizeClosure: $("authorizeClosure").checked,
-    authorizeRefund: $("authorizeRefund").checked,
+    authorizationTargets: targets,
+    // Retain the original keys as a narrow local-settings migration path.
+    authorizationTarget: targets[0]?.display || "",
+    authorizeClosure: Boolean(targets[0]?.authorizeClosure),
+    authorizeRefund: Boolean(targets[0]?.authorizeRefund),
     refundChecking: $("refundChecking").checked,
     refundCheck: $("refundCheck").checked,
     authorizeHuca: $("authorizeHuca").checked,
@@ -1010,9 +1080,6 @@ function saveRunAuthorization() {
 }
 
 function runAuthorizationPayload() {
-  const authorizedActions = [];
-  if ($("authorizeClosure").checked) authorizedActions.push("close_card");
-  if ($("authorizeRefund").checked) authorizedActions.push("request_credit_refund");
   const refundMethods = [];
   if ($("refundChecking").checked) refundMethods.push("existing_checking");
   if ($("refundCheck").checked) refundMethods.push("check");
@@ -1020,9 +1087,18 @@ function runAuthorizationPayload() {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+  const targets = authorizationTargetValues()
+    .filter((target) => target.display)
+    .map((target, index) => ({
+      key: `target-${index + 1}`,
+      display: target.display,
+      authorized_actions: [
+        ...(target.authorizeClosure ? ["close_card"] : []),
+        ...(target.authorizeRefund ? ["request_credit_refund"] : []),
+      ],
+    }));
   return {
-    target_account: $("authorizationTarget").value.trim() || null,
-    authorized_actions: authorizedActions,
+    targets,
     refund_methods: refundMethods,
     declined_alternatives: declinedAlternatives,
     huca_authorized: $("authorizeHuca").checked,
@@ -1070,6 +1146,23 @@ function saveTemplatePreference() {
   });
 }
 
+async function loadHelperBuildIdentity() {
+  try {
+    const response = await fetch(`${state.helperUrl}/health`);
+    const payload = await response.json();
+    const build = payload?.build || {};
+    const identity = build.identity
+      || [build.version, build.revision || build.channel].filter(Boolean).join("+")
+      || "unknown/development";
+    const desktopMatch = new URLSearchParams(window.location.search).get("desktopBuildMatch");
+    $("helperBuild").textContent = desktopMatch === "mismatch"
+      ? `${identity} (does not match desktop build)`
+      : identity;
+  } catch {
+    $("helperBuild").textContent = "unknown/development";
+  }
+}
+
 function connectHelper() {
   if (state.socket?.readyState === WebSocket.OPEN) return;
 
@@ -1087,6 +1180,7 @@ function connectHelper() {
     socket.send(JSON.stringify({ type: "resolve", url: state.activeUrl }));
     refreshBrowserStatus();
     loadModelSettings();
+    loadHelperBuildIdentity();
     if (state.browserStatusTimer) clearInterval(state.browserStatusTimer);
     state.browserStatusTimer = setInterval(refreshBrowserStatus, 5000);
   });
@@ -1619,14 +1713,10 @@ function buildRunPayload(task) {
 }
 
 function cancelTask() {
-  state.socket?.send(JSON.stringify({ type: "cancel" }));
-  state.running = false;
-  updateButtons();
-  $("agentStatus").textContent = "cancelling";
-  $("runMessage").textContent = "Cancelling.";
-  log("cancel", "Cancel requested.");
-  state.workflowStage = "ready";
-  updateWorkflowView();
+  state.socket?.send(JSON.stringify({ type: "stop" }));
+  $("agentStatus").textContent = "stopping";
+  $("runMessage").textContent = "Stopping future actions and checking fresh evidence.";
+  log("stop", "Safe supervisor stop requested.");
 }
 
 function sendAnswer() {
@@ -1732,10 +1822,12 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("successCriteria").addEventListener("input", () => {
     storageSet({ successCriteria: $("successCriteria").value.trim() });
   });
+  $("authorizationTargets").addEventListener("change", saveRunAuthorization);
+  $("addAuthorizationTarget").addEventListener("click", () => {
+    addAuthorizationTargetRow();
+    saveRunAuthorization();
+  });
   for (const id of [
-    "authorizationTarget",
-    "authorizeClosure",
-    "authorizeRefund",
     "refundChecking",
     "refundCheck",
     "authorizeHuca",

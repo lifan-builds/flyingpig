@@ -8,8 +8,16 @@ function render(status) {
   $("failure").classList.toggle("hidden", !failed);
 
   const diagnostics = status?.diagnostics || {};
+  const build = diagnostics.build || diagnostics.expectedBuild || {};
+  $("buildIdentity").textContent = build.identity
+    || [build.version, build.revision || build.channel].filter(Boolean).join("+")
+    || "development";
+  $("startupPhase").textContent = diagnostics.phase || "initializing";
+  $("helperPort").textContent = diagnostics.port ? String(diagnostics.port) : "-";
+  $("portSelection").textContent = diagnostics.preferredPortOccupied
+    ? `Preferred port occupied; selected ${diagnostics.port}`
+    : "Preferred port selected";
   $("baseUrl").textContent = diagnostics.baseUrl || "-";
-  $("logPath").textContent = diagnostics.logPath || "-";
   $("errorText").textContent = status?.error || diagnostics.lastError || "-";
 }
 
