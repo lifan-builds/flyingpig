@@ -73,3 +73,36 @@ Added live PII-safe progress, target-scoped authorization, fresh completion, dup
 ### Next Steps
 
 - None - task complete
+
+
+## Session 3: Bootstrap project development guidelines
+
+**Date**: 2026-07-18
+**Task**: Bootstrap project development guidelines
+**Branch**: `task/prepare-next-supervised-beta-run`
+
+### Summary
+
+Documented repository-backed backend and frontend Trellis guidance, including actual active and legacy boundaries, persistence reality, async/error/logging/testing conventions, plain-JavaScript dashboard and Electron patterns, runtime contracts, accessibility limits, and explicit anti-patterns. Independent review passed after privacy wording fixes; documentation checks passed.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6f76432` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
