@@ -361,15 +361,21 @@ async def ws_endpoint(ws: WebSocket):
             elif mtype == "start":
                 if "dashboard smoke test" in (msg.get("task") or "").lower():
                     authorization = msg.get("authorization") or {}
-                    if authorization.get("target_account") != "12345":
+                    targets = authorization.get("targets") or []
+                    if [target.get("display") for target in targets] != [
+                        "synthetic service A",
+                        "synthetic service B",
+                    ]:
                         raise RuntimeError(
-                            "Mock run did not receive the target account authorization"
+                            "Mock run did not receive ordered structured target authorization"
                         )
-                    if authorization.get("authorized_actions") != [
+                    if targets[0].get("authorized_actions") != [
                         "close_card",
                         "request_credit_refund",
                     ]:
-                        raise RuntimeError("Mock run did not receive explicit authorized actions")
+                        raise RuntimeError("Mock run broadened the first target's actions")
+                    if targets[1].get("authorized_actions") != ["close_card"]:
+                        raise RuntimeError("Mock run broadened the second target's actions")
                     if authorization.get("refund_methods") != ["existing_checking", "check"]:
                         raise RuntimeError("Mock run did not receive allowed refund methods")
                 preflight_span = add_timing_span(
@@ -610,7 +616,7 @@ async def ws_endpoint(ws: WebSocket):
                         )
                     )
                 )
-            elif mtype == "cancel":
+            elif mtype in {"stop", "cancel"}:
                 await ws.send_text(json.dumps({"type": "status", "text": "cancelled"}))
                 await ws.send_text(
                     json.dumps(

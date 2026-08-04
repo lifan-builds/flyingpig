@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { configureAutoUpdates } from "./auto_update.js";
+import { buildMetadata } from "./build_metadata.js";
 import { HelperSupervisor } from "./helper_supervisor.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -106,18 +107,41 @@ async function startHelperAndLoadDashboard() {
     isPackaged: app.isPackaged,
     logsDir: app.getPath("logs"),
     env: process.env,
+    expectedBuild: {
+      version: app.getVersion(),
+      revision: buildMetadata.revision,
+      builtAt: buildMetadata.builtAt,
+      channel: buildMetadata.channel,
+    },
+    onDiagnostics: (diagnostics) => {
+      const messages = {
+        port_selection: "Selecting a local helper port.",
+        spawn: "Launching the local helper.",
+        health_wait: "Waiting for the local helper to become ready.",
+        ready: "The local helper is ready.",
+      };
+      sendStatus({
+        state: diagnostics.phase === "ready" ? "ready" : "starting",
+        message: messages[diagnostics.phase] || "Starting the local Flying Pig helper.",
+        diagnostics,
+      });
+    },
   });
 
   try {
     const diagnostics = await helper.start();
     sendStatus({
       state: "ready",
-      message: "Helper is ready. Loading the dashboard.",
+      message: diagnostics.buildMatch === "mismatch"
+        ? "Helper is ready, but its build does not match this desktop package."
+        : "Helper is ready. Loading the dashboard.",
       diagnostics,
     });
-    await mainWindow.loadURL(
-      `${diagnostics.baseUrl}/dashboard/?helperUrl=${encodeURIComponent(diagnostics.baseUrl)}`,
-    );
+    const dashboardParams = new URLSearchParams({
+      helperUrl: diagnostics.baseUrl,
+      desktopBuildMatch: diagnostics.buildMatch,
+    });
+    await mainWindow.loadURL(`${diagnostics.baseUrl}/dashboard/?${dashboardParams}`);
   } catch (error) {
     sendStatus({
       state: "failed",
@@ -141,8 +165,7 @@ async function retryHelper() {
 }
 
 async function openLogsFolder() {
-  const logPath = helper?.diagnostics().logPath || app.getPath("logs");
-  await shell.openPath(path.dirname(logPath));
+  await shell.openPath(helper?.logsDir || app.getPath("logs"));
 }
 
 async function checkForUpdates(options = {}) {

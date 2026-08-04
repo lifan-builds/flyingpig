@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/flyingpig/index.md", "reason": "Run the complete Flying Pig quality checklist and verify package discovery for the cross-layer hardening task."}
+{"file": ".trellis/spec/flyingpig/architecture.md", "reason": "Check that helper, daemon, executor, dashboard, and desktop ownership boundaries remain coherent after cross-layer changes."}
+{"file": ".trellis/spec/flyingpig/safety-auth.md", "reason": "Verify deny-by-default target authorization, checkpoints, fresh-evidence completion, verified sends, duplicate guards, and stop semantics."}
+{"file": ".trellis/spec/flyingpig/browser-runtime.md", "reason": "Verify MCP allowlists, bounded planner normalization, browser attachment rules, timeouts, and synthetic-only validation."}
+{"file": ".trellis/spec/flyingpig/supervised-mcp-runtime.md", "reason": "Trace and verify every executable cross-layer contract for progress, authorization, completion, duplicate guards, lifecycle, parser recovery, and build/startup diagnostics."}
+{"file": ".trellis/spec/flyingpig/data-privacy.md", "reason": "Inspect every changed path and diagnostic shape for credentials, PII, transcripts, URLs, screenshots, recordings, and session state."}
+{"file": ".trellis/spec/flyingpig/coding.md", "reason": "Review schema compatibility, async/thread safety, error handling, reuse, and consistency with repository idioms."}
+{"file": ".trellis/spec/flyingpig/verification.md", "reason": "Apply focused tests, full safe gates, syntax checks, desktop/dashboard smokes, and honest reporting of gated live/release checks."}

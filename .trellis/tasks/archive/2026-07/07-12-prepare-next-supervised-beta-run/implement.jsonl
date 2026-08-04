@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/flyingpig/index.md", "reason": "Apply the product boundary and pre-development checklist to the operational beta validation."}
+{"file": ".trellis/spec/flyingpig/safety-auth.md", "reason": "Preserve manual authentication, explicit authorization, checkpoints, verified sends, and supervised live-action boundaries."}
+{"file": ".trellis/spec/flyingpig/browser-runtime.md", "reason": "Keep authenticated browser and MCP actions gated, narrow, visible, and bounded."}
+{"file": ".trellis/spec/flyingpig/data-privacy.md", "reason": "Record only PII-free evidence and exclude secrets, private chat, URLs, recordings, and session state."}
+{"file": ".trellis/spec/flyingpig/verification.md", "reason": "Select safe checks and report authenticated, build, and release gates honestly."}

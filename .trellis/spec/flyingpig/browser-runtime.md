@@ -23,8 +23,9 @@
 - Keep the MCP action allowlist narrow and prefer local/mock validation before any authenticated use.
 - Selected MCP tabs are runnable only through the explicit MCP backend contract. Do not claim browser-use/CDP readiness when no compatible CDP handoff exists.
 - Planner calls are bounded. List and harmlessly probe local model candidates before sending page data, skip quota-blocked or stalled candidates, and retain a bounded fallback.
-- Structured action parsing may retry once without provider schema enforcement and decode only the first complete JSON object. Parsing recovery never bypasses action allowlists, authorization, or checkpoints.
-- MCP chat writes use the same semantic verified-send operation as other backends; direct composer fill/type/key actions remain forbidden.
+- Structured action parsing may retry once without provider schema enforcement and decode only the first complete JSON object. It may unwrap one allowlisted single-action envelope, then must apply the strict action schema; reject ambiguous, multi-action, conflicting, or recursively nested shapes. Parsing recovery never bypasses action allowlists, authorization, or checkpoints.
+- MCP setup, selected-page access, tool discovery, snapshots, planning, browser actions, and completion checks use bounded phases. Live progress contains only fixed phase/state copy, safe error categories, step numbers, and timing—not prompts, snapshots, tool payloads/results, chat text, targets, or URLs.
+- MCP chat writes use the same semantic verified-send operation as other backends; direct composer fill/type/key actions remain forbidden. Apply exact/transcript duplicate checks first, then a bounded deterministic recent-intent guard scoped to one authorization target.
 
 ## Supervision
 

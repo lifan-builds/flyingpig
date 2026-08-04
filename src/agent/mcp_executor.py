@@ -6,16 +6,22 @@ import asyncio
 import hashlib
 import json
 import re
-from collections.abc import Callable
+from collections import deque
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from time import perf_counter
-from typing import Any
+from typing import Any, TypeVar
 
 from browser_use.llm.messages import SystemMessage, UserMessage
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from src.agent.chat_workflow import ChatWorkflowState, parse_workflow_state
+from src.agent.chat_workflow import (
+    ChatWorkflowState,
+    CompletionEvaluation,
+    evaluate_completion,
+    parse_workflow_state,
+)
 from src.agent.chrome_devtools_mcp import (
     ChromeDevtoolsMcpError,
     ChromeDevtoolsMcpSession,
@@ -43,10 +49,33 @@ SEMANTIC_ACTIONS = {
     "send_chat_message",
 }
 ALLOWED_ACTIONS = BROWSER_ACTIONS | SEMANTIC_ACTIONS
+PHASE_TIMEOUTS = {
+    "process_session_setup": 15.0,
+    "page_selection": 60.0,
+    "tool_discovery": 30.0,
+    "first_snapshot": 60.0,
+    "planner_call": 180.0,
+    "browser_action": 95.0,
+    "snapshot_refresh": 60.0,
+    "completion_evaluation": 5.0,
+}
+PLANNER_ENVELOPE_KEYS = {"action", "result"}
+T = TypeVar("T")
+
+
+class McpPhaseError(RuntimeError):
+    """A blocking MCP phase failed with a bounded, payload-free category."""
+
+    def __init__(self, phase: str, category: str):
+        self.phase = phase
+        self.category = category
+        super().__init__(f"{phase} failed ({category})")
 
 
 class McpAgentAction(BaseModel):
     """One strict action emitted by the MCP-native planner."""
+
+    model_config = ConfigDict(extra="forbid")
 
     action: str = Field(description="One of the allowed action names.")
     thought: str = ""
@@ -66,6 +95,7 @@ class McpAgentAction(BaseModel):
     amount_saved: str | None = None
     next_steps: str | None = None
     fields: list[dict] | None = None
+    target_key: str | None = None
 
 
 class McpBrowserExecutor:
@@ -76,15 +106,42 @@ class McpBrowserExecutor:
         *,
         session_factory: Callable[[], ChromeDevtoolsMcpSession] = get_default_mcp_session,
         max_snapshot_chars: int = 12000,
+        progress_sink: Callable[[dict], None] | None = None,
+        phase_timeouts: dict[str, float] | None = None,
+        recent_intent_window: int = 8,
     ):
         self.session_factory = session_factory
         self.max_snapshot_chars = max_snapshot_chars
+        self.progress_sink = progress_sink
+        self.phase_timeouts = {**PHASE_TIMEOUTS, **(phase_timeouts or {})}
         self.step_log: list[dict] = []
+        self.timing_spans: list[dict] = []
         self.action_log: list[dict] = []
         self._sent_message_hashes: set[str] = set()
+        self._recent_intents: deque[tuple[str, float]] = deque(
+            maxlen=max(1, recent_intent_window)
+        )
         self._human_wait_message: str | None = None
         self._human_wait_started_at: float | None = None
         self._human_holding_sent = False
+        self._stop_requested = asyncio.Event()
+        self._stop_reason = "Supervisor requested a stop."
+        self._latest_snapshot_text = ""
+        self._latest_snapshot_id: str | None = None
+        self._latest_evaluation: CompletionEvaluation | None = None
+
+    def request_stop(self, reason: str | None = None) -> None:
+        """Prevent another outbound action at the next safe boundary."""
+        self._stop_reason = (reason or self._stop_reason)[:160]
+        self._stop_requested.set()
+
+    def _create_connected_session(self) -> ChromeDevtoolsMcpSession:
+        """Create the helper-owned MCP session and start its bounded local process."""
+        session = self.session_factory()
+        connect = getattr(session, "connect", None)
+        if callable(connect):
+            connect()
+        return session
 
     async def run(
         self,
@@ -101,82 +158,159 @@ class McpBrowserExecutor:
     ) -> TaskResult:
         started_at = perf_counter()
         save_dir = Path(save_dir)
-        session = self.session_factory()
         authorization = authorization or RunAuthorization()
+        snapshot_text = ""
 
         try:
-            await asyncio.to_thread(session.select_page, page)
-            tools = await asyncio.to_thread(session.list_tools)
+            session = await self._run_phase(
+                "process_session_setup",
+                lambda: asyncio.to_thread(self._create_connected_session),
+            )
+            await self._run_phase(
+                "page_selection",
+                lambda: asyncio.to_thread(session.select_page, page),
+            )
+            tools = await self._run_phase(
+                "tool_discovery",
+                lambda: asyncio.to_thread(session.list_tools),
+            )
             tool_names = {tool.get("name") for tool in tools if isinstance(tool, dict)}
-            missing = {"take_snapshot"} - tool_names
-            if missing:
+            if "take_snapshot" not in tool_names:
                 return self._failed(
-                    f"Chrome DevTools MCP is missing required tools: {', '.join(sorted(missing))}",
+                    "Chrome DevTools MCP is missing a required snapshot capability.",
                     started_at,
                     save_dir,
                     snapshot_text="",
                     input_handler=input_handler,
+                    error_category="missing_required_tool",
                 )
 
-            snapshot = await asyncio.to_thread(session.take_snapshot)
-            snapshot_text = self._snapshot_text(snapshot)
-            outcome: dict | None = None
+            snapshot = await self._run_phase(
+                "first_snapshot",
+                lambda: asyncio.to_thread(session.take_snapshot),
+            )
+            snapshot_text = self._remember_snapshot(snapshot)
 
             for step in range(1, max_steps + 1):
                 workflow_state = parse_workflow_state(snapshot_text)
+                evaluation = await self._evaluate_fresh_snapshot(
+                    workflow_state,
+                    authorization,
+                    step=step,
+                )
+                if self._stop_requested.is_set():
+                    return self._stopped_result(
+                        evaluation,
+                        started_at,
+                        save_dir,
+                        input_handler,
+                        snapshot_text,
+                    )
+                if evaluation.satisfied:
+                    return self._completion_result(
+                        evaluation,
+                        workflow_state,
+                        started_at,
+                        save_dir,
+                        input_handler,
+                        snapshot_text,
+                    )
+
                 self._record_step(
                     step=step,
-                    phase="starting",
-                    message="Inspecting the selected Chrome tab through MCP.",
+                    phase="action_loop",
+                    state="starting",
+                    message="Preparing the next bounded MCP action.",
                 )
                 action = self._authorized_workflow_action(workflow_state, authorization)
                 if action is None:
-                    action = await self._plan_action(
-                        llm=llm,
-                        fallback_llm=fallback_llm,
-                        llm_timeout_seconds=llm_timeout_seconds,
-                        task_prompt=task_prompt,
-                        snapshot_text=snapshot_text,
-                        action_log=self.action_log,
-                        tool_names=tool_names,
-                        authorization=authorization,
-                        workflow_state=workflow_state,
+                    action = await self._run_phase(
+                        "planner_call",
+                        lambda: self._plan_action(
+                            llm=llm,
+                            fallback_llm=fallback_llm,
+                            llm_timeout_seconds=llm_timeout_seconds,
+                            task_prompt=task_prompt,
+                            snapshot_text=snapshot_text,
+                            action_log=self.action_log,
+                            tool_names=tool_names,
+                            authorization=authorization,
+                            workflow_state=workflow_state,
+                        ),
+                        step=step,
+                        timeout=max((float(llm_timeout_seconds) * 2.0) + 5.0, 10.0),
                     )
                 if action.action not in ALLOWED_ACTIONS:
                     return self._failed(
-                        f"MCP planner requested unsupported action: {action.action}",
+                        "MCP planner requested an unsupported action.",
                         started_at,
                         save_dir,
                         snapshot_text=snapshot_text,
                         input_handler=input_handler,
+                        error_category="unsupported_action",
+                    )
+                if self._stop_requested.is_set():
+                    return self._stopped_result(
+                        evaluation,
+                        started_at,
+                        save_dir,
+                        input_handler,
+                        snapshot_text,
                     )
 
                 action_started = perf_counter()
-                result_text, done, outcome = await self._execute_action(
-                    action=action,
-                    session=session,
-                    input_handler=input_handler,
-                    tool_names=tool_names,
-                    snapshot_text=snapshot_text,
-                    authorization=authorization,
-                    workflow_state=workflow_state,
+                result_text, done, outcome = await self._run_phase(
+                    "browser_action",
+                    lambda: self._execute_action(
+                        action=action,
+                        session=session,
+                        input_handler=input_handler,
+                        tool_names=tool_names,
+                        snapshot_text=snapshot_text,
+                        authorization=authorization,
+                        workflow_state=workflow_state,
+                    ),
+                    step=step,
                 )
                 duration_ms = (perf_counter() - action_started) * 1000
                 self.action_log.append(
                     {
                         "step": step,
                         "action": action.action,
-                        "thought": action.thought,
+                        "target_key": action.target_key,
                         "result": result_text[:1000],
                         "duration_ms": round(duration_ms, 1),
                     }
                 )
                 self._record_step(
                     step=step,
-                    phase="complete",
-                    message=result_text[:240] or f"MCP action {action.action} complete.",
-                    thought=action.thought,
+                    phase="action_loop",
+                    state="complete",
+                    message="Completed one bounded MCP action.",
                 )
+
+                if self._stop_requested.is_set():
+                    if action.action in BROWSER_ACTIONS or action.action == "send_chat_message":
+                        snapshot = await self._run_phase(
+                            "snapshot_refresh",
+                            lambda: asyncio.to_thread(session.take_snapshot),
+                            step=step,
+                            timeout=min(self.phase_timeouts["snapshot_refresh"], 10.0),
+                        )
+                        snapshot_text = self._remember_snapshot(snapshot)
+                        workflow_state = parse_workflow_state(snapshot_text)
+                        evaluation = await self._evaluate_fresh_snapshot(
+                            workflow_state,
+                            authorization,
+                            step=step,
+                        )
+                    return self._stopped_result(
+                        evaluation,
+                        started_at,
+                        save_dir,
+                        input_handler,
+                        snapshot_text,
+                    )
 
                 if done:
                     return self._success(
@@ -188,30 +322,78 @@ class McpBrowserExecutor:
                     )
 
                 if action.action in BROWSER_ACTIONS or action.action == "send_chat_message":
-                    snapshot = await asyncio.to_thread(session.take_snapshot)
-                    snapshot_text = self._snapshot_text(snapshot)
+                    snapshot = await self._run_phase(
+                        "snapshot_refresh",
+                        lambda: asyncio.to_thread(session.take_snapshot),
+                        step=step,
+                    )
+                    snapshot_text = self._remember_snapshot(snapshot)
 
-            return TaskResult(
-                status=TaskStatus.PARTIAL,
-                summary="MCP run reached the step limit before a final outcome was reported.",
-                transcript=self._transcript(snapshot_text),
-                checkpoint_events=input_handler.events,
-                transcript_path=self._save_artifact(save_dir, {}, snapshot_text, input_handler),
-                steps_taken=len(self.action_log),
-                duration_seconds=round(perf_counter() - started_at, 2),
-            )
-        except Exception as exc:
-            latest_snapshot = ""
-            try:
-                latest_snapshot = snapshot_text
-            except UnboundLocalError:
-                latest_snapshot = ""
-            return self._failed(
-                f"MCP run failed: {type(exc).__name__}: {exc}",
+            return self._partial(
+                "MCP run reached the step limit before fresh evidence resolved every goal.",
                 started_at,
                 save_dir,
-                snapshot_text=latest_snapshot,
+                input_handler,
+                snapshot_text,
+                self._latest_evaluation,
+            )
+        except McpPhaseError as exc:
+            if self._stop_requested.is_set():
+                return self._stop_after_failure(
+                    started_at,
+                    save_dir,
+                    input_handler,
+                    snapshot_text,
+                    error_category=exc.category,
+                    failed_phase=exc.phase,
+                )
+            return self._failed(
+                f"MCP phase {exc.phase} failed ({exc.category}).",
+                started_at,
+                save_dir,
+                snapshot_text=snapshot_text,
                 input_handler=input_handler,
+                error_category=exc.category,
+                failed_phase=exc.phase,
+            )
+        except (ValidationError, ValueError, RuntimeError) as exc:
+            category = (
+                "planner_output_invalid"
+                if isinstance(exc, (ValidationError, ValueError))
+                else "runtime_error"
+            )
+            if self._stop_requested.is_set():
+                return self._stop_after_failure(
+                    started_at,
+                    save_dir,
+                    input_handler,
+                    snapshot_text,
+                    error_category=category,
+                )
+            return self._failed(
+                f"MCP run failed safely ({category}).",
+                started_at,
+                save_dir,
+                snapshot_text=snapshot_text,
+                input_handler=input_handler,
+                error_category=category,
+            )
+        except Exception:
+            if self._stop_requested.is_set():
+                return self._stop_after_failure(
+                    started_at,
+                    save_dir,
+                    input_handler,
+                    snapshot_text,
+                    error_category="unexpected_error",
+                )
+            return self._failed(
+                "MCP run failed safely (unexpected_error).",
+                started_at,
+                save_dir,
+                snapshot_text=snapshot_text,
+                input_handler=input_handler,
+                error_category="unexpected_error",
             )
 
     async def _plan_action(
@@ -317,11 +499,15 @@ class McpBrowserExecutor:
         workflow_state: ChatWorkflowState,
     ) -> tuple[str, bool, dict | None]:
         if action.action == "report_outcome":
-            checklist = workflow_state.checklist(authorization)
-            if any(item["id"] == "close_card" and not item["complete"] for item in checklist):
+            evaluation = evaluate_completion(
+                workflow_state,
+                authorization,
+                fresh=bool(self._latest_snapshot_id),
+                snapshot_id=self._latest_snapshot_id,
+            )
+            if evaluation.items and not evaluation.satisfied:
                 return (
-                    "Do not finalize yet. The authorized card closure is not confirmed "
-                    "in the visible transcript.",
+                    "Do not finalize yet. Fresh visible evidence has unresolved authorized goals.",
                     False,
                     None,
                 )
@@ -331,11 +517,8 @@ class McpBrowserExecutor:
                 "amount_saved": action.amount_saved,
                 "next_steps": action.next_steps,
                 "human_reached": workflow_state.human_reached,
-                "completion_checklist": checklist,
-                "follow_up_actions": workflow_state.follow_up_actions(),
                 "confirmation_expected": workflow_state.confirmation_expected,
-                "unresolved_items": [item["id"] for item in checklist if not item.get("complete")],
-                "evidence_quotes": [item["evidence"] for item in checklist if item.get("evidence")],
+                **evaluation.outcome_details(),
             }
             return json.dumps(details), True, details
         if action.action == "ask_user":
@@ -365,6 +548,8 @@ class McpBrowserExecutor:
                 session=session,
                 snapshot_text=snapshot_text,
                 text=action.text or action.value or "",
+                target_key=action.target_key,
+                authorization=authorization,
             )
 
         if action.action == "wait_for" and not action.text:
@@ -393,21 +578,50 @@ class McpBrowserExecutor:
         session: ChromeDevtoolsMcpSession,
         snapshot_text: str,
         text: str,
+        target_key: str | None,
+        authorization: RunAuthorization,
     ) -> tuple[str, bool, dict | None]:
         message = " ".join(text.split()).strip()
         if not message:
             return "send_chat_message requires non-empty text.", False, None
-        digest = hashlib.sha256(message.encode("utf-8")).hexdigest()
-        if (
-            digest in self._sent_message_hashes
-            or message in parse_workflow_state(snapshot_text).messages
-        ):
+
+        intent = self._message_intent(message)
+        action_scope = self._authorization_action_for_intent(intent)
+        target = authorization.target(target_key)
+        if action_scope:
+            candidates = authorization.targets_for_action(action_scope)
+            if target is None and len(candidates) == 1:
+                target = candidates[0]
+                target_key = target.key
+            if target is None or not authorization.permits(action_scope, target.key):
+                return "Blocked consequential chat message with an ambiguous target.", False, None
+            if target.display.casefold() not in message.casefold():
+                return (
+                    "Blocked consequential chat message that was not bound to its target.",
+                    False,
+                    None,
+                )
+
+        digest_source = f"{target_key or 'no-target'}\n{message}"
+        digest = hashlib.sha256(digest_source.encode("utf-8")).hexdigest()
+        transcript_messages = parse_workflow_state(snapshot_text).messages
+        if digest in self._sent_message_hashes or message in transcript_messages:
             return "Skipped duplicate chat message already present in the transcript.", False, None
+
+        intent_key = self._intent_key(intent, target_key, message)
+        now = perf_counter()
+        if intent_key and any(
+            previous == intent_key and now - sent_at < 90.0
+            for previous, sent_at in self._recent_intents
+        ):
+            return f"Skipped duplicate recent {intent} intent.", False, None
 
         textbox_uid = self._find_uid(snapshot_text, "textbox", "Type a message...")
         send_uid = self._find_uid(snapshot_text, "button", "send your message")
         if not textbox_uid or not send_uid:
             return "Chat textbox or send button is not visible in the latest snapshot.", False, None
+        if self._stop_requested.is_set():
+            return "Supervisor stop prevented composer preparation.", False, None
 
         await asyncio.to_thread(
             session.call_tool,
@@ -416,7 +630,9 @@ class McpBrowserExecutor:
         )
         prepared = self._snapshot_text(await asyncio.to_thread(session.take_snapshot))
         if not self._textbox_has_exact_value(prepared, message):
-            raise ChromeDevtoolsMcpError("Chat composer did not contain the exact prepared message")
+            raise ChromeDevtoolsMcpError("Chat composer verification failed")
+        if self._stop_requested.is_set():
+            return "Supervisor stop prevented sending the prepared message.", False, None
         send_uid = self._find_uid(prepared, "button", "send your message") or send_uid
         await asyncio.to_thread(
             session.call_tool,
@@ -425,8 +641,10 @@ class McpBrowserExecutor:
         )
         sent_snapshot = self._snapshot_text(await asyncio.to_thread(session.take_snapshot))
         if message not in parse_workflow_state(sent_snapshot).messages:
-            raise ChromeDevtoolsMcpError("Sent chat message did not appear in the transcript")
+            raise ChromeDevtoolsMcpError("Sent chat message verification failed")
         self._sent_message_hashes.add(digest)
+        if intent_key:
+            self._recent_intents.append((intent_key, perf_counter()))
         return "Sent one verified chat message.", False, None
 
     def _authorized_workflow_action(
@@ -434,17 +652,37 @@ class McpBrowserExecutor:
         workflow_state: ChatWorkflowState,
         authorization: RunAuthorization,
     ) -> McpAgentAction | None:
-        if workflow_state.stage == "consent_required" and authorization.permits("close_card"):
-            target = authorization.target_account
-            suffix = f" ending in {target}" if target else ""
-            return McpAgentAction(
-                action="send_chat_message",
-                thought="Send the already-authorized cancellation consent promptly.",
-                text=(
-                    "Yes. I understand and consent. Please proceed with closing only "
-                    f"the authorized card{suffix}."
-                ),
-            )
+        if workflow_state.stage == "consent_required":
+            visible = "\n".join(workflow_state.messages[-4:])
+            target = authorization.target_for_visible_text("close_card", visible)
+            if target is not None:
+                return McpAgentAction(
+                    action="send_chat_message",
+                    thought="Send target-bound authorized cancellation consent.",
+                    target_key=target.key,
+                    text=self._consent_message(target.display),
+                )
+            candidates = authorization.targets_for_action("close_card")
+            if len(candidates) > 1:
+                options = [
+                    {
+                        "id": f"select_{target.key}",
+                        "label": f"Use {target.display}",
+                        "consequence": "Bind this consent to exactly this authorized target.",
+                        "message_to_send": self._consent_message(target.display),
+                    }
+                    for target in candidates
+                ]
+                return McpAgentAction(
+                    action="decision_checkpoint",
+                    thought="Visible consent request is ambiguous across authorized targets.",
+                    checkpoint={
+                        "type": "irreversible_action",
+                        "summary": "Which authorized target does this consent request apply to?",
+                        "recommended_option_id": options[0]["id"],
+                        "options": options,
+                    },
+                )
         if workflow_state.human_active and workflow_state.active_human_message:
             message = workflow_state.active_human_message
             if message != self._human_wait_message:
@@ -525,6 +763,382 @@ class McpBrowserExecutor:
             return args
         return {}
 
+    async def _run_phase(
+        self,
+        phase: str,
+        operation: Callable[[], Awaitable[T]],
+        *,
+        step: int | None = None,
+        timeout: float | None = None,
+    ) -> T:
+        """Run one blocking phase with ordered PII-free progress and timing."""
+        started_at = perf_counter()
+        self._publish(
+            {
+                "type": "progress",
+                "phase": phase,
+                "state": "starting",
+                "step": step,
+                "message": self._phase_message(phase, "starting"),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
+        try:
+            value = await asyncio.wait_for(
+                operation(),
+                timeout=max(timeout or self.phase_timeouts[phase], 0.01),
+            )
+        except TimeoutError as exc:
+            self._finish_phase(phase, started_at, "timeout", step, "timeout")
+            raise McpPhaseError(phase, "timeout") from exc
+        except asyncio.CancelledError:
+            self._finish_phase(phase, started_at, "failed", step, "cancelled")
+            raise
+        except Exception as exc:
+            category = self._safe_error_category(exc)
+            self._finish_phase(phase, started_at, "failed", step, category)
+            raise McpPhaseError(phase, category) from exc
+        self._finish_phase(phase, started_at, "complete", step, None)
+        return value
+
+    def _finish_phase(
+        self,
+        phase: str,
+        started_at: float,
+        state: str,
+        step: int | None,
+        error_category: str | None,
+    ) -> None:
+        duration_ms = round(max((perf_counter() - started_at) * 1000, 0.0), 1)
+        progress = {
+            "type": "progress",
+            "phase": phase,
+            "state": state,
+            "step": step,
+            "message": self._phase_message(phase, state),
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+        if error_category:
+            progress["error_category"] = error_category
+        self._publish(progress)
+        span = {
+            "type": "timing_span",
+            "name": phase,
+            "label": self._phase_message(phase, "label"),
+            "duration_ms": duration_ms,
+            "status": "ok" if state == "complete" else state,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "metadata": {"step": step} if step is not None else {},
+        }
+        if error_category:
+            span["error_category"] = error_category
+        self.timing_spans.append(span)
+        self._publish(span)
+
+    def _publish(self, event: dict) -> None:
+        safe_event = dict(event)
+        self.step_log.append(safe_event)
+        if self.progress_sink is not None:
+            self.progress_sink(dict(safe_event))
+
+    async def _evaluate_fresh_snapshot(
+        self,
+        workflow_state: ChatWorkflowState,
+        authorization: RunAuthorization,
+        *,
+        step: int,
+    ) -> CompletionEvaluation:
+        evaluation = await self._run_phase(
+            "completion_evaluation",
+            lambda: self._immediate_evaluation(workflow_state, authorization),
+            step=step,
+        )
+        self._latest_evaluation = evaluation
+        return evaluation
+
+    async def _immediate_evaluation(
+        self,
+        workflow_state: ChatWorkflowState,
+        authorization: RunAuthorization,
+    ) -> CompletionEvaluation:
+        return evaluate_completion(
+            workflow_state,
+            authorization,
+            fresh=bool(self._latest_snapshot_id),
+            snapshot_id=self._latest_snapshot_id,
+        )
+
+    def _remember_snapshot(self, snapshot: dict) -> str:
+        text = self._snapshot_text(snapshot)
+        self._latest_snapshot_text = text
+        sequence = int((self._latest_snapshot_id or "snapshot-0").rsplit("-", 1)[-1]) + 1
+        self._latest_snapshot_id = f"snapshot-{sequence}"
+        return text
+
+    def _completion_result(
+        self,
+        evaluation: CompletionEvaluation,
+        workflow_state: ChatWorkflowState,
+        started_at: float,
+        save_dir: Path,
+        input_handler: UserInputHandler,
+        snapshot_text: str,
+    ) -> TaskResult:
+        details = {
+            "outcome": (
+                "Authorized goals are confirmed by fresh visible evidence."
+                if evaluation.state == "complete"
+                else "Authorized work has a grounded deferred follow-up."
+            ),
+            "human_reached": workflow_state.human_reached,
+            "confirmation_expected": workflow_state.confirmation_expected,
+            "termination_reason": "fresh_evidence_completion",
+            **evaluation.outcome_details(),
+        }
+        if evaluation.state == "complete":
+            return self._success(
+                details,
+                started_at,
+                save_dir,
+                input_handler,
+                snapshot_text=snapshot_text,
+            )
+        return self._partial(
+            details["outcome"],
+            started_at,
+            save_dir,
+            input_handler,
+            snapshot_text,
+            evaluation,
+            outcome=details,
+        )
+
+    def _stopped_result(
+        self,
+        evaluation: CompletionEvaluation,
+        started_at: float,
+        save_dir: Path,
+        input_handler: UserInputHandler,
+        snapshot_text: str,
+    ) -> TaskResult:
+        details = {
+            "termination_reason": "supervisor_stop",
+            "supervisor_stop_reason": self._stop_reason,
+            "stop_evaluation": (
+                "success"
+                if evaluation.state == "complete"
+                else "partial"
+                if evaluation.state in {"partial", "incomplete"}
+                and any(
+                    item.get("complete") or item.get("deferred_accepted")
+                    for item in evaluation.items
+                )
+                else "stopped_with_no_result"
+                if evaluation.state != "unknown"
+                else "failed_to_evaluate"
+            ),
+            **evaluation.outcome_details(),
+        }
+        if evaluation.state == "complete":
+            details["outcome"] = "Fresh visible evidence confirms the authorized goals."
+            return self._success(
+                details,
+                started_at,
+                save_dir,
+                input_handler,
+                snapshot_text=snapshot_text,
+            )
+        summary = (
+            "Supervisor stopped further actions; partial grounded work was preserved."
+            if details["stop_evaluation"] == "partial"
+            else "Supervisor stopped further actions before a grounded result was available."
+        )
+        return self._partial(
+            summary,
+            started_at,
+            save_dir,
+            input_handler,
+            snapshot_text,
+            evaluation,
+            outcome=details,
+        )
+
+    def _stop_after_failure(
+        self,
+        started_at: float,
+        save_dir: Path,
+        input_handler: UserInputHandler,
+        snapshot_text: str,
+        *,
+        error_category: str,
+        failed_phase: str | None = None,
+    ) -> TaskResult:
+        """Preserve a grounded evaluation, or mark a stopped run as unevaluable."""
+        if self._latest_evaluation is not None:
+            return self._stopped_result(
+                self._latest_evaluation,
+                started_at,
+                save_dir,
+                input_handler,
+                snapshot_text,
+            )
+        return self._failed(
+            "Supervisor stopped the run, but fresh evidence could not be evaluated.",
+            started_at,
+            save_dir,
+            snapshot_text=snapshot_text,
+            input_handler=input_handler,
+            error_category=error_category,
+            failed_phase=failed_phase,
+            extra_details={
+                "termination_reason": "supervisor_stop",
+                "supervisor_stop_reason": self._stop_reason,
+                "stop_evaluation": "failed_to_evaluate",
+            },
+        )
+
+    def _partial(
+        self,
+        summary: str,
+        started_at: float,
+        save_dir: Path,
+        input_handler: UserInputHandler,
+        snapshot_text: str,
+        evaluation: CompletionEvaluation | None,
+        *,
+        outcome: dict | None = None,
+    ) -> TaskResult:
+        details = dict(outcome or {})
+        if evaluation is not None:
+            details = {**evaluation.outcome_details(), **details}
+        path = self._save_artifact(save_dir, details, snapshot_text, input_handler)
+        return TaskResult(
+            status=TaskStatus.PARTIAL,
+            summary=summary,
+            transcript=[entry["result"] for entry in self.action_log if entry.get("result")],
+            chat_transcript=parse_workflow_state(snapshot_text).messages,
+            checkpoint_events=input_handler.events,
+            transcript_path=path,
+            outcome_details=details,
+            steps_taken=len(self.action_log),
+            duration_seconds=round(perf_counter() - started_at, 2),
+            timing_spans=list(self.timing_spans),
+        )
+
+    def _message_intent(self, message: str) -> str | None:
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", message.casefold())
+        normalized = " ".join(normalized.split())
+        correction_markers = ("correct", "correction", "instead", "change that")
+        if any(marker in normalized for marker in correction_markers):
+            if any(marker in normalized for marker in ("close", "cancel", "cancellation")):
+                return "close_correction"
+            if any(marker in normalized for marker in ("refund", "credit balance")):
+                return "refund_correction"
+            return None
+        status_markers = ("when", "status", "update", "still working")
+        if any(marker in normalized for marker in status_markers):
+            return "status_check"
+        if "understand" in normalized and "consent" in normalized:
+            return "consent"
+        refund_markers = (
+            "refund",
+            "reimburse",
+            "credit balance",
+            "return the credit",
+            "send the credit",
+        )
+        if any(marker in normalized for marker in refund_markers):
+            return "refund_request"
+        close_markers = (
+            "close",
+            "closing",
+            "cancel",
+            "cancellation",
+            "terminate",
+            "deactivate",
+            "shut down",
+        )
+        if any(marker in normalized for marker in close_markers):
+            return "close_request"
+        return None
+
+    def _authorization_action_for_intent(self, intent: str | None) -> str | None:
+        if intent in {"consent", "close_request", "close_correction"}:
+            return "close_card"
+        if intent in {"refund_request", "refund_correction"}:
+            return "request_credit_refund"
+        return None
+
+    def _intent_key(self, intent: str | None, target_key: str | None, message: str) -> str | None:
+        if not intent or intent.endswith("_correction"):
+            return None
+        if intent in {"consent", "status_check"}:
+            operative = "status" if intent == "status_check" else intent
+            return f"{target_key or 'no-target'}:{operative}"
+
+        # Preserve materially new asks while collapsing only small wording/politeness variants.
+        normalized = re.sub(r"[^a-z0-9 ]+", " ", message.casefold())
+        modifier_groups = {
+            "amount": ("amount", "how much"),
+            "confirmation": ("confirm", "confirmation", "reference", "receipt"),
+            "email": ("email", "e mail"),
+            "fee": ("fee", "charge", "waive"),
+            "method": ("method", "bank account", "checking account", "check by mail"),
+            "reason": ("reason", "why"),
+            "timing": ("when", "how long", "timeline"),
+        }
+        modifiers = sorted(
+            name
+            for name, markers in modifier_groups.items()
+            if any(marker in normalized for marker in markers)
+        )
+        suffix = f":{','.join(modifiers)}" if modifiers else ""
+        return f"{target_key or 'no-target'}:{intent}{suffix}"
+
+    def _consent_message(self, target_display: str) -> str:
+        display = target_display.strip()
+        if display.isdigit():
+            target_phrase = f"the authorized card ending in {display}"
+        elif display.casefold().startswith(("card ", "account ", "service ")):
+            target_phrase = f"the authorized {display}"
+        else:
+            target_phrase = f"the authorized target {display}"
+        return (
+            "Yes. I understand and consent. Please proceed with closing only "
+            f"{target_phrase}."
+        )
+
+    def _phase_message(self, phase: str, state: str) -> str:
+        labels = {
+            "process_session_setup": "Chrome MCP session setup",
+            "page_selection": "Authorized tab selection",
+            "tool_discovery": "MCP capability discovery",
+            "first_snapshot": "Initial visible-state refresh",
+            "planner_call": "Bounded planning",
+            "browser_action": "Bounded browser action",
+            "snapshot_refresh": "Visible-state refresh",
+            "completion_evaluation": "Fresh-evidence completion check",
+        }
+        label = labels.get(phase, "MCP operation")
+        if state == "label":
+            return label
+        verbs = {
+            "starting": "started",
+            "complete": "completed",
+            "timeout": "timed out",
+            "failed": "failed safely",
+        }
+        return f"{label} {verbs.get(state, state)}."
+
+    def _safe_error_category(self, exc: Exception) -> str:
+        if isinstance(exc, ChromeDevtoolsMcpError):
+            return "mcp_unavailable"
+        if isinstance(exc, (ValidationError, ValueError, json.JSONDecodeError)):
+            return "invalid_output"
+        if isinstance(exc, OSError):
+            return "process_unavailable"
+        return "operation_failed"
+
     def _success(
         self,
         outcome: dict,
@@ -547,6 +1161,7 @@ class McpBrowserExecutor:
             outcome_details=outcome,
             steps_taken=len(self.action_log),
             duration_seconds=round(perf_counter() - started_at, 2),
+            timing_spans=list(self.timing_spans),
         )
 
     def _failed(
@@ -557,12 +1172,20 @@ class McpBrowserExecutor:
         *,
         snapshot_text: str = "",
         input_handler: UserInputHandler | None = None,
+        error_category: str = "run_failed",
+        failed_phase: str | None = None,
+        extra_details: dict | None = None,
     ) -> TaskResult:
+        details = {"error": summary, "error_category": error_category}
+        if failed_phase:
+            details["failed_phase"] = failed_phase
+        if extra_details:
+            details.update(extra_details)
         transcript_path = None
         if save_dir is not None and input_handler is not None:
             transcript_path = self._save_artifact(
                 save_dir,
-                {"error": summary},
+                details,
                 snapshot_text,
                 input_handler,
             )
@@ -572,9 +1195,10 @@ class McpBrowserExecutor:
             transcript=[summary],
             checkpoint_events=input_handler.events if input_handler is not None else [],
             transcript_path=transcript_path,
-            outcome_details={"error": summary},
+            outcome_details=details,
             steps_taken=len(self.action_log),
             duration_seconds=round(perf_counter() - started_at, 2),
+            timing_spans=list(self.timing_spans),
         )
 
     def _save_artifact(
@@ -612,13 +1236,36 @@ class McpBrowserExecutor:
     def _coerce_action(self, raw) -> McpAgentAction:
         if isinstance(raw, McpAgentAction):
             return raw
-        if isinstance(raw, dict):
-            return McpAgentAction(**raw)
         if isinstance(raw, str):
-            return McpAgentAction(**self._first_json_object(raw))
-        if hasattr(raw, "model_dump"):
-            return McpAgentAction(**raw.model_dump())
-        raise RuntimeError(f"Could not parse MCP planner action from {type(raw).__name__}")
+            payload = self._first_json_object(raw)
+        elif isinstance(raw, dict):
+            payload = raw
+        elif hasattr(raw, "model_dump"):
+            payload = raw.model_dump()
+        else:
+            raise ValueError("MCP planner action has an unsupported shape")
+        return McpAgentAction(**self._normalize_action_payload(payload))
+
+    def _normalize_action_payload(self, payload: dict) -> dict:
+        """Unwrap one allowlisted action envelope and reject ambiguous shapes."""
+        if not isinstance(payload, dict):
+            raise ValueError("MCP planner action must be an object")
+        if isinstance(payload.get("action"), str):
+            if any(isinstance(payload.get(key), dict) for key in PLANNER_ENVELOPE_KEYS):
+                raise ValueError("MCP planner action has conflicting action shapes")
+            return payload
+
+        envelope_keys = [
+            key for key in PLANNER_ENVELOPE_KEYS if isinstance(payload.get(key), dict)
+        ]
+        if len(envelope_keys) != 1 or set(payload) != {envelope_keys[0]}:
+            raise ValueError("MCP planner envelope is ambiguous or unsupported")
+        inner = payload[envelope_keys[0]]
+        if not isinstance(inner.get("action"), str):
+            raise ValueError("MCP planner envelope exceeds one supported nesting level")
+        if any(isinstance(inner.get(key), dict) for key in PLANNER_ENVELOPE_KEYS):
+            raise ValueError("MCP planner envelope contains a nested executable shape")
+        return inner
 
     def _is_recoverable_json_error(self, exc: Exception) -> bool:
         message = str(exc)
@@ -632,9 +1279,17 @@ class McpBrowserExecutor:
         start = text.find("{")
         if start < 0:
             raise ValueError("MCP planner response did not contain a JSON object")
-        value, _ = json.JSONDecoder().raw_decode(text[start:])
+        value, consumed = json.JSONDecoder().raw_decode(text[start:])
         if not isinstance(value, dict):
             raise ValueError("MCP planner response JSON must be an object")
+        remainder = text[start + consumed :]
+        for candidate_start in (match.start() for match in re.finditer(r"[\[{]", remainder)):
+            try:
+                candidate, _ = json.JSONDecoder().raw_decode(remainder[candidate_start:])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, (dict, list)):
+                raise ValueError("MCP planner response contains multiple JSON actions")
         return value
 
     def _record_step(
@@ -642,15 +1297,16 @@ class McpBrowserExecutor:
         *,
         step: int,
         phase: str,
+        state: str,
         message: str,
-        thought: str = "",
     ) -> None:
-        self.step_log.append(
+        self._publish(
             {
+                "type": "progress",
                 "step": step,
                 "phase": phase,
+                "state": state,
                 "message": message,
-                "thought": thought[:200],
                 "timestamp": datetime.now(UTC).isoformat(),
             }
         )

@@ -69,6 +69,8 @@ class AgentBrain:
         self._timing_spans: list[dict] = []
         self._step_started_at: dict[int, float] = {}
         self._agent_run_started_at: float | None = None
+        self._mcp_executor: McpBrowserExecutor | None = None
+        self._stop_requested_reason: str | None = None
 
     @property
     def step_log(self) -> list[dict]:
@@ -82,6 +84,22 @@ class AgentBrain:
 
     def _create_llm(self):
         return create_llm(self._model_name)
+
+    def request_stop(self, reason: str | None = None) -> bool:
+        """Request a graceful MCP stop at the next verified action boundary."""
+        if self.browser_backend != "mcp":
+            return False
+        self._stop_requested_reason = reason or "Supervisor requested a stop."
+        if self._mcp_executor is not None:
+            self._mcp_executor.request_stop(self._stop_requested_reason)
+        return True
+
+    def _append_mcp_progress(self, event: dict) -> None:
+        """Append one executor-owned PII-free event to the shared live stream."""
+        payload = dict(event)
+        self._step_log.append(payload)
+        if payload.get("type") == "timing_span":
+            self._timing_spans.append(payload)
 
     async def _on_step_start(self, agent: Agent):
         """Called at the start of each agent step."""
@@ -211,7 +229,10 @@ class AgentBrain:
                         preferred_model=settings.cliproxyapi_model,
                     )
                 mcp_started_at = perf_counter()
-                executor = McpBrowserExecutor()
+                executor = McpBrowserExecutor(progress_sink=self._append_mcp_progress)
+                self._mcp_executor = executor
+                if self._stop_requested_reason:
+                    executor.request_stop(self._stop_requested_reason)
                 result = await executor.run(
                     task_prompt=agent_task,
                     llm=self.llm,
@@ -228,7 +249,6 @@ class AgentBrain:
                     "selected_model": selected_model,
                     "model_probe": model_probe,
                 }
-                self._step_log = list(executor.step_log)
                 self._record_timing_span(
                     "mcp_browser_attach",
                     "Chrome MCP browser control",
@@ -298,6 +318,7 @@ class AgentBrain:
                 transcript=[f"Error: {e}"],
             )
         finally:
+            self._mcp_executor = None
             await navigator.close()
 
     async def _run_browser_use_agent(
