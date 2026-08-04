@@ -5,3 +5,6 @@ inherit = "core"
 
 [shell_environment_policy.set]
 CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR = "1"
+
+[agents]
+max_depth = 1
