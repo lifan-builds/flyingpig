@@ -45,14 +45,11 @@ Long prompts stay under `prompts/<site>/`; tests mirror behavior under `tests/un
 
 Use lowercase `snake_case.py` modules, `PascalCase` classes/Pydantic models/dataclasses, `snake_case` functions and fields, and `UPPER_SNAKE_CASE` constants. Name protocol values explicitly (`RunStatus`, `RunEventType`, `TaskStatus`) rather than scattering anonymous strings.
 
-## Legacy Surfaces and Common Mistakes
-
-`src/api/` and `src/models/` retain an older standalone FastAPI/auth/SQLAlchemy development path. Tests such as `tests/unit/test_api.py` preserve compatibility, but new desktop-helper product behavior belongs in the active areas above.
+## Boundary Guardrails and Common Mistakes
 
 Do not:
 
-- revive the legacy API, database, extension, or React paths as a second product architecture;
-- invent generic `services/`, `repositories/`, Celery workers, Redis state, or framework layers without an approved product need;
+- create a second backend, ORM, queue, or framework layer without an approved product need;
 - move helper safety, authorization, completion, browser, or model policy into dashboard JavaScript or Electron;
 - grow `src/daemon/server.py` or `AgentBrain` with logic already owned by a focused module;
 - block async loops with subprocess, filesystem, MCP, or CDP work that should be delegated and bounded.

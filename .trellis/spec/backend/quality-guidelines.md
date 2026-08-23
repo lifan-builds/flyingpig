@@ -35,7 +35,7 @@ Add a focused test for the changed contract before relying on the broader suite.
 
 ## Forbidden Patterns
 
-- Reviving `src/api/`/`src/models/` as the active product backend or inventing ORM migrations, Redis, Celery, Postgres, queues, or a second service without approved scope.
+- Adding an ORM-backed database, external queue, or second service without approved scope.
 - Moving helper-owned policy into dashboard/Electron, accepting arbitrary model/tool output, broadening authorization, or bypassing verified send/checkpoints.
 - Blocking the event loop with synchronous browser/MCP/process/filesystem work.
 - Swallowing exceptions, cancellation, or timeout; emitting raw private errors; using unbounded retry or wait loops.

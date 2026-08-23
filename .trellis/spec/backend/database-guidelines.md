@@ -2,7 +2,7 @@
 
 ## No Active Application Database
 
-The active packaged helper has no ORM-backed application database and no migration workflow. Its state is deliberately local and split by lifecycle. Do not infer an active Postgres/Redis/Celery architecture from dependencies in `pyproject.toml` or legacy settings in `src/config.py`.
+The active packaged helper has no ORM-backed application database and no migration workflow. Its state is deliberately local and split by lifecycle. Keep persistence local to the helper and add a durable store only when a user-facing lifecycle requires it.
 
 Read [Data and Privacy](../flyingpig/data-privacy.md) before changing any stored shape or path.
 
@@ -27,16 +27,10 @@ Read [Data and Privacy](../flyingpig/data-privacy.md) before changing any stored
 - Secret values may be accepted by the helper settings endpoint but must not be returned. `model_settings_payload()` reports `configured` booleans, not keys.
 - Tests redirect all writes to `tmp_path` and monkeypatch user-local paths. See `tests/unit/test_follow_up_reminders.py`, `tests/unit/test_config.py`, and artifact assertions in `tests/unit/test_mcp_executor.py`.
 
-## Legacy SQLAlchemy Compatibility Surface
-
-`src/models/db.py`, `src/models/task.py`, `src/models/user.py`, and `src/api/` are legacy development-compatibility code. That path creates tables through `Base.metadata.create_all()` and may rewrite the default local Postgres URL to `sqlite+aiosqlite:///flyingpig.db`; it does not establish an active migration convention. `tests/unit/test_api.py` covers that compatibility surface.
-
-If a task explicitly targets legacy compatibility, keep changes isolated there and describe them as legacy. Otherwise do not add models, repositories, Alembic migrations, Redis, Celery, Postgres requirements, or SQL transactions to support the desktop helper.
-
 ## Common Mistakes
 
 - Treating process-local `RunStateStore` or browser `localStorage` as durable/authoritative run data.
 - Persisting transcripts, private URLs, target/account values, credentials, cookies, or browser profiles in reminders, scorecards, logs, or test fixtures.
 - Returning API-key values after saving them.
 - Writing directly over JSON where an interrupted write could corrupt the only copy.
-- Claiming migrations or database checks passed when the active product path did not use a database.
+- Claiming durable persistence or database checks passed when the active product path did not use an application database.

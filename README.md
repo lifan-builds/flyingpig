@@ -195,8 +195,7 @@ src/
 ├── agent/          # Core AI agent (LLM + browser automation)
 ├── sites/          # Per-site adapters (Amex, etc.)
 ├── daemon/         # Helper API, WebSocket protocol, dashboard static host
-├── api/            # Legacy FastAPI app kept for development compatibility
-└── models/         # Legacy DB models kept for development compatibility
+├── config.py        # Provider and runtime settings
 dashboard/          # Helper-served cockpit loaded by the desktop app
 desktop/            # Electron shell and helper supervision
 docs/legacy/        # Archived old extension and React frontend references

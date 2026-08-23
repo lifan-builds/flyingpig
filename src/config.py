@@ -23,12 +23,9 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     google_api_key: str = ""
     cliproxyapi_api_key: str = ""
-    api_secret_key: str = ""
     cliproxyapi_base_url: str = "http://127.0.0.1:8317/v1"
     cliproxyapi_model: str = "gpt-5.5"
     cliproxyapi_config: str = "~/.cli-proxy-api/config.yaml"
-    database_url: str = "postgresql+asyncpg://flyingpig:flyingpig@localhost:5432/flyingpig"
-    redis_url: str = "redis://localhost:6379/0"
     app_env: str = "development"
     log_level: str = "INFO"
     default_llm: str = "claude"
@@ -46,6 +43,7 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": (".env", str(USER_ENV_FILE)),
         "env_file_encoding": "utf-8",
+        "extra": "ignore",
     }
 
     def model_post_init(self, __context: object) -> None:
