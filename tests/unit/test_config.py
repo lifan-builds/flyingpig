@@ -22,6 +22,27 @@ api-keys:
     assert settings.cliproxyapi_api_key == "sk-local-test-key"
 
 
+def test_settings_ignore_retired_user_env_keys(tmp_path):
+    env_path = tmp_path / ".flyingpig.env"
+    env_path.write_text(
+        "\n".join(
+            (
+                "DEFAULT_LLM=openai",
+                "DATABASE_URL=sqlite+aiosqlite:///flyingpig.db",
+                "REDIS_URL=redis://localhost:6379/0",
+                "FLYINGPIG_USER_ENV=~/.flyingpig/.env",
+            )
+        ),
+        encoding="utf-8",
+    )
+
+    settings = Settings(_env_file=env_path)
+
+    assert settings.default_llm == "openai"
+    assert not hasattr(settings, "database_url")
+    assert not hasattr(settings, "redis_url")
+
+
 def test_dashboard_model_settings_write_user_env(tmp_path, monkeypatch):
     env_path = tmp_path / ".flyingpig.env"
     monkeypatch.setattr(model_settings, "USER_ENV_FILE", env_path)

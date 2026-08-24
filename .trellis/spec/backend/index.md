@@ -2,8 +2,6 @@
 
 The active backend is the packaged Python helper behind the Electron desktop app. It owns supervised browser/model execution, safety policy, reconnectable run state, local persistence, evidence, and the dashboard REST/WebSocket protocol. Start with the product-wide [Flying Pig specification](../flyingpig/index.md).
 
-`src/api/` and `src/models/` are legacy development-compatibility surfaces. They are not the backend of the normal desktop -> helper -> dashboard -> Controlled Chrome path; do not route new product work through them.
-
 ## Pre-Development Routing
 
 1. Read [Architecture](../flyingpig/architecture.md) and identify the owning active module.
@@ -14,7 +12,7 @@ The active backend is the packaged Python helper behind the Electron desktop app
 | Guide | Use it for |
 |---|---|
 | [Directory Structure](directory-structure.md) | Module ownership, new-file placement, Pydantic/dataclass boundaries |
-| [Persistence and Local Storage](database-guidelines.md) | Process state, reminders, evidence, model settings, and the legacy SQLAlchemy surface |
+| [Persistence and Local Storage](database-guidelines.md) | Process state, reminders, evidence, and model settings |
 | [Error Handling](error-handling.md) | Exceptions, cancellation, REST errors, WebSocket errors, safe categories |
 | [Logging](logging-guidelines.md) | Python diagnostics, public progress events, and privacy exclusions |
 | [Quality](quality-guidelines.md) | Ruff, pytest, synthetic fixtures, review, and gated operations |
@@ -27,4 +25,4 @@ The active backend is the packaged Python helper behind the Electron desktop app
 - REST/WebSocket failures keep their existing protocol shape while exposing only actionable, privacy-safe information.
 - Logs and public progress contain no secrets, prompts, snapshots, chat/account content, private URLs, user paths, or raw tool payloads.
 - Tests use synthetic/local fixtures. Report live, slow, GUI, package, signing, notarization, and release checks as gated or skipped—not passed.
-- No new work revives `src/api/`, `src/models/`, or an invented ORM/Redis/Celery service path.
+- No new work introduces a second backend, external state store, or queue outside the helper ownership boundary.
