@@ -86,6 +86,40 @@ ROOT = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 DASHBOARD_DIR = ROOT / "dashboard"
 
 
+def _safe_error_category(exc: BaseException) -> str:
+    """Classify an exception without retaining its message or traceback."""
+    if isinstance(exc, TimeoutError):
+        return "timeout"
+    if isinstance(exc, PermissionError):
+        return "permission_denied"
+    if isinstance(exc, FileNotFoundError):
+        return "unavailable"
+    if isinstance(exc, ValueError):
+        return "invalid_input"
+    return "operation_failed"
+
+
+def _safe_public_error(operation: str, exc: BaseException) -> str:
+    """Return actionable fixed-copy error text without exposing exception details."""
+    outcome = {
+        "timeout": "timed out",
+        "permission_denied": "was denied",
+        "unavailable": "is unavailable",
+        "invalid_input": "received invalid input",
+    }.get(_safe_error_category(exc), "failed")
+    return f"{operation} {outcome}. Check the local helper logs for details."
+
+
+def _log_safe_failure(operation: str, exc: BaseException) -> None:
+    """Log only fixed operation, exception class, and safe category."""
+    logger.error(
+        "%s failed (exception=%s, category=%s)",
+        operation,
+        type(exc).__name__,
+        _safe_error_category(exc),
+    )
+
+
 class BrowserLaunchRequest(BaseModel):
     site: str = "generic"
     cdp_port: int = 9222
@@ -424,13 +458,14 @@ class RunManager:
                 )
             raise
         except Exception as e:
-            logger.exception("agent run failed")
-            await self.broadcast(type="error", text=f"{type(e).__name__}: {e}")
+            _log_safe_failure("Agent run", e)
+            error_text = _safe_public_error("Agent run", e)
+            await self.broadcast(type="error", text=error_text)
             await self.set_state(
                 status=RunStatus.FAILED.value,
                 running=False,
                 needs_input=False,
-                message=f"{type(e).__name__}: {e}",
+                message=error_text,
                 finished_at=now_iso(),
                 pending_request=None,
                 timing_spans=list(self.timing_spans),
@@ -990,8 +1025,8 @@ def create_app(reminder_store: FollowUpReminderStore | None = None) -> FastAPI:
             )
             await run_manager.add_timing_span(launch_span)
         except Exception as exc:
-            logger.exception("browser launch failed")
-            return {"ok": False, "error": f"{type(exc).__name__}: {exc}"}
+            _log_safe_failure("Work window launch", exc)
+            return {"ok": False, "error": _safe_public_error("Work window launch", exc)}
         status = browser_status_payload(cdp_url)
         return {
             "ok": True,

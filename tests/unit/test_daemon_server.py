@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 
 import src.daemon.server as daemon_server
@@ -49,6 +50,11 @@ class FakeAgentBrain:
             steps_taken=1,
             duration_seconds=0.2,
         )
+
+
+class FakeFailingAgentBrain(FakeAgentBrain):
+    async def execute(self, **kwargs) -> TaskResult:
+        raise RuntimeError("private path=/Users/synthetic/secret-profile token=synthetic-key")
 
 
 class FakeLiveProgressAgentBrain:
@@ -406,6 +412,70 @@ def test_browser_launch_endpoint_uses_site_adapter(monkeypatch):
     assert launched["config"].chrome_profile == "dedicated"
     assert launched["config"].disable_extensions is True
     assert "americanexpress.com" in launched["config"].initial_url
+
+
+def test_browser_launch_endpoint_redacts_exception_details(monkeypatch, caplog):
+    reset_run_manager()
+    caplog.set_level(logging.ERROR, logger=daemon_server.__name__)
+
+    def failing_launch(config):
+        raise RuntimeError("private path=/Users/synthetic/secret-profile token=synthetic-key")
+
+    monkeypatch.setattr(daemon_server, "launch_cdp_chrome", failing_launch)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/browser/launch", json={"site": "generic"})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "ok": False,
+        "error": "Work window launch failed. Check the local helper logs for details.",
+    }
+    assert "synthetic-key" not in response.text
+    assert "/Users/synthetic" not in response.text
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "Work window launch failed (exception=RuntimeError, category=operation_failed)" in message
+        for message in messages
+    )
+    assert all(
+        "synthetic-key" not in message and "/Users/synthetic" not in message
+        for message in messages
+    )
+
+
+def test_agent_run_error_redacts_exception_details(monkeypatch, caplog):
+    reset_run_manager()
+    caplog.set_level(logging.ERROR, logger=daemon_server.__name__)
+    monkeypatch.setattr(daemon_server, "AgentBrain", FakeFailingAgentBrain)
+    app = daemon_server.create_app()
+
+    with TestClient(app) as client:
+        response = client.post("/run/start", json=run_payload())
+        assert response.status_code == 200
+
+        state = None
+        for _ in range(40):
+            state = client.get("/run/state").json()
+            if state["status"] == "failed":
+                break
+            time.sleep(0.05)
+
+    assert state is not None
+    assert state["status"] == "failed"
+    assert state["message"] == "Agent run failed. Check the local helper logs for details."
+    assert "synthetic-key" not in str(state)
+    assert "/Users/synthetic" not in str(state)
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(
+        "Agent run failed (exception=RuntimeError, category=operation_failed)" in message
+        for message in messages
+    )
+    assert all(
+        "synthetic-key" not in message and "/Users/synthetic" not in message
+        for message in messages
+    )
 
 
 def test_daemon_serves_localhost_dashboard():
