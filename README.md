@@ -2,11 +2,25 @@
 
 An AI-powered agent that interacts with customer service chat interfaces on your behalf. Stop waiting on hold, arguing with chatbots, or navigating phone trees — let Flying Pig handle it.
 
+## Deprecated
+
+Flying Pig has been useful while the agent computer use capability wasn't that
+strong, and it kept breaking while interacting with different vendors. But now,
+with the latest Codex computer use and browser use, we feel this project is no
+longer providing additional value over the native capabilities, so we are
+deprecating it.
+
+The repository is archived and no longer maintained. For this workflow, use
+Codex's native computer use and browser use capabilities instead.
+
 ![Flying Pig agent history](agent_history.gif)
 
 ## Status
 
-Flying Pig is an early local beta for supervised customer-service automation.
+Flying Pig is an early local beta for supervised customer-service automation
+that is no longer maintained. The usage and development instructions below are
+retained for historical reference only; they are not a supported product path.
+
 The current product shape is a native desktop app that starts a local Python
 helper, opens the helper-served dashboard as the cockpit, and keeps the
 Controlled Chrome Window separate as the work area. You prepare the support
